@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
 )
 from views.registro import RegistroWindow
 from views.reportes import ReportesWindow
+from views.mensuales import MensualesWindow
 
 class MainWindow(QWidget):
     def __init__(self, usuario, rol):
@@ -24,7 +25,13 @@ class MainWindow(QWidget):
         btn_registro.clicked.connect(self.abrir_registro)
         layout.addWidget(btn_registro)
 
-        # Botón de reportes (solo para administrador)
+        # Botón de agregar mensuales (solo para admin)
+        if self.rol == "administrador":
+            btn_mensuales = QPushButton("Clientes Mensuales")
+            btn_mensuales.clicked.connect(self.abrir_mensuales)
+            layout.addWidget(btn_mensuales)
+
+        # Botón de reportes (solo para admin)
         btn_reportes = QPushButton("Reportes")
         btn_reportes.clicked.connect(self.abrir_reportes)
         if self.rol != "administrador":
@@ -45,3 +52,7 @@ class MainWindow(QWidget):
     def abrir_reportes(self):
         self.reportes_window = ReportesWindow()
         self.reportes_window.show()
+        
+    def abrir_mensuales(self):
+        self.mensuales_window = MensualesWindow()
+        self.mensuales_window.show()
