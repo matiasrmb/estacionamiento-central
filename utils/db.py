@@ -14,7 +14,7 @@ def get_connection():
     }
 
     try:
-        connection = mysql.connector.connect(**db_config)
+        connection = mysql.connector.connect(charset='utf8mb4', **db_config)
         return connection
     except mysql.connector.Error as err:
         print(f"Error al conectar a la base de datos: {err}")
