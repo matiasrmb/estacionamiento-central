@@ -2,6 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QPushButton, QLabel, QVBoxLayout
 )
 from views.registro import RegistroWindow
+from views.reportes import ReportesWindow
 
 class MainWindow(QWidget):
     def __init__(self, usuario, rol):
@@ -25,6 +26,7 @@ class MainWindow(QWidget):
 
         # Botón de reportes (solo para administrador)
         btn_reportes = QPushButton("Reportes")
+        btn_reportes.clicked.connect(self.abrir_reportes)
         if self.rol != "administrador":
             btn_reportes.setDisabled(True)
         layout.addWidget(btn_reportes)
@@ -39,3 +41,7 @@ class MainWindow(QWidget):
     def abrir_registro(self):
         self.registro_window = RegistroWindow(self.usuario)
         self.registro_window.show()
+
+    def abrir_reportes(self):
+        self.reportes_window = ReportesWindow()
+        self.reportes_window.show()
