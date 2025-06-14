@@ -1,5 +1,7 @@
 from utils.db import get_connection
 from datetime import datetime
+from utils.ticket import generar_ticket_ingreso
+from utils.ticket import generar_ticket_salida
 
 def buscar_estado_vehiculo(patente):
     conn = get_connection()
@@ -32,6 +34,7 @@ def buscar_estado_vehiculo(patente):
         return "fuera"
 
 def registrar_ingreso(patente):
+    from datetime import datetime
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -48,16 +51,21 @@ def registrar_ingreso(patente):
         )
         id_vehiculo = cursor.lastrowid
 
+    fecha_hora = datetime.now()
     cursor.execute(
         "INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso) VALUES (%s, %s)",
-        (id_vehiculo, datetime.now())
+        (id_vehiculo, fecha_hora)
     )
     conn.commit()
     cursor.close()
     conn.close()
+
+    generar_ticket_ingreso(patente, fecha_hora)
     return True
 
+
 def registrar_salida(patente):
+    from datetime import datetime
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -78,9 +86,10 @@ def registrar_salida(patente):
     if not ingreso:
         return None
 
+    fecha_ingreso = ingreso["fecha_hora_ingreso"]
     ahora = datetime.now()
-    minutos = int((ahora - ingreso["fecha_hora_ingreso"]).total_seconds() / 60)
-    tarifa = minutos * 50  # Cambia esto si deseas una tarifa diferente
+    minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
+    tarifa = minutos * 50  # Tarifa por minuto
 
     cursor.execute("""
         UPDATE ingresos SET fecha_hora_salida = %s, tarifa_aplicada = %s
@@ -90,4 +99,8 @@ def registrar_salida(patente):
     conn.commit()
     cursor.close()
     conn.close()
+
+    generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa)
     return tarifa
+    
+
