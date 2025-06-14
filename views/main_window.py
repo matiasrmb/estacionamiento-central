@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
-    QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox
+    QWidget, QPushButton, QLabel, QVBoxLayout
 )
+from views.registro import RegistroWindow
 
 class MainWindow(QWidget):
     def __init__(self, usuario, rol):
@@ -10,30 +11,31 @@ class MainWindow(QWidget):
         self.setWindowTitle("Estacionamiento Central - Panel Principal")
         self.setFixedSize(400, 300)
         self.init_ui()
-        
+
     def init_ui(self):
         layout = QVBoxLayout()
 
         bienvenida = QLabel(f"Bienvenido, {self.usuario} ({self.rol})")
         layout.addWidget(bienvenida)
 
-        # Botones de navegación
-        btn_ingreso = QPushButton("Registrar Ingreso")
-        btn_salida = QPushButton("Registrar Salida")
-        btn_reportes = QPushButton("Reportes")
+        # Botón de registro de vehículos
+        btn_registro = QPushButton("Registro de Vehículos")
+        btn_registro.clicked.connect(self.abrir_registro)
+        layout.addWidget(btn_registro)
 
-        # Comportamiento por rol
+        # Botón de reportes (solo para administrador)
+        btn_reportes = QPushButton("Reportes")
         if self.rol != "administrador":
             btn_reportes.setDisabled(True)
-
-        # Agrega botones al layout
-        layout.addWidget(btn_ingreso)
-        layout.addWidget(btn_salida)
         layout.addWidget(btn_reportes)
 
-        # Salir
+        # Botón de cierre de sesión
         btn_salir = QPushButton("Cerrar sesión")
         btn_salir.clicked.connect(self.close)
         layout.addWidget(btn_salir)
 
         self.setLayout(layout)
+
+    def abrir_registro(self):
+        self.registro_window = RegistroWindow(self.usuario)
+        self.registro_window.show()
