@@ -2,6 +2,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox
 )
 import sys
+from controllers.login_controller import validar_usuario
 
 class LoginWindow(QWidget):
     def __init__(self):
@@ -36,11 +37,12 @@ class LoginWindow(QWidget):
         usuario = self.user_input.text()
         clave = self.pass_input.text()
 
-        # Esto será posteriormente reemplazado por una validación ral en DB
-        if usuario == "admin" and clave == "admin":
-            QMessageBox.information(self, "Acceso correcto", "Bienvenido!")
+        exito, rol = validar_usuario(usuario,clave)
+        if exito:
+            QMessageBox.information(self, "Acceso correcto", f"Bienvenido, {usuario}. Rol: {rol}")
+            # Aquí se podría redirigir a otra ventana según rol
         else:
-            QMessageBox.critical(self, "Error", "Usuario o clave incorrecta.")
+            QMessageBox.critical(self, "Error", "Usuario o clave incorrectas.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

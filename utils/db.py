@@ -2,7 +2,7 @@ import mysql.connector
 from configparser import ConfigParser
 
 def get_connection():
-    config = ConfigParser
+    config = ConfigParser()
     config.read("config.ini")
 
     db_config = {
