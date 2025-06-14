@@ -1,6 +1,8 @@
 from fpdf import FPDF
 from datetime import datetime
 import os
+import platform
+import subprocess
 
 def generar_ticket_ingreso(patente, fecha_hora):
     pdf = FPDF()
@@ -20,6 +22,7 @@ def generar_ticket_ingreso(patente, fecha_hora):
     os.makedirs(carpeta, exist_ok=True)
     ruta =os.path.join(carpeta, nombre_archivo)
     pdf.output(ruta)
+    abrir_pdf(ruta)
     return ruta
 
 def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa):
@@ -41,4 +44,13 @@ def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa
     os.makedirs(carpeta, exist_ok=True)
     ruta = os.path.join(carpeta, nombre_archivo)
     pdf.output(ruta)
+    abrir_pdf(ruta)
     return ruta
+
+def abrir_pdf(ruta):
+    if platform.system() == "Windows":
+        os.startfile(ruta)
+    elif platform.system() == "Darwin":  # macOS
+        subprocess.run(["open", ruta])
+    else:  # Linux
+        subprocess.run(["xdg-open", ruta])
