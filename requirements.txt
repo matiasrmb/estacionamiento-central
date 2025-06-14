@@ -2,3 +2,4 @@ mysql-connector-python
 configparser
 PySide6 
 bcrypt 
+fpdf 
