@@ -86,8 +86,12 @@ class MensualesWindow(QWidget):
 
     def editar_tarifa(self, id_vehiculo):
         from controllers.mensuales_controller import actualizar_tarifa
-        nueva_tarifa, ok = QInputDialog.getDouble(self, "Editar Tarifa",
-            "Ingresa nueva tarifa mensual:", min=0, decimals=0)
+        nueva_tarifa, ok = QInputDialog.getDouble(
+            self,
+            "Editar Tarifa",
+            "Ingresa nueva tarifa mensual:",
+            decimals=0
+        )
         if ok:
             actualizar_tarifa(id_vehiculo, nueva_tarifa)
             self.cargar_mensuales()
