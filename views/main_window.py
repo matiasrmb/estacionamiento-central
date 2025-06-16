@@ -5,6 +5,7 @@ from views.registro import RegistroWindow
 from views.reportes import ReportesWindow
 from views.mensuales import MensualesWindow
 from views.configuracion import ConfiguracionWindow
+from views.tarifas_personalizadas import TarifasPersonalizadasWindow
 
 class MainWindow(QWidget):
     def __init__(self, usuario, rol):
@@ -38,6 +39,12 @@ class MainWindow(QWidget):
             btn_config.clicked.connect(self.abrir_configuracion)
             layout.addWidget(btn_config)
 
+        # Botón para editar tarifas (solo para admin)
+        if self.rol == "administrador":
+            btn_tarifas = QPushButton("Editar tarifas personalizadas")
+            btn_tarifas.clicked.connect(self.abrir_tarifas)
+            layout.addWidget(btn_tarifas)
+
         # Botón de reportes (solo para admin)
         btn_reportes = QPushButton("Reportes")
         btn_reportes.clicked.connect(self.abrir_reportes)
@@ -67,3 +74,7 @@ class MainWindow(QWidget):
     def abrir_configuracion(self):
         self.config_window = ConfiguracionWindow()
         self.config_window.show()
+
+    def abrir_tarifas(self):
+        self.tarifas_window = TarifasPersonalizadasWindow()
+        self.tarifas_window.show()
