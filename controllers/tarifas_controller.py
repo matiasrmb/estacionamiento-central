@@ -72,7 +72,9 @@ def calcular_tarifa(minutos):
         if resultado:
             return resultado["valor"]
         else:
-            return int(config.get("tarifa_minima", 300))
+            # Si no hay tramo, aplicar tarifa por hora proporcional
+            tarifa_hora = int(config.get("tarifa_hora", 1300))
+            return round((minutos / 60) * tarifa_hora)
 
     else:
         # Fallback a tarifa mínima
