@@ -1,4 +1,5 @@
 from utils.db import get_connection
+from controllers.config_controller import obtener_configuracion
 
 def obtener_tarifas_personalizadas():
     conn = get_connection()
@@ -43,3 +44,36 @@ def actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor):
     conn.commit()
     cursor.close()
     conn.close()
+
+def calcular_tarifa(minutos):
+    config = obtener_configuracion()
+    modo = config.get("modo_cobro", "minuto")
+
+    if modo == "minuto":
+        tarifa_por_minuto = int(config.get("tarifa_hora", 1300)) / 60
+        return round(minutos * tarifa_por_minuto)
+
+    elif modo == "personalizado":
+        from utils.db import get_connection
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT valor
+            FROM tarifas_personalizadas
+            WHERE %s BETWEEN minuto_inicio AND minuto_fin
+            ORDER BY minuto_inicio ASC
+            LIMIT 1
+        """, (minutos,))
+        resultado = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if resultado:
+            return resultado["valor"]
+        else:
+            return int(config.get("tarifa_minima", 300))
+
+    else:
+        # Fallback a tarifa mínima
+        return int(config.get("tarifa_minima", 300))

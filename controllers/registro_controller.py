@@ -2,6 +2,7 @@ from utils.db import get_connection
 from datetime import datetime
 from utils.ticket import generar_ticket_ingreso
 from utils.ticket import generar_ticket_salida
+from controllers.tarifas_controller import calcular_tarifa
 
 def buscar_estado_vehiculo(patente):
     conn = get_connection()
@@ -89,7 +90,7 @@ def registrar_salida(patente):
     fecha_ingreso = ingreso["fecha_hora_ingreso"]
     ahora = datetime.now()
     minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
-    tarifa = minutos * 50  # Tarifa por minuto
+    tarifa = calcular_tarifa(minutos)
 
     cursor.execute("""
         UPDATE ingresos SET fecha_hora_salida = %s, tarifa_aplicada = %s
