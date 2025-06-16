@@ -55,11 +55,11 @@ class TarifasPersonalizadasWindow(QWidget):
             self.tabla.setItem(i, 3, QTableWidgetItem(str(row["valor"])))
 
     def agregar(self):
-        min_inicio, ok1 = QInputDialog.getInt(self, "Nuevo intervalo", "Desde (minutos):", min=0)
+        min_inicio, ok1 = QInputDialog.getInt(self, "Nuevo intervalo", "Desde (minutos):", 0)
         if not ok1: return
-        min_fin, ok2 = QInputDialog.getInt(self, "Nuevo intervalo", "Hasta (minutos):", min=min_inicio+1)
+        min_fin, ok2 = QInputDialog.getInt(self, "Nuevo intervalo", "Hasta (minutos):", min_inicio+1)
         if not ok2: return
-        valor, ok3 = QInputDialog.getInt(self, "Nuevo intervalo", "Valor (CLP):", min=0)
+        valor, ok3 = QInputDialog.getInt(self, "Nuevo intervalo", "Valor (CLP):", 0)
         if not ok3: return
 
         agregar_intervalo(min_inicio, min_fin, valor)
