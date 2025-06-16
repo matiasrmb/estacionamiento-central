@@ -39,7 +39,10 @@ def agregar_mensual(patente):
 def eliminar_mensual(id_vehiculo):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM vehiculos WHERE id_vehiculo = %s", (id_vehiculo,))
+    cursor.execute(
+        "UPDATE vehiculos SET activo = 0 WHERE id_vehiculo = %s",
+        (id_vehiculo,)
+    )
     conn.commit()
     cursor.close()
     conn.close()
