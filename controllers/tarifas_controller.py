@@ -57,7 +57,6 @@ def calcular_tarifa(minutos):
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Obtener todos los intervalos
         cursor.execute("""
             SELECT minuto_inicio, minuto_fin, valor
             FROM tarifas_personalizadas
@@ -73,15 +72,20 @@ def calcular_tarifa(minutos):
         minutos_en_hora = minutos % 60
         horas_completas = minutos // 60
 
-        # Buscar el tramo correspondiente dentro del ciclo de 60 minutos
+        # Calcular cuánto vale una hora completa (suma de intervalos dentro de 0–59)
+        total_hora_base = 0
+        for tramo in intervalos:
+            if tramo["minuto_fin"] <= 59:
+                total_hora_base = tramo["valor"]  # Siempre toma el último válido antes de minuto 60
+
+        # Buscar tramo dentro del ciclo de 0–59
+        tarifa_tramo = intervalos[-1]["valor"]  # fallback
         for tramo in intervalos:
             if tramo["minuto_inicio"] <= minutos_en_hora <= tramo["minuto_fin"]:
-                return tramo["valor"] + horas_completas * intervalos[-1]["valor"]
+                tarifa_tramo = tramo["valor"]
+                break
 
-        # Si por algún motivo no encaja, usar el último tramo como base
-        return intervalos[-1]["valor"] + horas_completas * intervalos[-1]["valor"]
+        return tarifa_tramo + horas_completas * total_hora_base
 
     else:
-        # Fallback a tarifa mínima si modo no reconocido
         return int(config.get("tarifa_minima", 300))
-
