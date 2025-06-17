@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QTimer, Qt
 from datetime import datetime
-from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida, obtener_vehiculos_activos, marcar_en_espera, eliminar_patente_en_espera
+from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida, obtener_vehiculos_activos
 from views.dashboard import DashboardWindow
 from functools import partial
 
@@ -136,51 +136,28 @@ class RegistroWindow(QWidget):
 
     def actualizar_tabla_activos(self):
         datos = obtener_vehiculos_activos()
-        self.tabla_activos.setRowCount(len(datos) + 1)  # +1 para la fila de total
+        self.tabla_activos.setRowCount(len(datos) + 1)
         total = 0
 
         for i, vehiculo in enumerate(datos):
             patente = vehiculo["patente"]
             hora = vehiculo["hora"]
             monto = vehiculo["monto"]
-            en_espera = vehiculo.get("en_espera", False)
 
-            # Columna 0: Patente
             item_patente = QTableWidgetItem(patente)
             item_patente.setFlags(item_patente.flags() ^ Qt.ItemIsEditable)
-            if en_espera:
-                item_patente.setForeground(Qt.gray)
             self.tabla_activos.setItem(i, 0, item_patente)
 
-            # Columna 1: Hora ingreso
             item_hora = QTableWidgetItem(hora)
             item_hora.setFlags(item_hora.flags() ^ Qt.ItemIsEditable)
-            if en_espera:
-                item_hora.setForeground(Qt.gray)
             self.tabla_activos.setItem(i, 1, item_hora)
 
-            # Columna 2: Monto
             item_monto = QTableWidgetItem(f"${monto:.0f}")
             item_monto.setFlags(item_monto.flags() ^ Qt.ItemIsEditable)
-            if en_espera:
-                item_monto.setForeground(Qt.gray)
             self.tabla_activos.setItem(i, 2, item_monto)
 
-            # Sumar solo si no está en espera
-            if not en_espera:
-                total += monto
+            total += monto
 
-            # Columna 3: Botón "En espera" si corresponde
-            if not en_espera:
-                btn_espera = QPushButton("🕒 En espera")
-                btn_espera.clicked.connect(partial(self.marcar_patente_en_espera, patente))
-                self.tabla_activos.setCellWidget(i, 3, btn_espera)
-            elif self.rol == "administrador":
-                btn_eliminar = QPushButton("🗑️ Eliminar")
-                btn_eliminar.clicked.connect(partial(self.eliminar_patente_en_espera, patente))
-                self.tabla_activos.setCellWidget(i, 3, btn_eliminar)
-
-        # Fila final: TOTAL
         fila_total = len(datos)
         item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
         item_total_label.setFlags(item_total_label.flags() ^ Qt.ItemIsEditable)
@@ -192,33 +169,8 @@ class RegistroWindow(QWidget):
         item_total_monto.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.tabla_activos.setItem(fila_total, 2, item_total_monto)
 
-        # Última celda de acción vacía
+        self.tabla_activos.setItem(fila_total, 0, QTableWidgetItem(""))
         self.tabla_activos.setItem(fila_total, 3, QTableWidgetItem(""))
-
 
     def mostrar_ocultar_tabla(self, visible):
         self.tabla_activos.setVisible(visible)
-
-    def marcar_patente_en_espera(self, patente):
-        confirmar = QMessageBox.question(
-            self,
-            "Confirmar acción",
-            f"¿Seguro que quieres marcar la patente '{patente}' como EN ESPERA?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if confirmar == QMessageBox.Yes:
-            marcar_en_espera(patente)
-            self.actualizar_tabla_activos()
-
-    def eliminar_patente_en_espera(self, patente):
-        confirmar = QMessageBox.question(
-            self,
-            "Confirmar eliminación",
-            f"¿Estás seguro de eliminar definitivamente el ingreso de la patente '{patente}' marcada como EN ESPERA?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if confirmar == QMessageBox.Yes:
-            eliminar_patente_en_espera(patente)
-            self.actualizar_tabla_activos()
