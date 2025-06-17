@@ -132,11 +132,26 @@ class RegistroWindow(QWidget):
     def actualizar_tabla_activos(self):
         datos = obtener_vehiculos_activos()
 
-        self.tabla_activos.setRowCount(len(datos))
+        self.tabla_activos.setRowCount(len(datos) + 1)  # +1 para la fila del total
+        total = 0
+
         for i, vehiculo in enumerate(datos):
             self.tabla_activos.setItem(i, 0, QTableWidgetItem(vehiculo["patente"]))
             self.tabla_activos.setItem(i, 1, QTableWidgetItem(vehiculo["hora"]))
             self.tabla_activos.setItem(i, 2, QTableWidgetItem(f"${vehiculo['monto']:.0f}"))
+            total += vehiculo["monto"]
+
+        # Fila total
+        item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
+        item_total_label.setFlags(item_total_label.flags() ^ Qt.ItemIsEditable)
+        item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        item_total_monto = QTableWidgetItem(f"${total:.0f}")
+        item_total_monto.setFlags(item_total_monto.flags() ^ Qt.ItemIsEditable)
+        item_total_monto.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        self.tabla_activos.setItem(len(datos), 1, item_total_label)
+        self.tabla_activos.setItem(len(datos), 2, item_total_monto)
 
     def mostrar_ocultar_tabla(self, visible):
         self.tabla_activos.setVisible(visible)
