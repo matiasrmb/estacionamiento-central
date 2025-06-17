@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHBoxLayout, QLineEdit, QComboBox, QMessageBox, QInputDialog
 )
 from PySide6.QtCore import Qt
-from controllers.usuarios_controller import obtener_usuarios, crear_usuario, cambiar_contrasena
+from controllers.usuarios_controller import obtener_usuarios, crear_usuario, cambiar_contrasena, cambiar_estado_usuario
 from functools import partial
 
 class UsuariosWindow(QWidget):
@@ -56,9 +56,22 @@ class UsuariosWindow(QWidget):
         for i, u in enumerate(usuarios):
             self.tabla.setItem(i, 0, QTableWidgetItem(u["usuario"]))
             self.tabla.setItem(i, 1, QTableWidgetItem(u["rol"]))
-            btn_cambiar = QPushButton("🔒 Cambiar clave")
-            btn_cambiar.clicked.connect(partial(self.preguntar_nueva_clave, u["usuario"]))
-            self.tabla.setCellWidget(i, 2, btn_cambiar)
+            botones = QWidget()
+            layout_btn = QHBoxLayout()
+            layout_btn.setContentsMargins(0, 0, 0, 0)
+
+            btn_clave = QPushButton("🔒 Cambiar clave")
+            btn_clave.clicked.connect(partial(self.preguntar_nueva_clave, u["usuario"]))
+            layout_btn.addWidget(btn_clave)
+
+            # Botón activar/desactivar
+            estado = "Desactivar" if u["activo"] else "Activar"
+            btn_estado = QPushButton(f"🚦 {estado}")
+            btn_estado.clicked.connect(partial(self.toggle_estado_usuario, u["usuario"], not u["activo"]))
+            layout_btn.addWidget(btn_estado)
+
+            botones.setLayout(layout_btn)
+            self.tabla.setCellWidget(i, 2, botones)
 
     def crear_usuario(self):
         usuario = self.input_usuario.text().strip()
@@ -84,3 +97,18 @@ class UsuariosWindow(QWidget):
                 QMessageBox.information(self, "Éxito", "Contraseña actualizada.")
             else:
                 QMessageBox.critical(self, "Error", "No se pudo cambiar la contraseña.")
+
+    def toggle_estado_usuario(self, usuario, nuevo_estado):
+        texto = "activar" if nuevo_estado else "desactivar"
+        confirmar = QMessageBox.question(
+            self,
+            "Confirmar",
+            f"¿Seguro que deseas {texto} el usuario '{usuario}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirmar == QMessageBox.Yes:
+            if cambiar_estado_usuario(usuario, nuevo_estado):
+                QMessageBox.information(self, "Éxito", "Estado actualizado.")
+                self.cargar_usuarios()
+            else:
+                QMessageBox.critical(self, "Error", "No se pudo actualizar el estado.")
