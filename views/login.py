@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
 import sys
 from controllers.login_controller import validar_usuario
 from views.main_window import MainWindow
+from views.dashboard import DashboardWindow
 
 class LoginWindow(QWidget):
     def __init__(self):
@@ -42,8 +43,8 @@ class LoginWindow(QWidget):
         if exito:
             QMessageBox.information(self, "Acceso correcto", f"Bienvenido, {usuario}. Rol: {rol}")
             self.hide()
-            self.main_window = MainWindow(usuario, rol)
-            self.main_window.show()
+            self.dashboard = DashboardWindow(usuario, rol)
+            self.dashboard.show()
         else:
             QMessageBox.critical(self, "Error", "Usuario o clave incorrectas.")
 
