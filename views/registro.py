@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QTableWidget, QTableWidgetItem
+    QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QTableWidget, QTableWidgetItem, QGroupBox
 )
 from PySide6.QtCore import QTimer
 from datetime import datetime
@@ -12,7 +12,7 @@ class RegistroWindow(QWidget):
         self.usuario = usuario
         self.rol = rol
         self.setWindowTitle("Registro de Vehículos")
-        self.setFixedSize(400, 250)
+        self.setMinimumSize(400, 250)
         self.init_ui()
 
     def init_ui(self):
@@ -45,17 +45,28 @@ class RegistroWindow(QWidget):
         self.boton_resumen.clicked.connect(self.abrir_dashboard)
         layout.addWidget(self.boton_resumen)
 
-        # Tabla de vehículos actualmente estacionados
+        # Grupo desplegable para la tabla
+        self.grupo_tabla = QGroupBox("🚗 Vehículos actualmente estacionados")
+        self.grupo_tabla.setCheckable(True)
+        self.grupo_tabla.setChecked(False)  # Empieza colapsado
+        self.grupo_tabla.toggled.connect(self.mostrar_ocultar_tabla)
+
         self.tabla_activos = QTableWidget()
         self.tabla_activos.setColumnCount(3)
         self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Monto Actual"])
-        layout.addWidget(QLabel("🚗 Vehículos actualmente estacionados:"))
-        layout.addWidget(self.tabla_activos)
 
+        layout_tabla = QVBoxLayout()
+        layout_tabla.addWidget(self.tabla_activos)
+        self.grupo_tabla.setLayout(layout_tabla)
+
+        layout.addWidget(self.grupo_tabla)
+
+        # Timer para actualizar tabla
         self.timer_tabla = QTimer()
         self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
-        self.timer_tabla.start(60000)  # Cada 60 segundos
-        self.actualizar_tabla_activos()  # Primera carga inmediata
+        self.timer_tabla.start(60000)
+        self.actualizar_tabla_activos()
+
 
 
         self.setLayout(layout)
@@ -125,3 +136,5 @@ class RegistroWindow(QWidget):
             self.tabla_activos.setItem(i, 1, QTableWidgetItem(vehiculo["hora"]))
             self.tabla_activos.setItem(i, 2, QTableWidgetItem(f"${vehiculo['monto']:.0f}"))
 
+    def mostrar_ocultar_tabla(self, visible):
+        self.tabla_activos.setVisible(visible)
