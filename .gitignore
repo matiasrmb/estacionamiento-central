@@ -7,3 +7,4 @@ dist/
 build/ 
 config.ini 
 tickets/ 
+test_tarifas.py
