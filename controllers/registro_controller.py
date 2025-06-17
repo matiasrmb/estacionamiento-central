@@ -109,7 +109,7 @@ def obtener_vehiculos_activos():
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT v.patente, i.fecha_hora_ingreso
+        SELECT v.patente, i.fecha_hora_ingreso, i.en_espera
         FROM ingresos i
         JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
         WHERE i.fecha_hora_salida IS NULL
@@ -124,12 +124,33 @@ def obtener_vehiculos_activos():
     lista = []
     for r in resultados:
         minutos = int((ahora - r["fecha_hora_ingreso"]).total_seconds() / 60)
-        tarifa = calcular_tarifa(minutos)
+        tarifa = calcular_tarifa(minutos) if r["en_espera"] == 0 else 0
         lista.append({
-            "patente": r["patente"],
+            "patente": r["patente"] + (" [EN ESPERA]" if r["en_espera"] else ""),
             "hora": r["fecha_hora_ingreso"].strftime("%H:%M"),
-            "monto": tarifa
+            "monto": tarifa,
+            "en_espera": bool(r["en_espera"])
         })
 
     return lista
 
+def marcar_en_espera(patente):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Buscar el id_vehiculo con ingreso activo
+    cursor.execute("""
+        SELECT i.id_ingreso
+        FROM ingresos i
+        JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+        WHERE v.patente = %s AND i.fecha_hora_salida IS NULL
+    """, (patente,))
+    resultado = cursor.fetchone()
+
+    if resultado:
+        id_ingreso = resultado[0]
+        cursor.execute("UPDATE ingresos SET en_espera = 1 WHERE id_ingreso = %s", (id_ingreso,))
+        conn.commit()
+
+    cursor.close()
+    conn.close()
