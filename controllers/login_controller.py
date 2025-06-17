@@ -12,10 +12,13 @@ def validar_usuario(usuario, clave_plana):
     resultado = cursor.fetchone()
     cursor.close()
     conn.close()
-
+    
     if resultado:
+        if not resultado.get("activo", 1):
+            return "inactivo", None  # Usuario existe, pero desactivado
+
         clave_hash = resultado["clave_hash"].encode("utf-8")
         if bcrypt.checkpw(clave_plana.encode("utf-8"), clave_hash):
             return True, resultado["rol"]
-        
-    return False, None
+
+    return False, None  # Usuario no existe o clave incorrecta

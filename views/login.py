@@ -40,11 +40,14 @@ class LoginWindow(QWidget):
         clave = self.pass_input.text()
 
         exito, rol = validar_usuario(usuario,clave)
-        if exito:
+
+        if exito == True:
             QMessageBox.information(self, "Acceso correcto", f"Bienvenido, {usuario}. Rol: {rol}")
             self.hide()
             self.dashboard = DashboardWindow(usuario, rol)
             self.dashboard.show()
+        elif exito == "inactivo":
+            QMessageBox.warning(self, "Cuenta inactiva", "Tu cuenta está desactivada. Contacta al administrador.")
         else:
             QMessageBox.critical(self, "Error", "Usuario o clave incorrectas.")
 
