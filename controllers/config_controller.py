@@ -21,3 +21,15 @@ def actualizar_configuracion(clave, valor):
     cursor.close()
     conn.close()
     return True
+
+def guardar_configuracion_masiva(diccionario_config):
+    conn = get_connection()
+    cursor = conn.cursor()
+    for clave, valor in diccionario_config.items():
+        cursor.execute(
+            "UPDATE configuracion SET valor = %s WHERE clave = %s",
+            (str(valor), clave)
+        )
+    conn.commit()
+    cursor.close()
+    conn.close()
