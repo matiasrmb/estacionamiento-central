@@ -3,11 +3,13 @@ from PySide6.QtWidgets import (
 )
 from datetime import datetime
 from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida
+from views.dashboard import DashboardWindow
 
 class RegistroWindow(QWidget):
-    def __init__(self, usuario):
+    def __init__(self, usuario, rol="operador"):
         super().__init__()
         self.usuario = usuario
+        self.rol = rol
         self.setWindowTitle("Registro de Vehículos")
         self.setFixedSize(400, 250)
         self.init_ui()
@@ -36,6 +38,11 @@ class RegistroWindow(QWidget):
         layout.addWidget(self.info_label)
         layout.addWidget(self.boton_ingreso)
         layout.addWidget(self.boton_salida)
+
+        # Botón para ver el resumen
+        self.boton_resumen = QPushButton("Ver Resumen Diario")
+        self.boton_resumen.clicked.connect(self.abrir_dashboard)
+        layout.addWidget(self.boton_resumen)
 
         self.setLayout(layout)
 
@@ -86,3 +93,7 @@ class RegistroWindow(QWidget):
         self.boton_ingreso.setEnabled(False)
         self.boton_salida.setEnabled(False)
         self.info_label.setText("")
+
+    def abrir_dashboard(self):
+        self.dashboard = DashboardWindow(self.usuario, rol="operador")  # o self.rol si lo tienes
+        self.dashboard.show()

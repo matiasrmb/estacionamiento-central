@@ -60,7 +60,7 @@ class MainWindow(QWidget):
         self.setLayout(layout)
 
     def abrir_registro(self):
-        self.registro_window = RegistroWindow(self.usuario)
+        self.registro_window = RegistroWindow(self.usuario, self.rol)
         self.registro_window.show()
 
     def abrir_reportes(self):
