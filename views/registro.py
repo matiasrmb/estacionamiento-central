@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QTimer, Qt
 from datetime import datetime
-from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida, obtener_vehiculos_activos, marcar_en_espera
+from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida, obtener_vehiculos_activos, marcar_en_espera, eliminar_patente_en_espera
 from views.dashboard import DashboardWindow
 from functools import partial
 
@@ -175,10 +175,10 @@ class RegistroWindow(QWidget):
                 btn_espera = QPushButton("🕒 En espera")
                 btn_espera.clicked.connect(partial(self.marcar_patente_en_espera, patente))
                 self.tabla_activos.setCellWidget(i, 3, btn_espera)
-            else:
-                item_accion = QTableWidgetItem("")
-                item_accion.setFlags(item_accion.flags() ^ Qt.ItemIsEditable)
-                self.tabla_activos.setItem(i, 3, item_accion)
+            elif self.rol == "administrador":
+                btn_eliminar = QPushButton("🗑️ Eliminar")
+                btn_eliminar.clicked.connect(partial(self.eliminar_patente_en_espera, patente))
+                self.tabla_activos.setCellWidget(i, 3, btn_eliminar)
 
         # Fila final: TOTAL
         fila_total = len(datos)
@@ -211,3 +211,14 @@ class RegistroWindow(QWidget):
             marcar_en_espera(patente)
             self.actualizar_tabla_activos()
 
+    def eliminar_patente_en_espera(self, patente):
+        confirmar = QMessageBox.question(
+            self,
+            "Confirmar eliminación",
+            f"¿Estás seguro de eliminar definitivamente el ingreso de la patente '{patente}' marcada como EN ESPERA?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if confirmar == QMessageBox.Yes:
+            eliminar_patente_en_espera(patente)
+            self.actualizar_tabla_activos()

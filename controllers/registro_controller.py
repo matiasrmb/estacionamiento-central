@@ -154,3 +154,18 @@ def marcar_en_espera(patente):
 
     cursor.close()
     conn.close()
+
+def eliminar_patente_en_espera(patente):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Elimina el último ingreso activo marcado como en_espera
+    query = """
+        DELETE i FROM ingresos i
+        JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+        WHERE v.patente = %s AND i.fecha_hora_salida IS NULL AND i.en_espera = 1
+    """
+    cursor.execute(query, (patente,))
+    conn.commit()
+    cursor.close()
+    conn.close()
