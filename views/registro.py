@@ -3,8 +3,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QTimer, Qt
 from datetime import datetime
-from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida, obtener_vehiculos_activos
+from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida, obtener_vehiculos_activos, marcar_en_espera
 from views.dashboard import DashboardWindow
+from functools import partial
 
 class RegistroWindow(QWidget):
     def __init__(self, usuario, rol="operador"):
@@ -52,8 +53,8 @@ class RegistroWindow(QWidget):
         self.grupo_tabla.toggled.connect(self.mostrar_ocultar_tabla)
 
         self.tabla_activos = QTableWidget()
-        self.tabla_activos.setColumnCount(3)
-        self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Monto Actual"])
+        self.tabla_activos.setColumnCount(4)
+        self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Monto Actual", "Acción"])
         self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.tabla_activos.setMaximumHeight(200)
 
@@ -131,17 +132,44 @@ class RegistroWindow(QWidget):
 
     def actualizar_tabla_activos(self):
         datos = obtener_vehiculos_activos()
-
-        self.tabla_activos.setRowCount(len(datos) + 1)  # +1 para la fila del total
+        self.tabla_activos.setRowCount(len(datos) + 1)  # +1 para fila total
         total = 0
 
         for i, vehiculo in enumerate(datos):
-            self.tabla_activos.setItem(i, 0, QTableWidgetItem(vehiculo["patente"]))
-            self.tabla_activos.setItem(i, 1, QTableWidgetItem(vehiculo["hora"]))
-            self.tabla_activos.setItem(i, 2, QTableWidgetItem(f"${vehiculo['monto']:.0f}"))
-            total += vehiculo["monto"]
+            patente = vehiculo["patente"]
+            hora = vehiculo["hora"]
+            monto = vehiculo["monto"]
+            en_espera = vehiculo.get("en_espera", False)
 
-        # Fila total
+            # Columna 0: Patente
+            item_patente = QTableWidgetItem(patente)
+            if en_espera:
+                item_patente.setForeground(Qt.gray)
+            self.tabla_activos.setItem(i, 0, item_patente)
+
+            # Columna 1: Hora ingreso
+            item_hora = QTableWidgetItem(hora)
+            if en_espera:
+                item_hora.setForeground(Qt.gray)
+            self.tabla_activos.setItem(i, 1, item_hora)
+
+            # Columna 2: Monto
+            item_monto = QTableWidgetItem(f"${monto:.0f}")
+            if en_espera:
+                item_monto.setForeground(Qt.gray)
+            self.tabla_activos.setItem(i, 2, item_monto)
+
+            # Acumula total solo si no está en espera
+            if not en_espera:
+                total += monto
+
+            # Columna 3: Botón “En espera” solo si aún no está marcado
+            if not en_espera and self.rol != "administrador":
+                btn_espera = QPushButton("🕒 En espera")
+                btn_espera.clicked.connect(partial(self.marcar_patente_en_espera, patente))
+                self.tabla_activos.setCellWidget(i, 3, btn_espera)
+
+        # Fila total (última fila)
         item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
         item_total_label.setFlags(item_total_label.flags() ^ Qt.ItemIsEditable)
         item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -153,5 +181,19 @@ class RegistroWindow(QWidget):
         self.tabla_activos.setItem(len(datos), 1, item_total_label)
         self.tabla_activos.setItem(len(datos), 2, item_total_monto)
 
+
     def mostrar_ocultar_tabla(self, visible):
         self.tabla_activos.setVisible(visible)
+
+    def marcar_patente_en_espera(self, patente):
+        confirmar = QMessageBox.question(
+            self,
+            "Confirmar acción",
+            f"¿Seguro que quieres marcar la patente '{patente}' como EN ESPERA?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if confirmar == QMessageBox.Yes:
+            marcar_en_espera(patente)
+            self.actualizar_tabla_activos()
+
