@@ -1,9 +1,10 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHBoxLayout, QLineEdit, QComboBox, QMessageBox
+    QTableWidget, QTableWidgetItem, QHBoxLayout, QLineEdit, QComboBox, QMessageBox, QInputDialog
 )
 from PySide6.QtCore import Qt
-from controllers.usuarios_controller import obtener_usuarios, crear_usuario
+from controllers.usuarios_controller import obtener_usuarios, crear_usuario, cambiar_contrasena
+from functools import partial
 
 class UsuariosWindow(QWidget):
     def __init__(self):
@@ -55,7 +56,9 @@ class UsuariosWindow(QWidget):
         for i, u in enumerate(usuarios):
             self.tabla.setItem(i, 0, QTableWidgetItem(u["usuario"]))
             self.tabla.setItem(i, 1, QTableWidgetItem(u["rol"]))
-            self.tabla.setItem(i, 2, QTableWidgetItem(""))  # Por ahora vacío
+            btn_cambiar = QPushButton("🔒 Cambiar clave")
+            btn_cambiar.clicked.connect(partial(self.preguntar_nueva_clave, u["usuario"]))
+            self.tabla.setCellWidget(i, 2, btn_cambiar)
 
     def crear_usuario(self):
         usuario = self.input_usuario.text().strip()
@@ -73,3 +76,11 @@ class UsuariosWindow(QWidget):
             self.cargar_usuarios()
         else:
             QMessageBox.critical(self, "Error", "No se pudo crear el usuario.")
+
+    def preguntar_nueva_clave(self, usuario):
+        clave, ok = QInputDialog.getText(self, "Cambiar contraseña", f"Ingresar nueva clave para '{usuario}':", QLineEdit.Password)
+        if ok and clave:
+            if cambiar_contrasena(usuario, clave):
+                QMessageBox.information(self, "Éxito", "Contraseña actualizada.")
+            else:
+                QMessageBox.critical(self, "Error", "No se pudo cambiar la contraseña.")

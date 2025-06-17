@@ -27,3 +27,21 @@ def crear_usuario(usuario, clave, rol):
     cursor.close()
     conn.close()
     return exito
+
+def cambiar_contrasena(usuario, nueva_clave):
+    conn = get_connection()
+    cursor = conn.cursor()
+    nuevo_hash = bcrypt.hashpw(nueva_clave.encode('utf-8'), bcrypt.gensalt())
+    try:
+        cursor.execute(
+            "UPDATE usuarios SET clave_hash = %s WHERE usuario = %s",
+            (nuevo_hash, usuario)
+        )
+        conn.commit()
+        exito = True
+    except Exception as e:
+        print("Error al cambiar contraseña:", e)
+        exito = False
+    cursor.close()
+    conn.close()
+    return exito
