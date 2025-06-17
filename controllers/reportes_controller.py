@@ -44,7 +44,7 @@ def exportar_pdf(datos):
         ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
         salida = row["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M")
         pdf.cell(200, 10,
-            txt=f"{row['patente']} | {ingreso} → {salida} | ${row['tarifa_aplicada']:.0f}",
+            txt=f"{row['patente']} | {ingreso} -> {salida} | ${row['tarifa_aplicada']:.0f}",
             ln=True)
         total += row["tarifa_aplicada"]
 
