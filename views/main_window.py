@@ -6,6 +6,7 @@ from views.reportes import ReportesWindow
 from views.mensuales import MensualesWindow
 from views.configuracion import ConfiguracionWindow
 from views.tarifas_personalizadas import TarifasPersonalizadasWindow
+from views.usuarios import UsuariosWindow
 
 class MainWindow(QWidget):
     def __init__(self, usuario, rol):
@@ -52,6 +53,12 @@ class MainWindow(QWidget):
             btn_reportes.setDisabled(True)
         layout.addWidget(btn_reportes)
 
+        # Botón para crear usuarios (solo para admin)
+        if self.rol == "administrador":
+            btn_usuarios = QPushButton("Gestión de Usuarios")
+            btn_usuarios.clicked.connect(self.abrir_usuarios)
+            layout.addWidget(btn_usuarios)
+
         # Botón de cierre de sesión
         btn_salir = QPushButton("Cerrar sesión")
         btn_salir.clicked.connect(self.close)
@@ -78,3 +85,8 @@ class MainWindow(QWidget):
     def abrir_tarifas(self):
         self.tarifas_window = TarifasPersonalizadasWindow()
         self.tarifas_window.show()
+
+    def abrir_usuarios(self):
+        self.usuarios_window = UsuariosWindow()
+        self.usuarios_window.show()
+
