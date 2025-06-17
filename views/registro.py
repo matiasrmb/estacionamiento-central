@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QTableWidget, QTableWidgetItem, QGroupBox
 )
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Qt
 from datetime import datetime
 from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida, obtener_vehiculos_activos
 from views.dashboard import DashboardWindow
@@ -54,6 +54,8 @@ class RegistroWindow(QWidget):
         self.tabla_activos = QTableWidget()
         self.tabla_activos.setColumnCount(3)
         self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Monto Actual"])
+        self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.tabla_activos.setMaximumHeight(200)
 
         layout_tabla = QVBoxLayout()
         layout_tabla.addWidget(self.tabla_activos)
