@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QComboBox, QMessageBox
 )
 from controllers.config_controller import obtener_configuracion, actualizar_configuracion
+from controllers.tarifas_controller import generar_tramos_automaticos
 
 class ConfiguracionWindow(QWidget):
     def __init__(self):
@@ -34,6 +35,10 @@ class ConfiguracionWindow(QWidget):
         self.btn_guardar = QPushButton("Guardar configuración")
         self.btn_guardar.clicked.connect(self.guardar)
 
+        self.btn_generar_tramos = QPushButton("🛠 Generar tramos automáticamente")
+        self.btn_generar_tramos.clicked.connect(self.generar_tramos_auto)
+        layout.addWidget(self.btn_generar_tramos)
+
         layout.addWidget(self.modo_label)
         layout.addWidget(self.modo_combo)
         layout.addWidget(self.minima_label)
@@ -58,3 +63,16 @@ class ConfiguracionWindow(QWidget):
         actualizar_configuracion("tarifa_hora", tarifa_hora)
 
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
+
+    def generar_tramos_auto(self):
+        confirmar = QMessageBox.question(
+            self,
+            "Confirmación",
+            "¿Deseas generar automáticamente los tramos de tarifas personalizados?\nEsto sobrescribirá los tramos actuales.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if confirmar == QMessageBox.Yes:
+            generar_tramos_automaticos()
+            actualizar_configuracion("modo_auto_simplificado", 1)
+            QMessageBox.information(self, "Éxito", "Tramos generados correctamente.")

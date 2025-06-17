@@ -89,3 +89,38 @@ def calcular_tarifa(minutos):
 
     else:
         return int(config.get("tarifa_minima", 300))
+
+def generar_tramos_automaticos():
+    from controllers.config_controller import obtener_configuracion
+    config = obtener_configuracion()
+    tarifa_min = int(config.get("tarifa_minima", 300))
+    tarifa_hora = int(config.get("tarifa_hora", 1300))
+
+    if tarifa_min <= 0 or tarifa_hora <= 0:
+        return
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Limpiar tramos actuales
+    cursor.execute("DELETE FROM tarifas_personalizadas")
+
+    tramos = []
+    valor_actual = tarifa_min
+    minutos = 0
+
+    while valor_actual <= tarifa_hora:
+        tramo = (minutos, minutos + 4, valor_actual)
+        tramos.append(tramo)
+        minutos += 5
+        valor_actual += 100
+
+    for inicio, fin, valor in tramos:
+        cursor.execute("""
+            INSERT INTO tarifas_personalizadas (minuto_inicio, minuto_fin, valor)
+            VALUES (%s, %s, %s)
+        """, (inicio, fin, valor))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
