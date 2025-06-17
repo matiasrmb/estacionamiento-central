@@ -54,28 +54,34 @@ def calcular_tarifa(minutos):
         return round(minutos * tarifa_por_minuto)
 
     elif modo == "personalizado":
-        from utils.db import get_connection
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # Obtener todos los intervalos
         cursor.execute("""
-            SELECT valor
+            SELECT minuto_inicio, minuto_fin, valor
             FROM tarifas_personalizadas
-            WHERE %s BETWEEN minuto_inicio AND minuto_fin
             ORDER BY minuto_inicio ASC
-            LIMIT 1
-        """, (minutos,))
-        resultado = cursor.fetchone()
+        """)
+        intervalos = cursor.fetchall()
         cursor.close()
         conn.close()
 
-        if resultado:
-            return resultado["valor"]
-        else:
-            # Si no hay tramo, aplicar tarifa por hora proporcional
-            tarifa_hora = int(config.get("tarifa_hora", 1300))
-            return round((minutos / 60) * tarifa_hora)
+        if not intervalos:
+            return int(config.get("tarifa_minima", 300))
+
+        minutos_en_hora = minutos % 60
+        horas_completas = minutos // 60
+
+        # Buscar el tramo correspondiente dentro del ciclo de 60 minutos
+        for tramo in intervalos:
+            if tramo["minuto_inicio"] <= minutos_en_hora <= tramo["minuto_fin"]:
+                return tramo["valor"] + horas_completas * intervalos[-1]["valor"]
+
+        # Si por algún motivo no encaja, usar el último tramo como base
+        return intervalos[-1]["valor"] + horas_completas * intervalos[-1]["valor"]
 
     else:
-        # Fallback a tarifa mínima
+        # Fallback a tarifa mínima si modo no reconocido
         return int(config.get("tarifa_minima", 300))
+
