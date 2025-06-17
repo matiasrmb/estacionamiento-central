@@ -104,4 +104,32 @@ def registrar_salida(patente):
     generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa)
     return tarifa
     
+def obtener_vehiculos_activos():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT v.patente, i.fecha_hora_ingreso
+        FROM ingresos i
+        JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+        WHERE i.fecha_hora_salida IS NULL
+        ORDER BY i.fecha_hora_ingreso ASC
+    """)
+
+    resultados = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    ahora = datetime.now()
+    lista = []
+    for r in resultados:
+        minutos = int((ahora - r["fecha_hora_ingreso"]).total_seconds() / 60)
+        tarifa = calcular_tarifa(minutos)
+        lista.append({
+            "patente": r["patente"],
+            "hora": r["fecha_hora_ingreso"].strftime("%H:%M"),
+            "monto": tarifa
+        })
+
+    return lista
 

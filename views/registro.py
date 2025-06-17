@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
+    QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QTableWidget, QTableWidgetItem
 )
+from PySide6.QtCore import QTimer
 from datetime import datetime
-from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida
+from controllers.registro_controller import buscar_estado_vehiculo, registrar_ingreso, registrar_salida, obtener_vehiculos_activos
 from views.dashboard import DashboardWindow
 
 class RegistroWindow(QWidget):
@@ -44,6 +45,19 @@ class RegistroWindow(QWidget):
         self.boton_resumen.clicked.connect(self.abrir_dashboard)
         layout.addWidget(self.boton_resumen)
 
+        # Tabla de vehículos actualmente estacionados
+        self.tabla_activos = QTableWidget()
+        self.tabla_activos.setColumnCount(3)
+        self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Monto Actual"])
+        layout.addWidget(QLabel("🚗 Vehículos actualmente estacionados:"))
+        layout.addWidget(self.tabla_activos)
+
+        self.timer_tabla = QTimer()
+        self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
+        self.timer_tabla.start(60000)  # Cada 60 segundos
+        self.actualizar_tabla_activos()  # Primera carga inmediata
+
+
         self.setLayout(layout)
 
     def buscar_vehiculo(self):
@@ -78,6 +92,8 @@ class RegistroWindow(QWidget):
             self.reset()
         else:
             QMessageBox.critical(self, "Error", "No se pudo registrar el ingreso.")
+        self.actualizar_tabla_activos()
+
 
     def registrar_salida(self):
         patente = self.input_patente.text().strip().upper()
@@ -87,6 +103,8 @@ class RegistroWindow(QWidget):
             self.reset()
         else:
             QMessageBox.critical(self, "Error", "No se pudo registrar la salida.")
+        self.actualizar_tabla_activos()
+
 
     def reset(self):
         self.input_patente.clear()
@@ -97,3 +115,13 @@ class RegistroWindow(QWidget):
     def abrir_dashboard(self):
         self.dashboard = DashboardWindow(self.usuario, rol="operador")  # o self.rol si lo tienes
         self.dashboard.show()
+
+    def actualizar_tabla_activos(self):
+        datos = obtener_vehiculos_activos()
+
+        self.tabla_activos.setRowCount(len(datos))
+        for i, vehiculo in enumerate(datos):
+            self.tabla_activos.setItem(i, 0, QTableWidgetItem(vehiculo["patente"]))
+            self.tabla_activos.setItem(i, 1, QTableWidgetItem(vehiculo["hora"]))
+            self.tabla_activos.setItem(i, 2, QTableWidgetItem(f"${vehiculo['monto']:.0f}"))
+
