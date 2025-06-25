@@ -46,3 +46,48 @@ def realizar_cierre_diario(usuario):
     cursor.close()
     conn.close()
     return True, f"Cierre realizado con éxito. Total recaudado: ${total_recaudado}"
+
+def realizar_cierre_mensual(usuario):
+    ahora = datetime.now()
+    mes_actual = ahora.strftime("%Y-%m")
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Verificar si ya se cerró este mes
+    cursor.execute("SELECT * FROM cierres_mensuales WHERE mes = %s", (mes_actual,))
+    if cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return False, "Este mes ya fue cerrado."
+
+    # Obtener datos del mes
+    cursor.execute("""
+        SELECT COUNT(*) AS ingresos
+        FROM ingresos
+        WHERE MONTH(fecha_hora_ingreso) = MONTH(CURRENT_DATE())
+          AND YEAR(fecha_hora_ingreso) = YEAR(CURRENT_DATE())
+    """)
+    total_ingresos = cursor.fetchone()["ingresos"]
+
+    cursor.execute("""
+        SELECT COUNT(*) AS salidas, SUM(tarifa_aplicada) AS total
+        FROM ingresos
+        WHERE fecha_hora_salida IS NOT NULL
+          AND MONTH(fecha_hora_salida) = MONTH(CURRENT_DATE())
+          AND YEAR(fecha_hora_salida) = YEAR(CURRENT_DATE())
+    """)
+    salida_info = cursor.fetchone()
+    total_salidas = salida_info["salidas"]
+    total_recaudado = salida_info["total"] or 0
+
+    # Insertar el cierre mensual
+    cursor.execute("""
+        INSERT INTO cierres_mensuales (mes, fecha_cierre, total_recaudado, total_ingresos, total_salidas, usuario)
+        VALUES (%s, NOW(), %s, %s, %s, %s)
+    """, (mes_actual, total_recaudado, total_ingresos, total_salidas, usuario))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return True, "Cierre mensual realizado correctamente."

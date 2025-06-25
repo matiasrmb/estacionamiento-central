@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox
 from PySide6.QtCore import QDate, QDateTime, QTimer
 from controllers.dashboard_controller import obtener_resumen_diario
-from controllers.cierres_controller import realizar_cierre_diario
+from controllers.cierres_controller import realizar_cierre_diario, realizar_cierre_mensual
+from datetime import datetime
 
 class DashboardWindow(QWidget):
     def __init__(self, usuario, rol):
@@ -38,6 +39,11 @@ class DashboardWindow(QWidget):
         self.boton_cierre.clicked.connect(self.confirmar_cierre_diario)
         layout.addWidget(self.boton_cierre)
 
+        self.boton_cierre_mensual = QPushButton("📆 Realizar Cierre Mensual")
+        self.boton_cierre_mensual.clicked.connect(self.confirmar_cierre_mensual)
+        layout.addWidget(self.boton_cierre_mensual)
+
+
         self.btn_continuar = QPushButton("Ir al Panel Principal")
         self.btn_continuar.clicked.connect(self.abrir_menu)
         layout.addWidget(self.btn_continuar)
@@ -67,3 +73,22 @@ class DashboardWindow(QWidget):
                 QMessageBox.information(self, "Éxito", mensaje)
             else:
                 QMessageBox.information(self, "Sin registros", mensaje)
+
+    def confirmar_cierre_mensual(self):
+        ahora = datetime.now()
+        if ahora.day != 31 and not (ahora.month in [1, 3, 5, 7, 8, 10, 12] and ahora.day == 31) and not (ahora.month in [4, 6, 9, 11] and ahora.day == 30) and not (ahora.month == 2 and ahora.day in [28, 29]):
+            QMessageBox.warning(self, "Error", "El cierre mensual solo puede realizarse el último día del mes.")
+            return
+
+        confirmar = QMessageBox.question(
+            self,
+            "Confirmar Cierre Mensual",
+            "¿Estás seguro de que deseas realizar el cierre mensual?\nEste proceso es irreversible.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirmar == QMessageBox.Yes:
+            exito, mensaje = realizar_cierre_mensual(self.usuario)
+            if exito:
+                QMessageBox.information(self, "Éxito", mensaje)
+            else:
+                QMessageBox.information(self, "Aviso", mensaje)
