@@ -1,4 +1,7 @@
 __pycache__/ 
+tickets/ 
+reportes/
+pdfs/
 *.pyc 
 *.pyo 
 *.log 
@@ -6,6 +9,4 @@ __pycache__/
 dist/ 
 build/ 
 config.ini 
-tickets/ 
-reportes/
 test_tarifas.py
