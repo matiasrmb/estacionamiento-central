@@ -1,4 +1,5 @@
 from utils.db import get_connection
+from utils.pdf import generar_pdf_cierre
 from datetime import datetime
 
 def realizar_cierre_diario(usuario):
@@ -43,6 +44,17 @@ def realizar_cierre_diario(usuario):
     """, ids)
 
     conn.commit()
+
+    datos_pdf = {
+        "Fecha de inicio": fecha_inicio.strftime("%Y-%m-%d %H:%M"),
+        "Fecha de cierre": fecha_cierre.strftime("%Y-%m-%d %H:%M"),
+        "Total recaudado": f"${total_recaudado}",
+        "Total ingresos": total_ingresos,
+        "Total salidas": total_salidas,
+        "Registrado por": usuario
+    }
+    generar_pdf_cierre("diario", datos_pdf)
+
     cursor.close()
     conn.close()
     return True, f"Cierre realizado con éxito. Total recaudado: ${total_recaudado}"
