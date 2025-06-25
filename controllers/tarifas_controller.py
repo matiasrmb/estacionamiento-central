@@ -15,6 +15,9 @@ def obtener_tarifas_personalizadas():
     return resultado
 
 def agregar_intervalo(min_inicio, min_fin, valor):
+    if not validar_intervalo(min_inicio, min_fin):
+        raise ValueError("❌ El intervalo se superpone con uno existente.")
+
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -24,6 +27,22 @@ def agregar_intervalo(min_inicio, min_fin, valor):
     conn.commit()
     cursor.close()
     conn.close()
+
+def actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor):
+    if not validar_intervalo(min_inicio, min_fin, id_excluir=id_tarifa):
+        raise ValueError("❌ El intervalo se superpone con uno existente.")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE tarifas_personalizadas
+        SET minuto_inicio = %s, minuto_fin = %s, valor = %s
+        WHERE id_tarifa = %s
+    """, (min_inicio, min_fin, valor, id_tarifa))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 
 def eliminar_intervalo(id_tarifa):
     conn = get_connection()
@@ -124,3 +143,25 @@ def generar_tramos_automaticos():
     conn.commit()
     cursor.close()
     conn.close()
+
+def validar_intervalo(min_inicio, min_fin, id_excluir=None):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if id_excluir:
+        cursor.execute("""
+            SELECT minuto_inicio, minuto_fin FROM tarifas_personalizadas
+            WHERE id_tarifa != %s
+        """, (id_excluir,))
+    else:
+        cursor.execute("SELECT minuto_inicio, minuto_fin FROM tarifas_personalizadas")
+
+    tramos = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    for tramo in tramos:
+        if not (min_fin < tramo["minuto_inicio"] or min_inicio > tramo["minuto_fin"]):
+            return False  # Hay superposición
+
+    return True
