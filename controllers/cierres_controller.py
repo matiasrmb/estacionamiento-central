@@ -100,6 +100,17 @@ def realizar_cierre_mensual(usuario):
     """, (mes_actual, total_recaudado, total_ingresos, total_salidas, usuario))
 
     conn.commit()
+
+    datos_pdf = {
+        "Mes": mes_actual,
+        "Fecha de cierre": ahora.strftime("%Y-%m-%d %H:%M"),
+        "Total recaudado": f"${total_recaudado}",
+        "Total ingresos": total_ingresos,
+        "Total salidas": total_salidas,
+        "Registrado por": usuario
+    }
+    generar_pdf_cierre("mensual", datos_pdf)
+
     cursor.close()
     conn.close()
     return True, "Cierre mensual realizado correctamente."
