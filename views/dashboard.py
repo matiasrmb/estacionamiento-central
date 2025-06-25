@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton
+from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox
 from PySide6.QtCore import QDate, QDateTime, QTimer
 from controllers.dashboard_controller import obtener_resumen_diario
+from controllers.cierres_controller import realizar_cierre_diario
 
 class DashboardWindow(QWidget):
     def __init__(self, usuario, rol):
@@ -33,6 +34,10 @@ class DashboardWindow(QWidget):
         layout.addWidget(QLabel(f"🚘 Estacionados actualmente: {resumen['estacionados']}"))
         layout.addWidget(QLabel(f"💰 Total recaudado hoy: ${resumen['recaudado']:.0f}"))
 
+        self.boton_cierre = QPushButton("📦 Realizar Cierre Diario")
+        self.boton_cierre.clicked.connect(self.confirmar_cierre_diario)
+        layout.addWidget(self.boton_cierre)
+
         self.btn_continuar = QPushButton("Ir al Panel Principal")
         self.btn_continuar.clicked.connect(self.abrir_menu)
         layout.addWidget(self.btn_continuar)
@@ -48,3 +53,17 @@ class DashboardWindow(QWidget):
         self.hide()
         self.main = MainWindow(self.usuario, self.rol)
         self.main.show()
+
+    def confirmar_cierre_diario(self):
+        respuesta = QMessageBox.question(
+            self,
+            "Confirmar Cierre Diario",
+            "¿Estás seguro de que deseas realizar el cierre diario?\nEsto marcará como cerradas todas las salidas registradas hasta ahora.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if respuesta == QMessageBox.Yes:
+            exito, mensaje = realizar_cierre_diario(self.usuario)
+            if exito:
+                QMessageBox.information(self, "Éxito", mensaje)
+            else:
+                QMessageBox.information(self, "Sin registros", mensaje)
