@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
-    QWidget, QPushButton, QLabel, QVBoxLayout
+    QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy
 )
+from PySide6.QtCore import Qt
 from views.registro import RegistroWindow
 from views.reportes import ReportesWindow
 from views.mensuales import MensualesWindow
@@ -13,54 +14,46 @@ class MainWindow(QWidget):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
-        self.setWindowTitle("Estacionamiento Central - Panel Principal")
-        self.setFixedSize(400, 300)
+        self.setWindowTitle("🅿️ Estacionamiento Central - Panel Principal")
+        self.setMinimumSize(420, 450)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
 
-        bienvenida = QLabel(f"Bienvenido, {self.usuario} ({self.rol})")
+        # Encabezado
+        bienvenida = QLabel(f"👋 Bienvenido, <b>{self.usuario}</b> <span style='color:gray;'>({self.rol})</span>")
+        bienvenida.setAlignment(Qt.AlignCenter)
+        bienvenida.setStyleSheet("font-size: 16px; padding: 10px;")
         layout.addWidget(bienvenida)
 
-        # Botón de registro de vehículos
-        btn_registro = QPushButton("Registro de Vehículos")
-        btn_registro.clicked.connect(self.abrir_registro)
-        layout.addWidget(btn_registro)
+        # Botones principales
+        botones = [
+            ("🚗 Registro de Vehículos", self.abrir_registro),
+            ("📊 Reportes", self.abrir_reportes if self.rol == "administrador" else None),
+            ("👥 Clientes Mensuales", self.abrir_mensuales if self.rol == "administrador" else None),
+            ("⚙️ Configuración", self.abrir_configuracion if self.rol == "administrador" else None),
+            ("📈 Editar tarifas personalizadas", self.abrir_tarifas if self.rol == "administrador" else None),
+            ("🔐 Gestión de Usuarios", self.abrir_usuarios if self.rol == "administrador" else None)
+        ]
 
-        # Botón de agregar mensuales (solo para admin)
-        if self.rol == "administrador":
-            btn_mensuales = QPushButton("Clientes Mensuales")
-            btn_mensuales.clicked.connect(self.abrir_mensuales)
-            layout.addWidget(btn_mensuales)
+        for texto, funcion in botones:
+            btn = QPushButton(texto)
+            btn.setMinimumHeight(40)
+            if funcion:
+                btn.clicked.connect(funcion)
+            else:
+                btn.setDisabled(True)
+            layout.addWidget(btn)
 
-        # Botón para configuración (solo para admin)
-        if self.rol == "administrador":
-            btn_config = QPushButton("Configuración")
-            btn_config.clicked.connect(self.abrir_configuracion)
-            layout.addWidget(btn_config)
+        # Espacio flexible
+        layout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # Botón para editar tarifas (solo para admin)
-        if self.rol == "administrador":
-            btn_tarifas = QPushButton("Editar tarifas personalizadas")
-            btn_tarifas.clicked.connect(self.abrir_tarifas)
-            layout.addWidget(btn_tarifas)
-
-        # Botón de reportes (solo para admin)
-        btn_reportes = QPushButton("Reportes")
-        btn_reportes.clicked.connect(self.abrir_reportes)
-        if self.rol != "administrador":
-            btn_reportes.setDisabled(True)
-        layout.addWidget(btn_reportes)
-
-        # Botón para crear usuarios (solo para admin)
-        if self.rol == "administrador":
-            btn_usuarios = QPushButton("Gestión de Usuarios")
-            btn_usuarios.clicked.connect(self.abrir_usuarios)
-            layout.addWidget(btn_usuarios)
-
-        # Botón de cierre de sesión
-        btn_salir = QPushButton("Cerrar sesión")
+        # Botón de salida
+        btn_salir = QPushButton("🔙 Cerrar sesión")
+        btn_salir.setMinimumHeight(35)
         btn_salir.clicked.connect(self.close)
         layout.addWidget(btn_salir)
 
@@ -73,7 +66,7 @@ class MainWindow(QWidget):
     def abrir_reportes(self):
         self.reportes_window = ReportesWindow()
         self.reportes_window.show()
-        
+
     def abrir_mensuales(self):
         self.mensuales_window = MensualesWindow()
         self.mensuales_window.show()
@@ -89,4 +82,3 @@ class MainWindow(QWidget):
     def abrir_usuarios(self):
         self.usuarios_window = UsuariosWindow()
         self.usuarios_window.show()
-
