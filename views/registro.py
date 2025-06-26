@@ -13,44 +13,58 @@ class RegistroWindow(QWidget):
         self.usuario = usuario
         self.rol = rol
         self.setWindowTitle("Registro de Vehículos")
-        self.setMinimumSize(400, 250)
+        self.setMinimumSize(500, 500)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        # ➤ Grupo de Registro
+        grupo_registro = QGroupBox("🔎 Registro de Vehículo")
+        layout_registro = QVBoxLayout()
+        layout_registro.setContentsMargins(10, 20, 10, 20)  # Espaciado interno
 
         self.label_patente = QLabel("Patente del vehículo:")
         self.input_patente = QLineEdit()
 
-        self.boton_buscar = QPushButton("Buscar")
+        self.boton_buscar = QPushButton("🔍 Buscar")
         self.boton_buscar.clicked.connect(self.buscar_vehiculo)
 
         self.info_label = QLabel("")
-        self.boton_ingreso = QPushButton("Registrar Ingreso")
+        self.boton_ingreso = QPushButton("🚗 Registrar Ingreso")
         self.boton_ingreso.setEnabled(False)
         self.boton_ingreso.clicked.connect(self.registrar_ingreso)
 
-        self.boton_salida = QPushButton("Registrar Salida")
+        self.boton_salida = QPushButton("🏁 Registrar Salida")
         self.boton_salida.setEnabled(False)
         self.boton_salida.clicked.connect(self.registrar_salida)
 
-        layout.addWidget(self.label_patente)
-        layout.addWidget(self.input_patente)
-        layout.addWidget(self.boton_buscar)
-        layout.addWidget(self.info_label)
-        layout.addWidget(self.boton_ingreso)
-        layout.addWidget(self.boton_salida)
+        layout_registro.addWidget(self.label_patente)
+        layout_registro.addWidget(self.input_patente)
+        layout_registro.addWidget(self.boton_buscar)
+        layout_registro.addWidget(self.info_label)
+        layout_registro.addWidget(self.boton_ingreso)
+        layout_registro.addWidget(self.boton_salida)
+        grupo_registro.setLayout(layout_registro)
 
-        # Botón para ver el resumen
-        self.boton_resumen = QPushButton("Ver Resumen Diario")
+        layout.addWidget(grupo_registro)
+
+        # ➤ Botón para dashboard
+        layout.addSpacing(10)
+        self.boton_resumen = QPushButton("📊 Ver Resumen Diario")
         self.boton_resumen.clicked.connect(self.abrir_dashboard)
         layout.addWidget(self.boton_resumen)
 
-        # Grupo desplegable para la tabla
+        # ➤ Grupo para tabla de vehículos activos
         self.grupo_tabla = QGroupBox("🚗 Vehículos actualmente estacionados")
         self.grupo_tabla.setCheckable(True)
-        self.grupo_tabla.setChecked(False)  # Empieza colapsado
+        self.grupo_tabla.setChecked(False)
         self.grupo_tabla.toggled.connect(self.mostrar_ocultar_tabla)
+
+        layout_tabla = QVBoxLayout()
+        layout_tabla.setContentsMargins(10, 20, 10, 20)
 
         self.tabla_activos = QTableWidget()
         self.tabla_activos.setColumnCount(4)
@@ -58,23 +72,23 @@ class RegistroWindow(QWidget):
         self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.tabla_activos.setMaximumHeight(200)
 
-        layout_tabla = QVBoxLayout()
         layout_tabla.addWidget(self.tabla_activos)
         self.grupo_tabla.setLayout(layout_tabla)
 
         layout.addWidget(self.grupo_tabla)
 
-        # Timer para actualizar tabla
-        self.timer_tabla = QTimer()
-        self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
-        self.timer_tabla.start(60000)
-        self.actualizar_tabla_activos()
-
+        # Configurar tabla
         self.tabla_activos.horizontalHeader().setStretchLastSection(True)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+
+        # Timer para actualizar
+        self.timer_tabla = QTimer()
+        self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
+        self.timer_tabla.start(60000)
+        self.actualizar_tabla_activos()
 
         self.setLayout(layout)
 
