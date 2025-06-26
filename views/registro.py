@@ -39,6 +39,16 @@ class RegistroWindow(QWidget):
 
         self.boton_salida = QPushButton("🏁 Registrar Salida")
         self.boton_salida.setEnabled(False)
+        self.boton_salida.setStyleSheet("""
+            QPushButton {
+                padding: 6px;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+                border: 1px solid #aaaaaa;
+            }
+        """)
         self.boton_salida.clicked.connect(self.registrar_salida)
 
         layout_registro.addWidget(self.label_patente)
