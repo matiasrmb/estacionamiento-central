@@ -8,6 +8,7 @@ from views.mensuales import MensualesWindow
 from views.configuracion import ConfiguracionWindow
 from views.tarifas_personalizadas import TarifasPersonalizadasWindow
 from views.usuarios import UsuariosWindow
+from controllers.login_controller import registrar_asistencia_salida
 
 class MainWindow(QWidget):
     def __init__(self, usuario, rol):
@@ -54,7 +55,7 @@ class MainWindow(QWidget):
         # Botón de salida
         btn_salir = QPushButton("🔙 Cerrar sesión")
         btn_salir.setMinimumHeight(35)
-        btn_salir.clicked.connect(self.close)
+        btn_salir.clicked.connect(self.cerrar_sesion)
         layout.addWidget(btn_salir)
 
         self.setLayout(layout)
@@ -82,3 +83,8 @@ class MainWindow(QWidget):
     def abrir_usuarios(self):
         self.usuarios_window = UsuariosWindow()
         self.usuarios_window.show()
+    
+    def cerrar_sesion(self):
+        registrar_asistencia_salida(self.usuario)
+        self.close()
+
