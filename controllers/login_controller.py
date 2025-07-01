@@ -37,14 +37,42 @@ def registrar_asistencia_inicio(usuario):
 
 def registrar_asistencia_salida(usuario):
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
+
+    # 1. Obtener la última asistencia activa
     cursor.execute("""
-        UPDATE asistencias
-        SET hora_salida = NOW()
+        SELECT id_asistencia, hora_inicio
+        FROM asistencias
         WHERE usuario = %s AND hora_salida IS NULL
         ORDER BY hora_inicio DESC
         LIMIT 1
     """, (usuario,))
+    asistencia = cursor.fetchone()
+
+    if asistencia:
+        id_asistencia = asistencia["id_asistencia"]
+        hora_inicio = asistencia["hora_inicio"]
+
+        # 2. Calcular total recaudado y cantidad de movimientos
+        cursor.execute("""
+            SELECT COUNT(*) AS cantidad, SUM(tarifa_aplicada) AS total
+            FROM ingresos
+            WHERE usuario = %s AND fecha_hora_salida BETWEEN %s AND NOW()
+        """, (usuario, hora_inicio))
+        resultado = cursor.fetchone()
+        cantidad = resultado["cantidad"] or 0
+        total = resultado["total"] or 0
+
+        # 3. Cerrar asistencia con datos
+        cursor.execute("""
+            UPDATE asistencias
+            SET hora_salida = NOW(),
+                total_recaudado = %s,
+                cantidad_movimientos = %s
+            WHERE id_asistencia = %s
+        """, (total, cantidad, id_asistencia))
+
     conn.commit()
     cursor.close()
     conn.close()
+

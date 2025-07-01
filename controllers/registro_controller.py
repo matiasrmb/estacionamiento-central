@@ -65,7 +65,7 @@ def registrar_ingreso(patente):
     return True
 
 
-def registrar_salida(patente):
+def registrar_salida(patente, usuario):
     from datetime import datetime
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -93,9 +93,10 @@ def registrar_salida(patente):
     tarifa = calcular_tarifa(minutos)
 
     cursor.execute("""
-        UPDATE ingresos SET fecha_hora_salida = %s, tarifa_aplicada = %s
+        UPDATE ingresos
+        SET fecha_hora_salida = %s, tarifa_aplicada = %s, usuario = %s
         WHERE id_ingreso = %s
-    """, (ahora, tarifa, ingreso["id_ingreso"]))
+    """, (ahora, tarifa, usuario, ingreso["id_ingreso"]))
 
     conn.commit()
     cursor.close()

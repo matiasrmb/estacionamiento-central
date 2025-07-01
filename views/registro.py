@@ -136,17 +136,15 @@ class RegistroWindow(QWidget):
             QMessageBox.critical(self, "Error", "No se pudo registrar el ingreso.")
         self.actualizar_tabla_activos()
 
-
     def registrar_salida(self):
         patente = self.input_patente.text().strip().upper()
-        tarifa = registrar_salida(patente)
+        tarifa = registrar_salida(patente, self.usuario)  # ← aquí se pasa el usuario
         if tarifa is not None:
             QMessageBox.information(self, "Salida registrada", f"Tarifa: ${tarifa:.0f}")
             self.reset()
         else:
             QMessageBox.critical(self, "Error", "No se pudo registrar la salida.")
         self.actualizar_tabla_activos()
-
 
     def reset(self):
         self.input_patente.clear()
