@@ -1,0 +1,77 @@
+from PySide6.QtWidgets import (
+    QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
+    QHBoxLayout, QTableWidget, QTableWidgetItem, QDateEdit
+)
+from PySide6.QtCore import QDate
+from controllers.asistencias_controller import obtener_asistencias
+from utils.pdf_asistencias import exportar_asistencias_pdf  # la crearemos después
+
+class AsistenciasWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Registro de Asistencias")
+        self.setMinimumSize(700, 500)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        # Filtros
+        filtro_layout = QHBoxLayout()
+        self.input_usuario = QLineEdit()
+        self.input_usuario.setPlaceholderText("Usuario")
+
+        self.fecha_inicio = QDateEdit()
+        self.fecha_inicio.setCalendarPopup(True)
+        self.fecha_inicio.setDate(QDate.currentDate())
+
+        self.fecha_fin = QDateEdit()
+        self.fecha_fin.setCalendarPopup(True)
+        self.fecha_fin.setDate(QDate.currentDate())
+
+        self.btn_filtrar = QPushButton("Buscar")
+        self.btn_filtrar.clicked.connect(self.filtrar)
+
+        self.btn_exportar = QPushButton("Exportar PDF")
+        self.btn_exportar.clicked.connect(self.exportar_pdf)
+
+        filtro_layout.addWidget(QLabel("Usuario:"))
+        filtro_layout.addWidget(self.input_usuario)
+        filtro_layout.addWidget(QLabel("Desde:"))
+        filtro_layout.addWidget(self.fecha_inicio)
+        filtro_layout.addWidget(QLabel("Hasta:"))
+        filtro_layout.addWidget(self.fecha_fin)
+        filtro_layout.addWidget(self.btn_filtrar)
+        filtro_layout.addWidget(self.btn_exportar)
+
+        layout.addLayout(filtro_layout)
+
+        # Tabla
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(5)
+        self.tabla.setHorizontalHeaderLabels([
+            "Usuario", "Hora de Inicio", "Hora de Salida", "Movimientos", "Total Recaudado"
+        ])
+        layout.addWidget(self.tabla)
+
+        self.setLayout(layout)
+
+    def filtrar(self):
+        usuario = self.input_usuario.text().strip()
+        fecha_inicio = self.fecha_inicio.date().toPython()
+        fecha_fin = self.fecha_fin.date().toPython()
+
+        datos = obtener_asistencias(usuario or None, fecha_inicio, fecha_fin)
+        self.tabla.setRowCount(len(datos))
+        self.resultados = datos
+
+        for i, fila in enumerate(datos):
+            self.tabla.setItem(i, 0, QTableWidgetItem(fila["usuario"]))
+            self.tabla.setItem(i, 1, QTableWidgetItem(str(fila["hora_inicio"])))
+            self.tabla.setItem(i, 2, QTableWidgetItem(str(fila["hora_salida"] or "Activo")))
+            self.tabla.setItem(i, 3, QTableWidgetItem(str(fila["cantidad_movimientos"])))
+            self.tabla.setItem(i, 4, QTableWidgetItem(f"${fila['total_recaudado']:.0f}"))
+
+    def exportar_pdf(self):
+        if hasattr(self, "resultados") and self.resultados:
+            exportar_asistencias_pdf(self.resultados)

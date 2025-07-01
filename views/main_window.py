@@ -8,6 +8,7 @@ from views.mensuales import MensualesWindow
 from views.configuracion import ConfiguracionWindow
 from views.tarifas_personalizadas import TarifasPersonalizadasWindow
 from views.usuarios import UsuariosWindow
+from views.asistencias import AsistenciasWindow
 from controllers.login_controller import registrar_asistencia_salida
 
 class MainWindow(QWidget):
@@ -37,7 +38,8 @@ class MainWindow(QWidget):
             ("👥 Clientes Mensuales", self.abrir_mensuales if self.rol == "administrador" else None),
             ("⚙️ Configuración", self.abrir_configuracion if self.rol == "administrador" else None),
             ("📈 Editar tarifas personalizadas", self.abrir_tarifas if self.rol == "administrador" else None),
-            ("🔐 Gestión de Usuarios", self.abrir_usuarios if self.rol == "administrador" else None)
+            ("🔐 Gestión de Usuarios", self.abrir_usuarios if self.rol == "administrador" else None),
+            ("🕒 Ver asistencias", self.abrir_asistencias if self.rol == "administrador" else None)
         ]
 
         for texto, funcion in botones:
@@ -83,6 +85,10 @@ class MainWindow(QWidget):
     def abrir_usuarios(self):
         self.usuarios_window = UsuariosWindow()
         self.usuarios_window.show()
+
+    def abrir_asistencias(self):
+        self.asistencias_window = AsistenciasWindow()
+        self.asistencias_window.show()
     
     def cerrar_sesion(self):
 
