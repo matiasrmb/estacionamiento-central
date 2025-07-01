@@ -1,5 +1,6 @@
 import bcrypt
 from utils.db import get_connection
+from datetime import datetime, timedelta
 
 def validar_usuario(usuario, clave_plana):
     conn = get_connection()
@@ -49,11 +50,13 @@ def registrar_asistencia_salida(usuario):
     """, (usuario,))
     asistencia = cursor.fetchone()
 
+    resumen = {"cantidad": 0, "total": 0, "hora_inicio": None}
+
     if asistencia:
         id_asistencia = asistencia["id_asistencia"]
         hora_inicio = asistencia["hora_inicio"]
 
-        # 2. Calcular total recaudado y cantidad de movimientos
+        # 2. Calcular totales
         cursor.execute("""
             SELECT COUNT(*) AS cantidad, SUM(tarifa_aplicada) AS total
             FROM ingresos
@@ -63,7 +66,11 @@ def registrar_asistencia_salida(usuario):
         cantidad = resultado["cantidad"] or 0
         total = resultado["total"] or 0
 
-        # 3. Cerrar asistencia con datos
+        resumen["cantidad"] = cantidad
+        resumen["total"] = total
+        resumen["hora_inicio"] = hora_inicio
+
+        # 3. Cerrar asistencia
         cursor.execute("""
             UPDATE asistencias
             SET hora_salida = NOW(),
@@ -76,3 +83,4 @@ def registrar_asistencia_salida(usuario):
     cursor.close()
     conn.close()
 
+    return resumen

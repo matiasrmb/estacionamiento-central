@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy
+    QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy, QMessageBox
 )
 from PySide6.QtCore import Qt
 from views.registro import RegistroWindow
@@ -85,6 +85,14 @@ class MainWindow(QWidget):
         self.usuarios_window.show()
     
     def cerrar_sesion(self):
-        registrar_asistencia_salida(self.usuario)
-        self.close()
 
+        resumen = registrar_asistencia_salida(self.usuario)
+
+        QMessageBox.information(
+            self,
+            "Resumen del día",
+            f"Sesión: {resumen['hora_inicio'].strftime('%d-%m-%Y %H:%M') if resumen['hora_inicio'] else 'N/A'} - ahora\n"
+            f"Vehículos cobrados: {resumen['cantidad']}\n"
+            f"Total recaudado: ${resumen['total']:.0f}"
+        )
+        self.close()
