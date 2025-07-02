@@ -60,50 +60,55 @@ def realizar_cierre_diario(usuario):
     return True, f"Cierre realizado con éxito. Total recaudado: ${total_recaudado}"
 
 def realizar_cierre_mensual(usuario):
-    ahora = datetime.now()
-    mes_actual = ahora.strftime("%Y-%m")
-
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Verificar si ya se cerró este mes
-    cursor.execute("SELECT * FROM cierres_mensuales WHERE mes = %s", (mes_actual,))
-    if cursor.fetchone():
+    # 1. Obtener el mes más antiguo con ingresos que aún no haya sido cerrado
+    cursor.execute("""
+        SELECT DATE_FORMAT(MIN(fecha_hora_ingreso), '%Y-%m') AS mes
+        FROM ingresos
+        WHERE fecha_hora_ingreso IS NOT NULL
+          AND DATE_FORMAT(fecha_hora_ingreso, '%Y-%m') NOT IN (
+              SELECT mes FROM cierres_mensuales
+          )
+    """)
+    resultado = cursor.fetchone()
+    if not resultado or not resultado["mes"]:
         cursor.close()
         conn.close()
-        return False, "Este mes ya fue cerrado."
+        return False, "No hay meses pendientes por cerrar."
 
-    # Obtener datos del mes
+    mes_a_cerrar = resultado["mes"]
+
+    # 2. Obtener datos del mes a cerrar
     cursor.execute("""
         SELECT COUNT(*) AS ingresos
         FROM ingresos
-        WHERE MONTH(fecha_hora_ingreso) = MONTH(CURRENT_DATE())
-          AND YEAR(fecha_hora_ingreso) = YEAR(CURRENT_DATE())
-    """)
+        WHERE DATE_FORMAT(fecha_hora_ingreso, '%Y-%m') = %s
+    """, (mes_a_cerrar,))
     total_ingresos = cursor.fetchone()["ingresos"]
 
     cursor.execute("""
         SELECT COUNT(*) AS salidas, SUM(tarifa_aplicada) AS total
         FROM ingresos
         WHERE fecha_hora_salida IS NOT NULL
-          AND MONTH(fecha_hora_salida) = MONTH(CURRENT_DATE())
-          AND YEAR(fecha_hora_salida) = YEAR(CURRENT_DATE())
-    """)
+          AND DATE_FORMAT(fecha_hora_salida, '%Y-%m') = %s
+    """, (mes_a_cerrar,))
     salida_info = cursor.fetchone()
     total_salidas = salida_info["salidas"]
     total_recaudado = salida_info["total"] or 0
 
-    # Insertar el cierre mensual
+    # 3. Insertar el cierre mensual
     cursor.execute("""
         INSERT INTO cierres_mensuales (mes, fecha_cierre, total_recaudado, total_ingresos, total_salidas, usuario)
         VALUES (%s, NOW(), %s, %s, %s, %s)
-    """, (mes_actual, total_recaudado, total_ingresos, total_salidas, usuario))
+    """, (mes_a_cerrar, total_recaudado, total_ingresos, total_salidas, usuario))
 
     conn.commit()
 
     datos_pdf = {
-        "Mes": mes_actual,
-        "Fecha de cierre": ahora.strftime("%Y-%m-%d %H:%M"),
+        "Mes": mes_a_cerrar,
+        "Fecha de cierre": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "Total recaudado": f"${total_recaudado}",
         "Total ingresos": total_ingresos,
         "Total salidas": total_salidas,
@@ -113,4 +118,4 @@ def realizar_cierre_mensual(usuario):
 
     cursor.close()
     conn.close()
-    return True, "Cierre mensual realizado correctamente."
+    return True, f"Cierre del mes {mes_a_cerrar} realizado correctamente."

@@ -18,10 +18,12 @@ def obtener_resumen_diario():
     """)
     total_estacionados = cursor.fetchone()["estacionados"]
 
+    # ✅ Solo contar los que NO estén cerrados
     cursor.execute("""
         SELECT SUM(tarifa_aplicada) AS recaudado
         FROM ingresos
         WHERE DATE(fecha_hora_salida) = CURDATE()
+          AND cerrado = FALSE
     """)
     recaudado = cursor.fetchone()["recaudado"] or 0
 

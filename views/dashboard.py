@@ -31,9 +31,16 @@ class DashboardWindow(QWidget):
 
         layout.addWidget(self.label_hora)
         layout.addWidget(QLabel(f"🧍 Usuario: {self.usuario} ({self.rol})"))
-        layout.addWidget(QLabel(f"🚗 Ingresos hoy: {resumen['total_ingresos']}"))
-        layout.addWidget(QLabel(f"🚘 Estacionados actualmente: {resumen['estacionados']}"))
-        layout.addWidget(QLabel(f"💰 Total recaudado hoy: ${resumen['recaudado']:.0f}"))
+
+        self.label_ingresos = QLabel()
+        self.label_estacionados = QLabel()
+        self.label_recaudado = QLabel()
+
+        layout.addWidget(self.label_ingresos)
+        layout.addWidget(self.label_estacionados)
+        layout.addWidget(self.label_recaudado)
+
+        self.actualizar_resumen()
 
         self.boton_cierre = QPushButton("📦 Realizar Cierre Diario")
         self.boton_cierre.clicked.connect(self.confirmar_cierre_diario)
@@ -54,6 +61,12 @@ class DashboardWindow(QWidget):
         hora_actual = QDateTime.currentDateTime().toString("hh:mm:ss")
         self.label_hora.setText(f"🕒 Hora actual: {hora_actual}")
 
+    def actualizar_resumen(self):
+        resumen = obtener_resumen_diario()
+        self.label_ingresos.setText(f"🚗 Ingresos hoy: {resumen['total_ingresos']}")
+        self.label_estacionados.setText(f"🚘 Estacionados actualmente: {resumen['estacionados']}")
+        self.label_recaudado.setText(f"💰 Total recaudado hoy: ${resumen['recaudado']:.0f}")
+
     def abrir_menu(self):
         from views.main_window import MainWindow
         self.hide()
@@ -71,24 +84,21 @@ class DashboardWindow(QWidget):
             exito, mensaje = realizar_cierre_diario(self.usuario)
             if exito:
                 QMessageBox.information(self, "Éxito", mensaje)
+                self.actualizar_resumen()
             else:
                 QMessageBox.information(self, "Sin registros", mensaje)
 
     def confirmar_cierre_mensual(self):
-        ahora = datetime.now()
-        if ahora.day != 31 and not (ahora.month in [1, 3, 5, 7, 8, 10, 12] and ahora.day == 31) and not (ahora.month in [4, 6, 9, 11] and ahora.day == 30) and not (ahora.month == 2 and ahora.day in [28, 29]):
-            QMessageBox.warning(self, "Error", "El cierre mensual solo puede realizarse el último día del mes.")
-            return
-
         confirmar = QMessageBox.question(
             self,
             "Confirmar Cierre Mensual",
-            "¿Estás seguro de que deseas realizar el cierre mensual?\nEste proceso es irreversible.",
+            "¿Deseas cerrar el mes más antiguo aún no cerrado?\nEste proceso es irreversible.",
             QMessageBox.Yes | QMessageBox.No
         )
         if confirmar == QMessageBox.Yes:
             exito, mensaje = realizar_cierre_mensual(self.usuario)
             if exito:
                 QMessageBox.information(self, "Éxito", mensaje)
+                self.actualizar_resumen()
             else:
                 QMessageBox.information(self, "Aviso", mensaje)
