@@ -1,4 +1,5 @@
 from utils.db import get_connection
+from datetime import datetime, time
 
 def obtener_asistencias(usuario=None, fecha_inicio=None, fecha_fin=None):
     conn = get_connection()
@@ -16,8 +17,10 @@ def obtener_asistencias(usuario=None, fecha_inicio=None, fecha_fin=None):
         params.append(usuario)
 
     if fecha_inicio and fecha_fin:
+        inicio = datetime.combine(fecha_inicio, time.min)  # 00:00:00
+        fin = datetime.combine(fecha_fin, time.max)        # 23:59:59.999999
         query += " AND hora_inicio BETWEEN %s AND %s"
-        params.extend([fecha_inicio, fecha_fin])
+        params.extend([inicio, fin])
 
     query += " ORDER BY hora_inicio DESC"
 

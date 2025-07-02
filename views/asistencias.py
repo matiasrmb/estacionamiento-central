@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-    QHBoxLayout, QTableWidget, QTableWidgetItem, QDateEdit
+    QHBoxLayout, QTableWidget, QTableWidgetItem, QDateEdit,
+    QMessageBox
 )
 from PySide6.QtCore import QDate
 from controllers.asistencias_controller import obtener_asistencias
@@ -57,21 +58,35 @@ class AsistenciasWindow(QWidget):
         self.setLayout(layout)
 
     def filtrar(self):
-        usuario = self.input_usuario.text().strip()
-        fecha_inicio = self.fecha_inicio.date().toPython()
-        fecha_fin = self.fecha_fin.date().toPython()
+        try:
+            usuario = self.input_usuario.text().strip()
+            fecha_inicio = self.fecha_inicio.date().toPython()
+            fecha_fin = self.fecha_fin.date().toPython()
 
-        datos = obtener_asistencias(usuario or None, fecha_inicio, fecha_fin)
-        self.tabla.setRowCount(len(datos))
-        self.resultados = datos
+            datos = obtener_asistencias(usuario or None, fecha_inicio, fecha_fin)
+            self.resultados = datos  # Asegúrate de siempre guardarlo, incluso si está vacío
 
-        for i, fila in enumerate(datos):
-            self.tabla.setItem(i, 0, QTableWidgetItem(fila["usuario"]))
-            self.tabla.setItem(i, 1, QTableWidgetItem(str(fila["hora_inicio"])))
-            self.tabla.setItem(i, 2, QTableWidgetItem(str(fila["hora_salida"] or "Activo")))
-            self.tabla.setItem(i, 3, QTableWidgetItem(str(fila["cantidad_movimientos"])))
-            self.tabla.setItem(i, 4, QTableWidgetItem(f"${fila['total_recaudado']:.0f}"))
+            self.tabla.setRowCount(len(datos))
+
+            for i, fila in enumerate(datos):
+                self.tabla.setItem(i, 0, QTableWidgetItem(fila["usuario"]))
+                self.tabla.setItem(i, 1, QTableWidgetItem(str(fila["hora_inicio"])))
+                self.tabla.setItem(i, 2, QTableWidgetItem(str(fila["hora_salida"] or "Activo")))
+                self.tabla.setItem(i, 3, QTableWidgetItem(str(fila["cantidad_movimientos"])))
+                self.tabla.setItem(i, 4, QTableWidgetItem(f"${fila['total_recaudado']:.0f}"))
+
+            if not datos:
+                QMessageBox.information(self, "Sin resultados", "No se encontraron asistencias con esos filtros.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Ocurrió un error:\n{e}")
 
     def exportar_pdf(self):
-        if hasattr(self, "resultados") and self.resultados:
-            exportar_asistencias_pdf(self.resultados)
+        try:
+            if hasattr(self, "resultados") and self.resultados:
+                exportar_asistencias_pdf(self.resultados)
+            else:
+                QMessageBox.warning(self, "Sin datos", "Primero realiza una búsqueda con resultados.")
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"No se pudo exportar el PDF:\n{e}")
