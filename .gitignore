@@ -10,3 +10,4 @@ dist/
 build/ 
 config.ini 
 test_tarifas.py
+test_cierres_mensuales.py
