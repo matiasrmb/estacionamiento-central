@@ -60,8 +60,8 @@ def realizar_cierre_diario(usuario):
     conn.close()
     return True, f"Cierre realizado con éxito. Total recaudado: ${total_recaudado}"
 
-def realizar_cierre_mensual(usuario):
-    ahora = datetime.now()
+def realizar_cierre_mensual(usuario, fecha_prueba=None):
+    ahora = datetime.now() or fecha_prueba
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
