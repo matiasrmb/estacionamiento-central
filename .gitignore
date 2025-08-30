@@ -7,7 +7,6 @@ pdfs/
 *.log 
 *.sqlite 
 dist/ 
-build/ 
-config.ini 
+build/
 test_tarifas.py
 test_cierres_mensuales.py
