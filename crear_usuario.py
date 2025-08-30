@@ -1,28 +1,16 @@
-import bcrypt
 import argparse
-from utils.db import get_connection
+from controllers.usuarios_controller import crear_usuario
 
-def crear_usuario(usuario, clave_plana, rol):
-    conn = get_connection()
-    cursor = conn.cursor()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Crear un nuevo usuario.")
+    parser.add_argument("usuario", help="Nombre de usuario")
+    parser.add_argument("clave", help="Contraseña del usuario")
+    parser.add_argument("rol", choices=["operador", "administrador"], help="Rol del usuario")
 
-    clave_hash = bcrypt.hashpw(clave_plana.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    args = parser.parse_args()
 
-    cursor.execute("""
-        INSERT INTO usuarios (usuario, clave_hash, rol)
-        VALUES (%s, %s, %s)
-    """, (usuario, clave_hash, rol))
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-    print(f"Usuario {usuario} creado exitosamente con rol '{rol}'.")
-
-    if __name__ == "__main__":
-        parser = argparse.ArgumentParser(description="Crear un nuevo usuario en la base de datos.")
-        parser.add_argument("usuario", help="Nombre del usuario a crear")
-        parser.add_argument("clave", help="Contraseña del usuario")
-        parser.add_argument("rol", help="Rol del usuario (admin, usuario, etc.)")
-
-        args = parser.parse_args()
+    try:
         crear_usuario(args.usuario, args.clave, args.rol)
+        print(f"Usuario '{args.usuario}' creado exitosamente con rol '{args.rol}'.")
+    except Exception as e:
+        print(f"Error al crear el usuario: {e}")
