@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox
 from PySide6.QtCore import QDate, QDateTime, QTimer
 from controllers.dashboard_controller import obtener_resumen_diario
-from controllers.cierres_controller import realizar_cierre_diario, realizar_cierre_mensual
+from controllers.cierres_controller import realizar_cierre_diario
 from datetime import datetime
 
 class DashboardWindow(QWidget):
@@ -46,11 +46,6 @@ class DashboardWindow(QWidget):
         self.boton_cierre.clicked.connect(self.confirmar_cierre_diario)
         layout.addWidget(self.boton_cierre)
 
-        self.boton_cierre_mensual = QPushButton("📆 Realizar Cierre Mensual")
-        self.boton_cierre_mensual.clicked.connect(self.confirmar_cierre_mensual)
-        layout.addWidget(self.boton_cierre_mensual)
-
-
         self.btn_continuar = QPushButton("Ir al Panel Principal")
         self.btn_continuar.clicked.connect(self.abrir_menu)
         layout.addWidget(self.btn_continuar)
@@ -88,17 +83,3 @@ class DashboardWindow(QWidget):
             else:
                 QMessageBox.information(self, "Sin registros", mensaje)
 
-    def confirmar_cierre_mensual(self):
-        confirmar = QMessageBox.question(
-            self,
-            "Confirmar Cierre Mensual",
-            "¿Deseas cerrar el mes más antiguo aún no cerrado?\nEste proceso es irreversible.",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if confirmar == QMessageBox.Yes:
-            exito, mensaje = realizar_cierre_mensual(self.usuario)
-            if exito:
-                QMessageBox.information(self, "Éxito", mensaje)
-                self.actualizar_resumen()
-            else:
-                QMessageBox.information(self, "Aviso", mensaje)

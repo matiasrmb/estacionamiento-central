@@ -60,17 +60,6 @@ CREATE TABLE IF NOT EXISTS cierres_diarios (
     usuario VARCHAR(50) NOT NULL
 );
 
--- Tabla de cierres mensuales
-CREATE TABLE IF NOT EXISTS cierres_mensuales (
-    id_cierre INT AUTO_INCREMENT PRIMARY KEY,
-    mes VARCHAR(7) DEFAULT NULL,
-    fecha_cierre DATETIME DEFAULT NULL,
-    total_recaudado INT DEFAULT NULL,
-    total_ingresos INT DEFAULT NULL,
-    total_salidas INT DEFAULT NULL,
-    usuario VARCHAR(50) DEFAULT NULL
-);
-
 -- Tabla de asistencias (registro de sesiones de usuarios)
 CREATE TABLE IF NOT EXISTS asistencias (
     id_asistencia INT AUTO_INCREMENT PRIMARY KEY,
