@@ -1,6 +1,9 @@
 from fpdf import FPDF
 from datetime import datetime
+import time
 import os
+import platform
+import subprocess
 import platform
 import subprocess
 
@@ -25,7 +28,7 @@ def generar_ticket_ingreso(patente, fecha_hora):
     os.makedirs(carpeta, exist_ok=True)
     ruta = os.path.join(carpeta, nombre_archivo)
     pdf.output(ruta)
-    abrir_pdf(ruta)
+    imprimir_pdf_directamente(ruta)
     return ruta
 
 def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa):
@@ -54,8 +57,29 @@ def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa
     os.makedirs(carpeta, exist_ok=True)
     ruta = os.path.join(carpeta, nombre_archivo)
     pdf.output(ruta)
-    abrir_pdf(ruta)
+    imprimir_pdf_directamente(ruta)
     return ruta
+
+def imprimir_pdf_directamente(ruta):
+    ruta_acrobat = r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"  # AJUSTA SI ES NECESARIO
+    nombre_impresora = "POS58 Printer"  # ← CAMBIA esto por el nombre de tu impresora
+
+    try:
+        proceso = subprocess.Popen([
+            ruta_acrobat,
+            '/h',  
+            '/t',  
+            ruta,
+            nombre_impresora
+        ])
+
+        time.sleep(5)  # Espera a que el proceso inicie 
+
+        subprocess.run(["taskkill", "/f", "/im", "Acrobat.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    except Exception as e:
+        print(f"Error al imprimir el ticket o cerrar Acrobat Reader: {e}")
+
 
 def abrir_pdf(ruta):
     if platform.system() == "Windows":
