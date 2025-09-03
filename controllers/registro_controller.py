@@ -8,31 +8,34 @@ def buscar_estado_vehiculo(patente):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Ver si existe el vehículo
-    cursor.execute("SELECT id_vehiculo FROM vehiculos WHERE patente = %s", (patente,))
-    vehiculo = cursor.fetchone()
+    try:
+        # 1. Ver si existe el vehículo
+        cursor.execute("SELECT id_vehiculo FROM vehiculos WHERE patente = %s", (patente,))
+        vehiculo = cursor.fetchone()
 
-    if not vehiculo:
+        if not vehiculo:
+            return "no_registrado"
+
+        id_vehiculo = vehiculo["id_vehiculo"]
+
+        # 👇 Evitar problema: limpiar resultados anteriores
+        cursor.fetchall()
+
+        # 2. Verificar si tiene un ingreso activo
+        cursor.execute("""
+            SELECT id_ingreso FROM ingresos
+            WHERE id_vehiculo = %s AND fecha_hora_salida IS NULL
+        """, (id_vehiculo,))
+        ingreso_abierto = cursor.fetchone()
+
+        if ingreso_abierto:
+            return "dentro"
+        else:
+            return "fuera"
+
+    finally:
         cursor.close()
         conn.close()
-        return "no_registrado"
-
-    id_vehiculo = vehiculo["id_vehiculo"]
-
-    # Buscar si tiene un ingreso sin salida
-    cursor.execute("""
-        SELECT id_ingreso FROM ingresos
-        WHERE id_vehiculo = %s AND fecha_hora_salida IS NULL
-    """, (id_vehiculo,))
-    ingreso_abierto = cursor.fetchone()
-
-    cursor.close()
-    conn.close()
-
-    if ingreso_abierto:
-        return "dentro"
-    else:
-        return "fuera"
 
 def registrar_ingreso(patente):
     from datetime import datetime
