@@ -1,35 +1,29 @@
-from fpdf import FPDF
+from utils.pdf_utils import ReportePDF, abrir_pdf
 from datetime import datetime
 import os
-import webbrowser
 
-def exportar_asistencias_pdf(datos):
-    pdf = FPDF()
+def exportar_asistencias_pdf(asistencias, fecha_inicio=None, fecha_fin=None):
+    pdf = ReportePDF("Reporte de Asistencias")
     pdf.add_page()
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, "Reporte de Asistencias", ln=True, align="C")
-    pdf.ln(8)
-    pdf.set_font("Arial", "", 10)
+    pdf.set_font("Arial", size=11)
 
-    # Encabezados
-    pdf.cell(30, 8, "Usuario", 1)
-    pdf.cell(40, 8, "Inicio", 1)
-    pdf.cell(40, 8, "Salida", 1)
-    pdf.cell(30, 8, "Movimientos", 1)
-    pdf.cell(40, 8, "Recaudado", 1)
-    pdf.ln()
+    for row in asistencias:
+        inicio = row["hora_inicio"].strftime("%d-%m-%Y %H:%M")
+        salida = row["hora_salida"].strftime("%d-%m-%Y %H:%M") if row["hora_salida"] else "En curso"
+        linea = (
+            f"{row['usuario']} | {inicio} -> {salida} | "
+            f"{row['cantidad_movimientos']} movs | ${row['total_recaudado']:.0f}"
+        )
+        pdf.cell(0, 8, linea, ln=True)
 
-    for fila in datos:
-        pdf.cell(30, 8, fila["usuario"], 1)
-        pdf.cell(40, 8, str(fila["hora_inicio"]), 1)
-        pdf.cell(40, 8, str(fila["hora_salida"] or "Activo"), 1)
-        pdf.cell(30, 8, str(fila["cantidad_movimientos"]), 1)
-        pdf.cell(40, 8, f"${fila['total_recaudado']:.0f}", 1)
-        pdf.ln()
-
-    nombre = f"asistencias_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    carpeta = "pdfs"
+    carpeta = "asistencias"
     os.makedirs(carpeta, exist_ok=True)
-    ruta = os.path.join(carpeta, nombre)
+    nombre_archivo = "reporte_asistencias"
+    if fecha_inicio and fecha_fin:
+        nombre_archivo += f"_{fecha_inicio.strftime('%Y%m%d')}_a_{fecha_fin.strftime('%Y%m%d')}"
+    else:
+        nombre_archivo += f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    ruta = os.path.join(carpeta, nombre_archivo + ".pdf")
     pdf.output(ruta)
-    webbrowser.open(ruta)
+    abrir_pdf(ruta)
