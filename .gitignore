@@ -1,6 +1,8 @@
 __pycache__/ 
+views/setup_window.py
 tickets/ 
 reportes/
+cierres/
 pdfs/
 *.pyc 
 *.pyo 
@@ -9,7 +11,4 @@ pdfs/
 dist/ 
 build/
 config.ini
-test_tarifas.py
-test_cierres_mensuales.py
-views/setup_window.py
 crear_usuario.py
