@@ -5,6 +5,7 @@ reportes/
 cierres/
 pdfs/
 tests/
+asistencias/
 *.pyc 
 *.pyo 
 *.log 
