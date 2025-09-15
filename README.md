@@ -142,7 +142,7 @@ Este proyecto fue desarrollado pensando en:
 
 ## Créditos
 
-Desarrollador principal: Matías Román Medina Becerra
-Institución: Instituto Profesional IACC
-Proyecto de Título: Técnico de Nivel Superior en Análisis y Programación Computacional
-Año: 2025
+- Desarrollador principal: Matías Román Medina Becerra
+- Institución: Instituto Profesional IACC
+- Proyecto de Título: Técnico de Nivel Superior en Análisis y Programación Computacional
+- Año: 2025
