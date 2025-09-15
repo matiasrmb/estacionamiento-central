@@ -17,7 +17,7 @@ class MainWindow(QWidget):
         self.usuario = usuario
         self.rol = rol
         self.setWindowTitle("🅿️ Estacionamiento Central - Panel Principal")
-        self.setFixedSize(900, 600)
+        self.setFixedSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):

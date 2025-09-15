@@ -13,7 +13,7 @@ class RegistroWindow(QWidget):
         self.usuario = usuario
         self.rol = rol
         self.setWindowTitle("Registro de Vehículos")
-        self.setFixedSize(900, 600)
+        self.setFixedSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):

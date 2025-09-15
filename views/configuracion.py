@@ -9,7 +9,7 @@ class ConfiguracionWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Configuración del Sistema")
-        self.setFixedSize(900, 600)
+        self.setFixedSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):

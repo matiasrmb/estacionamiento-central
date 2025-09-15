@@ -11,7 +11,7 @@ class AsistenciasWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Registro de Asistencias")
-        self.setFixedSize(900, 600)
+        self.setFixedSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):
