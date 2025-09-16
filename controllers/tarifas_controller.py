@@ -1,7 +1,21 @@
+"""
+Módulo de control para la gestión de tarifas de estacionamiento.
+
+Este archivo contiene funciones para obtener, agregar, actualizar,
+eliminar y calcular tarifas según los modos configurados por el administrador
+(minuto a minuto, tramos personalizados o automático).
+"""
+
 from utils.db import get_connection
 from controllers.config_controller import obtener_configuracion
 
 def obtener_tarifas_personalizadas():
+    """
+    Obtiene todos los intervalos personalizados de tarifas registrados en la base de datos.
+
+    Returns:
+        list[dict]: Lista de tramos con minuto_inicio, minuto_fin y valor.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
@@ -15,6 +29,17 @@ def obtener_tarifas_personalizadas():
     return resultado
 
 def agregar_intervalo(min_inicio, min_fin, valor):
+    """
+    Agrega un nuevo tramo de tarifa personalizada si no se superpone con otros.
+
+    Args:
+        min_inicio (int): Minuto inicial del tramo.
+        min_fin (int): Minuto final del tramo.
+        valor (int): Valor asociado al tramo.
+
+    Raises:
+        ValueError: Si el nuevo tramo se superpone con uno existente.
+    """
     if not validar_intervalo(min_inicio, min_fin):
         raise ValueError("❌ El intervalo se superpone con uno existente.")
 
@@ -29,6 +54,18 @@ def agregar_intervalo(min_inicio, min_fin, valor):
     conn.close()
 
 def actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor):
+    """
+    Actualiza un tramo de tarifa personalizada.
+
+    Args:
+        id_tarifa (int): ID del tramo a actualizar.
+        min_inicio (int): Nuevo minuto inicial.
+        min_fin (int): Nuevo minuto final.
+        valor (int): Nuevo valor del tramo.
+
+    Raises:
+        ValueError: Si el nuevo tramo se superpone con otros.
+    """
     if not validar_intervalo(min_inicio, min_fin, id_excluir=id_tarifa):
         raise ValueError("❌ El intervalo se superpone con uno existente.")
 
@@ -45,6 +82,12 @@ def actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor):
 
 
 def eliminar_intervalo(id_tarifa):
+    """
+    Elimina un tramo de tarifa personalizada según su ID.
+
+    Args:
+        id_tarifa (int): ID del tramo a eliminar.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM tarifas_personalizadas WHERE id_tarifa = %s", (id_tarifa,))
@@ -53,6 +96,18 @@ def eliminar_intervalo(id_tarifa):
     conn.close()
 
 def actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor):
+    """
+    Actualiza un tramo de tarifa personalizada.
+
+    Args:
+        id_tarifa (int): ID del tramo a actualizar.
+        min_inicio (int): Nuevo minuto inicial.
+        min_fin (int): Nuevo minuto final.
+        valor (int): Nuevo valor del tramo.
+
+    Raises:
+        ValueError: Si el nuevo tramo se superpone con otros.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -65,6 +120,15 @@ def actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor):
     conn.close()
 
 def calcular_tarifa(minutos):
+    """
+    Calcula la tarifa según el tiempo transcurrido y el modo configurado.
+
+    Args:
+        minutos (int): Tiempo total en minutos.
+
+    Returns:
+        int: Valor monetario calculado.
+    """
     config = obtener_configuracion()
     modo = config.get("modo_cobro", "minuto")
 
@@ -110,7 +174,10 @@ def calcular_tarifa(minutos):
         return int(config.get("tarifa_minima", 300))
 
 def generar_tramos_automaticos():
-    from controllers.config_controller import obtener_configuracion
+    """
+    Genera tramos de cobro automáticos en bloques de 5 minutos, aumentando $100 por tramo.
+    Basado en las tarifas mínimas y por hora desde la configuración.
+    """
     config = obtener_configuracion()
     tarifa_min = int(config.get("tarifa_minima", 300))
     tarifa_hora = int(config.get("tarifa_hora", 1300))
@@ -145,6 +212,17 @@ def generar_tramos_automaticos():
     conn.close()
 
 def validar_intervalo(min_inicio, min_fin, id_excluir=None):
+    """
+    Valida que un nuevo tramo no se superponga con otros existentes.
+
+    Args:
+        min_inicio (int): Minuto inicial.
+        min_fin (int): Minuto final.
+        id_excluir (int, opcional): ID de tramo a excluir en la validación (en caso de edición).
+
+    Returns:
+        bool: True si el tramo es válido (sin superposición).
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 

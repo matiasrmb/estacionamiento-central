@@ -1,12 +1,26 @@
+"""
+Controlador para la generación de cierres diarios.
+
+Incluye lógica para consolidar ingresos y generar reportes en PDF.
+"""
+
 from utils.db import get_connection
 from utils.pdf import generar_pdf_cierre
 from datetime import datetime, timedelta
 
 def realizar_cierre_diario(usuario):
+    """
+    Realiza el cierre diario de ingresos y genera un resumen en PDF.
+
+    Args:
+        usuario (str): Usuario que ejecuta el cierre.
+
+    Returns:
+        tuple: (bool, str) indicando si el cierre fue exitoso y un mensaje informativo.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Obtener todos los ingresos cerrables (salidas completadas y no cerrados aún)
     cursor.execute("""
         SELECT id_ingreso, fecha_hora_ingreso, fecha_hora_salida, tarifa_aplicada
         FROM ingresos
@@ -25,7 +39,6 @@ def realizar_cierre_diario(usuario):
     total_ingresos = len(registros)
     total_salidas = total_ingresos  # En este sistema, ingreso = salida registrada
 
-    # Insertar el resumen en la tabla de cierres
     cursor.execute("""
         INSERT INTO cierres_diarios (
             fecha_inicio, fecha_cierre, total_recaudado,
@@ -35,7 +48,6 @@ def realizar_cierre_diario(usuario):
     """, (fecha_inicio, fecha_cierre, total_recaudado,
           total_ingresos, total_salidas, usuario))
 
-    # Marcar como cerrados esos ingresos
     ids = [r["id_ingreso"] for r in registros]
     formato = ','.join(['%s'] * len(ids))
     cursor.execute(f"""

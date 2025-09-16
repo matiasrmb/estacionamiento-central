@@ -1,6 +1,21 @@
+"""
+Controlador del resumen diario del sistema.
+
+Obtiene estadísticas simples para el panel principal (dashboard) del sistema.
+"""
+
 from utils.db import get_connection
 
 def obtener_resumen_diario():
+    """
+    Obtiene el resumen diario del sistema, incluyendo:
+    - Cantidad total de ingresos de hoy
+    - Vehículos actualmente estacionados
+    - Total recaudado hoy
+
+    Returns:
+        dict: Resumen con claves 'total_ingresos', 'estacionados' y 'recaudado'.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 

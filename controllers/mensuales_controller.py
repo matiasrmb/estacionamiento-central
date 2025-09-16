@@ -1,6 +1,16 @@
+"""
+Controlador para la gestión de clientes mensuales del sistema de estacionamiento.
+"""
+
 from utils.db import get_connection
 
 def obtener_mensuales():
+    """
+    Obtiene una lista de vehículos registrados como clientes mensuales activos.
+
+    Returns:
+        list: Lista de diccionarios con 'id_vehiculo', 'patente' y 'tarifa_mensual'.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -13,6 +23,15 @@ def obtener_mensuales():
     return resultados
 
 def agregar_mensual(patente):
+    """
+    Agrega o actualiza una patente como cliente mensual.
+
+    Args:
+        patente (str): Patente del vehículo.
+
+    Returns:
+        bool: True si la operación fue exitosa.
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -37,6 +56,15 @@ def agregar_mensual(patente):
     return True
 
 def eliminar_mensual(id_vehiculo):
+    """
+    Desactiva a un cliente mensual (no elimina el registro).
+
+    Args:
+        id_vehiculo (int): ID del vehículo.
+
+    Returns:
+        bool: True si la operación fue exitosa.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -49,6 +77,16 @@ def eliminar_mensual(id_vehiculo):
     return True
 
 def actualizar_tarifa(id_vehiculo, nueva_tarifa):
+    """
+    Modifica la tarifa mensual asociada a un cliente.
+
+    Args:
+        id_vehiculo (int): ID del vehículo.
+        nueva_tarifa (int): Nuevo valor de la tarifa mensual.
+
+    Returns:
+        bool: True si la operación fue exitosa.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(

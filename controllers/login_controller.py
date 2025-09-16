@@ -1,8 +1,25 @@
+"""
+Controlador de login y asistencias.
+
+Permite validar credenciales de usuarios, registrar la asistencia de entrada
+y salida, y calcular estadísticas del turno.
+"""
+
 import bcrypt
 from utils.db import get_connection
 from datetime import datetime, timedelta
 
 def validar_usuario(usuario, clave_plana):
+    """
+    Verifica si las credenciales ingresadas son válidas.
+
+    Args:
+        usuario (str): Nombre del usuario.
+        clave_plana (str): Contraseña en texto plano.
+
+    Returns:
+        tuple: (resultado de validación: bool|str, rol del usuario: str|None)
+    """
     conn = get_connection()
     if conn is None:
         return False, None # No hay conexión
@@ -26,6 +43,12 @@ def validar_usuario(usuario, clave_plana):
     return False, None  # Usuario no existe o clave incorrecta
 
 def registrar_asistencia_inicio(usuario):
+    """
+    Registra el inicio de turno del usuario actual.
+
+    Args:
+        usuario (str): Nombre del usuario.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -37,6 +60,15 @@ def registrar_asistencia_inicio(usuario):
     conn.close()
 
 def registrar_asistencia_salida(usuario):
+    """
+    Cierra el turno del usuario actual y calcula resumen de ingresos generados.
+
+    Args:
+        usuario (str): Nombre del usuario.
+
+    Returns:
+        dict: Contiene 'cantidad', 'total' y 'hora_inicio' del turno cerrado.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 

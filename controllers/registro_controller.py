@@ -1,10 +1,22 @@
+"""
+Controlador de operaciones de ingreso, salida y estado de vehículos en el estacionamiento.
+"""
+
 from utils.db import get_connection
 from datetime import datetime
-from utils.ticket import generar_ticket_ingreso
-from utils.ticket import generar_ticket_salida
+from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
 from controllers.tarifas_controller import calcular_tarifa
 
 def buscar_estado_vehiculo(patente):
+    """
+    Determina el estado actual del vehículo (dentro, fuera, o no registrado).
+
+    Args:
+        patente (str): Patente del vehículo.
+
+    Returns:
+        str: "no_registrado", "dentro" o "fuera".
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -38,6 +50,15 @@ def buscar_estado_vehiculo(patente):
         conn.close()
 
 def registrar_ingreso(patente):
+    """
+    Registra la entrada de un vehículo al estacionamiento.
+
+    Args:
+        patente (str): Patente del vehículo.
+
+    Returns:
+        bool: True si se registró correctamente.
+    """
     from datetime import datetime
     conn = get_connection()
     cursor = conn.cursor()
@@ -69,6 +90,16 @@ def registrar_ingreso(patente):
 
 
 def registrar_salida(patente, usuario):
+    """
+    Registra la salida de un vehículo y calcula la tarifa correspondiente.
+
+    Args:
+        patente (str): Patente del vehículo.
+        usuario (str): Usuario que registra la salida.
+
+    Returns:
+        int or None: Tarifa calculada o None si hubo error.
+    """
     from datetime import datetime
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -109,6 +140,12 @@ def registrar_salida(patente, usuario):
     return tarifa
     
 def obtener_vehiculos_activos():
+    """
+    Obtiene la lista de vehículos actualmente estacionados.
+
+    Returns:
+        list: Lista con patente, hora de ingreso y monto acumulado.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 

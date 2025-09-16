@@ -1,7 +1,19 @@
+"""
+Módulo de gestión de usuarios.
+
+Incluye funciones para listar, crear, actualizar estado y cambiar la contraseña de usuarios.
+"""
+
 import bcrypt
 from utils.db import get_connection
 
 def obtener_usuarios():
+    """
+    Obtiene todos los usuarios registrados en el sistema.
+
+    Returns:
+        list[dict]: Lista de usuarios con sus campos (id_usuario, usuario, rol, activo).
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT id_usuario, usuario, rol, activo FROM usuarios ORDER BY id_usuario ASC")
@@ -12,6 +24,17 @@ def obtener_usuarios():
 
 
 def crear_usuario(usuario, clave, rol):
+    """
+    Crea un nuevo usuario en la base de datos.
+
+    Args:
+        usuario (str): Nombre de usuario.
+        clave (str): Contraseña en texto plano.
+        rol (str): Rol asignado (ej. 'administrador', 'operador').
+
+    Returns:
+        bool: True si se creó exitosamente, False si hubo error.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     clave_hash = bcrypt.hashpw(clave.encode('utf-8'), bcrypt.gensalt())
@@ -30,6 +53,16 @@ def crear_usuario(usuario, clave, rol):
     return exito
 
 def cambiar_contrasena(usuario, nueva_clave):
+    """
+    Cambia la contraseña de un usuario.
+
+    Args:
+        usuario (str): Nombre del usuario.
+        nueva_clave (str): Nueva contraseña en texto plano.
+
+    Returns:
+        bool: True si el cambio fue exitoso, False si hubo error.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     nuevo_hash = bcrypt.hashpw(nueva_clave.encode('utf-8'), bcrypt.gensalt())
@@ -48,6 +81,16 @@ def cambiar_contrasena(usuario, nueva_clave):
     return exito
 
 def cambiar_estado_usuario(usuario, nuevo_estado):
+    """
+    Cambia el estado activo/inactivo de un usuario.
+
+    Args:
+        usuario (str): Nombre del usuario.
+        nuevo_estado (bool): Estado deseado (True = activo, False = inactivo).
+
+    Returns:
+        bool: True si el cambio fue exitoso, False si hubo error.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:

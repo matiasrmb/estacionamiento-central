@@ -1,10 +1,30 @@
+"""
+Controlador para la gestión de reportes de ingresos y salidas de vehículos.
+
+Este módulo permite:
+- Consultar los registros de ingresos y salidas dentro de un rango de fechas.
+- Filtrar por patente si se requiere.
+- Exportar los resultados a un archivo PDF con resumen del total recaudado.
+"""
+
 from utils.db import get_connection
 from utils.pdf_utils import ReportePDF, abrir_pdf
+from datetime import datetime
 from fpdf import FPDF
 import os
-from datetime import datetime
 
 def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
+    """
+    Obtiene los registros de ingresos y salidas de vehículos dentro de un rango de fechas.
+
+    Args:
+        fecha_inicio (date): Fecha inicial del rango a consultar.
+        fecha_fin (date): Fecha final del rango a consultar.
+        patente (str, opcional): Patente del vehículo para filtrar resultados. Por defecto, devuelve todos.
+
+    Returns:
+        list[dict]: Lista de movimientos con campos: patente, ingreso, salida, minutos y tarifa_aplicada.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -34,6 +54,16 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
     return resultados
 
 def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None):
+    """
+    Exporta los resultados de los reportes a un archivo PDF con formato estandarizado.
+
+    El archivo se guarda en la carpeta `reportes` con un nombre que incluye el rango de fechas o timestamp.
+
+    Args:
+        datos (list[dict]): Lista de movimientos obtenidos con `obtener_reportes`.
+        fecha_inicio (date, opcional): Fecha inicial del filtro (para el nombre del archivo).
+        fecha_fin (date, opcional): Fecha final del filtro (para el nombre del archivo).
+    """
     pdf = ReportePDF("Reporte de Ingresos y Salidas")
     pdf.add_page()
     pdf.set_font("Arial", size=11)
