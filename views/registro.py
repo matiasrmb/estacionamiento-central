@@ -91,8 +91,8 @@ class RegistroWindow(QWidget):
         layout_tabla.setContentsMargins(10, 20, 10, 20)
 
         self.tabla_activos = QTableWidget()
-        self.tabla_activos.setColumnCount(4)
-        self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Monto Actual", "Acción"])
+        self.tabla_activos.setColumnCount(3)
+        self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Monto Actual"])
         self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.tabla_activos.setMaximumHeight(200)
 
@@ -101,7 +101,6 @@ class RegistroWindow(QWidget):
         self.tabla_activos.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.tabla_activos.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
         layout_tabla.addWidget(self.tabla_activos)
         self.grupo_tabla.setLayout(layout_tabla)
