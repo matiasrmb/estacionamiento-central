@@ -1,7 +1,18 @@
+"""
+Módulo de conexión a la base de datos MySQL utilizando configuración desde config.ini.
+"""
+
 import mysql.connector
 from configparser import ConfigParser
 
 def get_connection():
+    """
+    Establece y retorna una conexión a la base de datos MySQL utilizando los datos del archivo config.ini.
+
+    Returns:
+        mysql.connector.connection_cext.CMySQLConnection or None: 
+            Objeto de conexión si se conecta exitosamente, o None si ocurre un error.
+    """
     config = ConfigParser()
     config.read("config.ini")
 
