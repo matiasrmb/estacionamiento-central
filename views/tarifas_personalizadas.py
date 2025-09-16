@@ -1,16 +1,19 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableWidget, QTableWidgetItem, QInputDialog, QMessageBox, QLabel, QGroupBox
+    QTableWidget, QTableWidgetItem, QInputDialog, 
+    QMessageBox, QLabel, QGroupBox
 )
 from PySide6.QtCore import Qt
 from controllers.tarifas_controller import (
-    obtener_tarifas_personalizadas,
-    agregar_intervalo,
-    eliminar_intervalo,
-    actualizar_intervalo
+    obtener_tarifas_personalizadas, agregar_intervalo,
+    eliminar_intervalo, actualizar_intervalo
 )
 
 class TarifasPersonalizadasWindow(QWidget):
+    """
+    Ventana que permite configurar los tramos personalizados de tarifas
+    por tiempo de estacionamiento. Solo accesible para administradores.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Editor de Tarifas Personalizadas")
@@ -22,16 +25,15 @@ class TarifasPersonalizadasWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # 🔷 Encabezado
+        # Título
         self.label_titulo = QLabel("📐 Configuración de Tramos de Tarifas")
         self.label_titulo.setStyleSheet("font-weight: bold; font-size: 16px; padding: 10px 0;")
         layout.addWidget(self.label_titulo)
 
-        # 🔹 Grupo de botones
+        # Grupo de botones de acción
         grupo_botones = QGroupBox("⚙️ Acciones disponibles")
         botones_layout = QHBoxLayout()
-        botones_layout.setContentsMargins(10, 20, 10, 20)  # Espaciado interno
-
+        botones_layout.setContentsMargins(10, 20, 10, 20)
 
         self.btn_agregar = QPushButton("➕ Agregar intervalo")
         self.btn_agregar.setStyleSheet("padding: 6px;")
@@ -51,13 +53,13 @@ class TarifasPersonalizadasWindow(QWidget):
         grupo_botones.setLayout(botones_layout)
         layout.addWidget(grupo_botones)
 
-        # 🔸 Tabla de intervalos
+        # Tabla de tarifas personalizadas
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(4)
         self.tabla.setHorizontalHeaderLabels(["ID", "Desde (min)", "Hasta (min)", "Valor (CLP)"])
         self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.tabla.setStyleSheet("QTableWidget::item { padding: 6px; }")
         self.tabla.setAlternatingRowColors(True)
+        self.tabla.setStyleSheet("QTableWidget::item { padding: 6px; }")
 
         layout.addWidget(self.tabla)
         self.setLayout(layout)
@@ -65,6 +67,7 @@ class TarifasPersonalizadasWindow(QWidget):
         self.cargar_datos()
 
     def cargar_datos(self):
+        """Carga los tramos personalizados desde la base de datos a la tabla."""
         self.tabla.setRowCount(0)
         datos = obtener_tarifas_personalizadas()
 
@@ -76,6 +79,7 @@ class TarifasPersonalizadasWindow(QWidget):
             self.tabla.setItem(i, 3, QTableWidgetItem(str(row["valor"])))
 
     def agregar(self):
+        """Agrega un nuevo tramo de tarifa personalizada."""
         min_inicio, ok1 = QInputDialog.getInt(self, "Nuevo intervalo", "Desde (minutos):", 0)
         if not ok1: return
 
@@ -89,6 +93,7 @@ class TarifasPersonalizadasWindow(QWidget):
         self.cargar_datos()
 
     def eliminar(self):
+        """Elimina el tramo de tarifa personalizada seleccionado."""
         fila = self.tabla.currentRow()
         if fila < 0:
             QMessageBox.warning(self, "Atención", "Selecciona una fila primero.")
@@ -99,6 +104,7 @@ class TarifasPersonalizadasWindow(QWidget):
         self.cargar_datos()
 
     def actualizar(self):
+        """Actualiza el tramo de tarifa personalizada seleccionado."""
         fila = self.tabla.currentRow()
         if fila < 0:
             QMessageBox.warning(self, "Atención", "Selecciona una fila primero.")

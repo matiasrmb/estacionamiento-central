@@ -1,89 +1,118 @@
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-    QHBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView, QDateEdit, QGroupBox, QMessageBox
+    QWidget, QLabel, QLineEdit, QPushButton, 
+    QVBoxLayout, QHBoxLayout, QTableWidget, 
+    QTableWidgetItem, QHeaderView, QDateEdit, 
+    QGroupBox, QMessageBox
 )
 from PySide6.QtCore import QDate, Qt
 from controllers.reportes_controller import obtener_reportes, exportar_pdf
 
 class ReportesWindow(QWidget):
+    """
+    Ventana para visualizar y exportar reportes de ingresos y salidas de vehículos,
+    con filtros por rango de fechas y patente y exportarlos a un archivo PDF.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("📊 Reportes de Ingresos y Salidas")
         self.setFixedSize(900, 600) 
+        self.resultados = []
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout()        
+        layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # 🔷 Encabezado
-        titulo = QLabel("📊 Reportes detallados de movimiento de vehículos")
-        titulo.setStyleSheet("font-weight: bold; font-size: 16px; margin: 10px 0;")
-        layout.addWidget(titulo)
-
-        # 🔹 Filtros
-        filtro_grupo = QGroupBox("🔎 Filtros de búsqueda")
+        # Filtro de fechas y patente
         filtro_layout = QHBoxLayout()
-        filtro_layout.setContentsMargins(10, 20, 10, 20)  # Espaciado interno
 
+        filtro_layout.addWidget(QLabel("📅 Desde:"))
         self.fecha_inicio = QDateEdit()
-        self.fecha_inicio.setCalendarPopup(True)
         self.fecha_inicio.setDate(QDate.currentDate())
-
-        self.fecha_fin = QDateEdit()
-        self.fecha_fin.setCalendarPopup(True)
-        self.fecha_fin.setDate(QDate.currentDate())
-
-        self.input_patente = QLineEdit()
-        self.input_patente.setPlaceholderText("Patente (opcional)")
-
-        self.btn_filtrar = QPushButton("🔍 Buscar")
-        self.btn_filtrar.setStyleSheet("padding: 6px;")
-        self.btn_filtrar.clicked.connect(self.buscar_reportes)
-
-        self.btn_exportar = QPushButton("📤 Exportar PDF")
-        self.btn_exportar.setStyleSheet("padding: 6px;")
-        self.btn_exportar.clicked.connect(self.exportar_pdf)
-
-        filtro_layout.addWidget(QLabel("Desde:"))
+        self.fecha_inicio.setCalendarPopup(True)
         filtro_layout.addWidget(self.fecha_inicio)
-        filtro_layout.addWidget(QLabel("Hasta:"))
+
+        filtro_layout.addWidget(QLabel("📅 Hasta:"))
+        self.fecha_fin = QDateEdit()
+        self.fecha_fin.setDate(QDate.currentDate())
+        self.fecha_fin.setCalendarPopup(True)
         filtro_layout.addWidget(self.fecha_fin)
+
+        filtro_layout.addWidget(QLabel("🚗 Patente:"))
+        self.input_patente = QLineEdit()
+        self.input_patente.setPlaceholderText("Opcional")
         filtro_layout.addWidget(self.input_patente)
-        filtro_layout.addWidget(self.btn_filtrar)
-        filtro_layout.addWidget(self.btn_exportar)
 
-        filtro_grupo.setLayout(filtro_layout)
-        layout.addWidget(filtro_grupo)
+        self.boton_filtrar = QPushButton("🔍 Buscar")
+        self.boton_filtrar.clicked.connect(self.filtrar)
+        filtro_layout.addWidget(self.boton_filtrar)
 
-        # 🔸 Tabla
+        layout.addLayout(filtro_layout)
+
+        # Tabla de resultados
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(5)
         self.tabla.setHorizontalHeaderLabels(["Patente", "Ingreso", "Salida", "Minutos", "Tarifa"])
-        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabla.setAlternatingRowColors(True)
-        self.tabla.setStyleSheet("QTableWidget::item { padding: 6px; }")
-
+        self.tabla.setStyleSheet("QTableWidget { font-size: 13px; }")
         layout.addWidget(self.tabla)
+
+        # Botón de exportar PDF
+        self.boton_exportar = QPushButton("🖨️ Exportar PDF")
+        self.boton_exportar.setEnabled(False)
+        self.boton_exportar.clicked.connect(self.exportar_pdf)
+        layout.addWidget(self.boton_exportar)
+
         self.setLayout(layout)
 
-    def buscar_reportes(self):
+    def filtrar(self):
+        """
+        Realiza la consulta de reportes según los filtros ingresados.
+        Actualiza la tabla con los resultados.
+        """
         fecha_inicio = self.fecha_inicio.date().toPython()
         fecha_fin = self.fecha_fin.date().toPython()
         patente = self.input_patente.text().strip().upper()
 
-        datos = obtener_reportes(fecha_inicio, fecha_fin, patente)
-        self.tabla.setRowCount(len(datos))
+        self.resultados = obtener_reportes(fecha_inicio, fecha_fin, patente)
 
-        for fila, row in enumerate(datos):
-            self.tabla.setItem(fila, 0, QTableWidgetItem(row["patente"]))
-            self.tabla.setItem(fila, 1, QTableWidgetItem(str(row["fecha_hora_ingreso"])))
-            self.tabla.setItem(fila, 2, QTableWidgetItem(str(row["fecha_hora_salida"])))
-            self.tabla.setItem(fila, 3, QTableWidgetItem(str(row["minutos"])))
-            self.tabla.setItem(fila, 4, QTableWidgetItem(f"${row['tarifa_aplicada']:.0f}"))
+        if not self.resultados:
+            QMessageBox.information(self, "Sin resultados", "No se encontraron movimientos en ese rango.")
+            self.tabla.setRowCount(0)
+            self.boton_exportar.setEnabled(False)
+            return
 
-        self.resultados = datos
+        self.tabla.setRowCount(len(self.resultados))
+        total = 0
+
+        for i, row in enumerate(self.resultados):
+            ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
+            salida = row["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M")
+            tarifa = row["tarifa_aplicada"]
+            total += tarifa
+
+            self.tabla.setItem(i, 0, QTableWidgetItem(row["patente"]))
+            self.tabla.setItem(i, 1, QTableWidgetItem(ingreso))
+            self.tabla.setItem(i, 2, QTableWidgetItem(salida))
+            self.tabla.setItem(i, 3, QTableWidgetItem(str(row["minutos"])))
+            self.tabla.setItem(i, 4, QTableWidgetItem(f"${tarifa:.0f}"))
+
+        # Fila extra para total
+        self.tabla.insertRow(self.tabla.rowCount())
+        fila_total = self.tabla.rowCount() - 1
+
+        item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
+        item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        item_total_label.setFlags(Qt.ItemIsEnabled)
+        self.tabla.setItem(fila_total, 3, item_total_label)
+
+        item_total_valor = QTableWidgetItem(f"${total:.0f}")
+        item_total_valor.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        item_total_valor.setFlags(Qt.ItemIsEnabled)
+        self.tabla.setItem(fila_total, 4, item_total_valor)
+
+        self.boton_exportar.setEnabled(True)
 
     def exportar_pdf(self):
         if hasattr(self, "resultados") and self.resultados:

@@ -1,5 +1,7 @@
 from PySide6.QtWidgets import (
-    QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy, QMessageBox
+    QWidget, QPushButton, QLabel, QVBoxLayout, 
+    QHBoxLayout, QSpacerItem, QSizePolicy, 
+    QMessageBox
 )
 from PySide6.QtCore import Qt
 from views.registro import RegistroWindow
@@ -12,6 +14,10 @@ from views.asistencias import AsistenciasWindow
 from controllers.login_controller import registrar_asistencia_salida
 
 class MainWindow(QWidget):
+    """
+    Ventana principal del sistema, donde el usuario puede acceder a los diferentes módulos
+    según su rol (operador o administrador).
+    """
     def __init__(self, usuario, rol):
         super().__init__()
         self.usuario = usuario
@@ -22,7 +28,7 @@ class MainWindow(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(30, 20, 30, 20)
         layout.setSpacing(15)
 
         # Encabezado
@@ -42,9 +48,17 @@ class MainWindow(QWidget):
             ("🕒 Ver asistencias", self.abrir_asistencias if self.rol == "administrador" else None)
         ]
 
+        # Crear y añadir botones al layout
         for texto, funcion in botones:
             btn = QPushButton(texto)
-            btn.setMinimumHeight(40)
+            btn.setMinimumHeight(42)
+            btn.setStyleSheet("""
+                QPushButton {
+                    font-size: 14px;
+                    text-align: left;
+                    padding-left: 12px;
+                }
+            """)
             if funcion:
                 btn.clicked.connect(funcion)
             else:
@@ -56,42 +70,52 @@ class MainWindow(QWidget):
 
         # Botón de salida
         btn_salir = QPushButton("🔙 Cerrar sesión")
-        btn_salir.setMinimumHeight(35)
+        btn_salir.setMinimumHeight(36)
+        btn_salir.setStyleSheet("font-weight: bold;")
         btn_salir.clicked.connect(self.cerrar_sesion)
         layout.addWidget(btn_salir)
 
         self.setLayout(layout)
 
     def abrir_registro(self):
+        """Abre la ventana de registro de vehículos."""
         self.registro_window = RegistroWindow(self.usuario, self.rol)
         self.registro_window.show()
 
     def abrir_reportes(self):
+        """Abre la ventana de reportes (solo para administradores)."""
         self.reportes_window = ReportesWindow()
         self.reportes_window.show()
 
     def abrir_mensuales(self):
+        """Abre la ventana de gestión de clientes mensuales (solo para administradores)."""
         self.mensuales_window = MensualesWindow()
         self.mensuales_window.show()
 
     def abrir_configuracion(self):
+        """Abre la ventana de configuración del sistema (solo para administradores)."""
         self.config_window = ConfiguracionWindow()
         self.config_window.show()
 
     def abrir_tarifas(self):
+        """Abre la ventana de edición de tarifas personalizadas (solo para administradores)."""
         self.tarifas_window = TarifasPersonalizadasWindow()
         self.tarifas_window.show()
 
     def abrir_usuarios(self):
+        """Abre la ventana de gestión de usuarios (solo para administradores)."""
         self.usuarios_window = UsuariosWindow()
         self.usuarios_window.show()
 
     def abrir_asistencias(self):
+        """Abre la ventana de gestión de asistencias (solo para administradores)."""
         self.asistencias_window = AsistenciasWindow()
         self.asistencias_window.show()
     
     def cerrar_sesion(self):
-
+        """
+        Registra la salida del usuario y cierra la ventana principal mostrando un resumen.
+        """
         resumen = registrar_asistencia_salida(self.usuario)
 
         QMessageBox.information(

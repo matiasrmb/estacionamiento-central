@@ -1,15 +1,21 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHBoxLayout, QLineEdit,
-    QComboBox, QMessageBox, QInputDialog, QGroupBox, QHeaderView
+    QTableWidget, QTableWidgetItem, QHBoxLayout, 
+    QLineEdit, QComboBox, QMessageBox, QInputDialog, 
+    QGroupBox, QHeaderView
 )
 from PySide6.QtCore import Qt
 from controllers.usuarios_controller import (
-    obtener_usuarios, crear_usuario, cambiar_contrasena, cambiar_estado_usuario
+    obtener_usuarios, crear_usuario, 
+    cambiar_contrasena, cambiar_estado_usuario
 )
 from functools import partial
 
 class UsuariosWindow(QWidget):
+    """
+    Ventana para la gestión de usuarios del sistema.
+    Permite ver, crear, activar/desactivar y cambiar contraseñas.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("👤 Gestión de Usuarios")
@@ -21,12 +27,12 @@ class UsuariosWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # 🔷 Título
+        # Título
         titulo = QLabel("👥 Usuarios Registrados")
         titulo.setStyleSheet("font-weight: bold; font-size: 16px; margin: 10px 0;")
         layout.addWidget(titulo)
 
-        # 🔹 Tabla
+        # Tabla
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(3)
         self.tabla.setHorizontalHeaderLabels(["Usuario", "Rol", "Acciones"])
@@ -38,13 +44,14 @@ class UsuariosWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.tabla.verticalHeader().setDefaultSectionSize(42)  # Alto fijo por fila
+        self.tabla.verticalHeader().setDefaultSectionSize(42)
         layout.addWidget(self.tabla)
 
-        # 🔸 Grupo para crear nuevo usuario
+        # Grupo para crear nuevo usuario
         grupo_formulario = QGroupBox("➕ Crear nuevo usuario")
         form_layout = QHBoxLayout()
-        form_layout.setContentsMargins(10, 20, 10, 20)  # Espaciado interno
+        form_layout.setContentsMargins(10, 20, 10, 20)
+
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Usuario")
 
@@ -70,6 +77,7 @@ class UsuariosWindow(QWidget):
         self.cargar_usuarios()
 
     def cargar_usuarios(self):
+        """Carga los usuarios desde la base de datos a la tabla."""
         usuarios = obtener_usuarios()
         self.tabla.setRowCount(len(usuarios))
 
@@ -83,11 +91,13 @@ class UsuariosWindow(QWidget):
             layout_btn.setSpacing(5)
             layout_btn.setAlignment(Qt.AlignCenter)
 
+            # Botón para cambiar clave
             btn_clave = QPushButton("🔑 Clave")
             btn_clave.setStyleSheet("padding: 5px;")
             btn_clave.clicked.connect(partial(self.preguntar_nueva_clave, u["usuario"]))
             layout_btn.addWidget(btn_clave)
 
+            # Botón para activar/desactivar
             estado = "Desactivar" if u["activo"] else "Activar"
             icono_estado = "❌" if u["activo"] else "✅"
             btn_estado = QPushButton(f"{icono_estado} {estado}")
@@ -100,6 +110,7 @@ class UsuariosWindow(QWidget):
             self.tabla.setCellWidget(i, 2, botones)
 
     def crear_usuario(self):
+        """Crea un nuevo usuario en el sistema."""
         usuario = self.input_usuario.text().strip()
         clave = self.input_clave.text().strip()
         rol = self.select_rol.currentText()
@@ -117,6 +128,7 @@ class UsuariosWindow(QWidget):
             QMessageBox.critical(self, "Error", "No se pudo crear el usuario.")
 
     def preguntar_nueva_clave(self, usuario):
+        """Pregunta por una nueva clave y la actualiza en la base de datos."""
         clave, ok = QInputDialog.getText(self, "Cambiar contraseña", f"Ingresar nueva clave para '{usuario}':", QLineEdit.Password)
         if ok and clave:
             if cambiar_contrasena(usuario, clave):
@@ -125,6 +137,7 @@ class UsuariosWindow(QWidget):
                 QMessageBox.critical(self, "Error", "No se pudo cambiar la contraseña.")
 
     def toggle_estado_usuario(self, usuario, nuevo_estado):
+        """Activa o desactiva un usuario según su estado actual."""
         texto = "activar" if nuevo_estado else "desactivar"
         confirmar = QMessageBox.question(
             self,

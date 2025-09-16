@@ -1,11 +1,15 @@
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-    QComboBox, QMessageBox, QGroupBox
+    QWidget, QLabel, QLineEdit, QPushButton, 
+    QVBoxLayout, QComboBox, QMessageBox, QGroupBox
 )
 from controllers.config_controller import obtener_configuracion, actualizar_configuracion
 from controllers.tarifas_controller import generar_tramos_automaticos
 
 class ConfiguracionWindow(QWidget):
+    """
+    Ventana de configuración del sistema, permite establecer el modo de cobro,
+    tarifas y generar tramos personalizados automáticamente.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Configuración del Sistema")
@@ -19,10 +23,11 @@ class ConfiguracionWindow(QWidget):
 
         self.config = obtener_configuracion()
 
-        # 🔧 Grupo de configuración general
+        # Grupo de configuración general
         grupo_general = QGroupBox("⚙️ Configuración General")
         layout_general = QVBoxLayout()
-        layout_general.setContentsMargins(10, 20, 10, 20)  # Espaciado interno
+        layout_general.setContentsMargins(10, 20, 10, 20)
+        layout_general.setSpacing(10)
 
         self.modo_label = QLabel("Modo de cobro:")
         self.modo_combo = QComboBox()
@@ -45,14 +50,18 @@ class ConfiguracionWindow(QWidget):
         grupo_general.setLayout(layout_general)
         layout.addWidget(grupo_general)
 
-        # 🛠 Grupo de acciones
+        # Grupo de acciones
         grupo_acciones = QGroupBox("🛠 Acciones disponibles")
         layout_acciones = QVBoxLayout()
+        layout_acciones.setContentsMargins(15, 20, 15, 20)
+        layout_acciones.setSpacing(12)
 
         self.btn_generar_tramos = QPushButton("📊 Generar tramos automáticamente")
+        self.btn_generar_tramos.setMinimumHeight(36)
         self.btn_generar_tramos.clicked.connect(self.generar_tramos_auto)
 
         self.btn_guardar = QPushButton("💾 Guardar configuración")
+        self.btn_guardar.setMinimumHeight(36)
         self.btn_guardar.clicked.connect(self.guardar)
 
         layout_acciones.addWidget(self.btn_generar_tramos)
@@ -64,6 +73,10 @@ class ConfiguracionWindow(QWidget):
         self.setLayout(layout)
 
     def guardar(self):
+        """
+        Guarda los cambios realizados en la configuración del sistema,
+        validando que los valores de tarifa sean numéricos.
+        """
         modo = self.modo_combo.currentText()
         tarifa_minima = self.minima_input.text().strip()
         tarifa_hora = self.hora_input.text().strip()
@@ -79,6 +92,10 @@ class ConfiguracionWindow(QWidget):
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 
     def generar_tramos_auto(self):
+        """
+        Genera automáticamente los tramos personalizados según las tarifas mínimas y por hora.
+        Sobrescribe los valores existentes si el usuario lo confirma.
+        """
         confirmar = QMessageBox.question(
             self,
             "Confirmación",

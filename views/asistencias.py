@@ -1,13 +1,17 @@
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-    QHBoxLayout, QTableWidget, QTableWidgetItem, QDateEdit,
-    QMessageBox
+    QWidget, QLabel, QLineEdit, QPushButton, 
+    QVBoxLayout, QHBoxLayout, QTableWidget, 
+    QTableWidgetItem, QDateEdit, QMessageBox
 )
 from PySide6.QtCore import QDate
 from controllers.asistencias_controller import obtener_asistencias
-from utils.pdf_asistencias import exportar_asistencias_pdf  # la crearemos después
+from utils.pdf_asistencias import exportar_asistencias_pdf
 
 class AsistenciasWindow(QWidget):
+    """
+    Ventana que permite visualizar y exportar asistencias de usuarios, 
+    filtradas por fecha y nombre de usuario.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Registro de Asistencias")
@@ -16,11 +20,16 @@ class AsistenciasWindow(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
 
         # Filtros
         filtro_layout = QHBoxLayout()
+        filtro_layout.setSpacing(10)
+
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Usuario")
+        self.input_usuario.setMinimumWidth(100)
 
         self.fecha_inicio = QDateEdit()
         self.fecha_inicio.setCalendarPopup(True)
@@ -31,9 +40,11 @@ class AsistenciasWindow(QWidget):
         self.fecha_fin.setDate(QDate.currentDate())
 
         self.btn_filtrar = QPushButton("Buscar")
+        self.btn_filtrar.setMinimumHeight(30)
         self.btn_filtrar.clicked.connect(self.filtrar)
 
         self.btn_exportar = QPushButton("Exportar PDF")
+        self.btn_exportar.setMinimumHeight(30)
         self.btn_exportar.clicked.connect(self.exportar_pdf)
 
         filtro_layout.addWidget(QLabel("Usuario:"))
@@ -53,18 +64,21 @@ class AsistenciasWindow(QWidget):
         self.tabla.setHorizontalHeaderLabels([
             "Usuario", "Hora de Inicio", "Hora de Salida", "Movimientos", "Total Recaudado"
         ])
+        self.tabla.setAlternatingRowColors(True)
+        self.tabla.setStyleSheet("QTableWidget::item { padding: 6px; }")
         layout.addWidget(self.tabla)
 
         self.setLayout(layout)
 
     def filtrar(self):
+        """Ejecuta la búsqueda de asistencias según los filtros ingresados."""
         try:
             usuario = self.input_usuario.text().strip()
             fecha_inicio = self.fecha_inicio.date().toPython()
             fecha_fin = self.fecha_fin.date().toPython()
 
             datos = obtener_asistencias(usuario or None, fecha_inicio, fecha_fin)
-            self.resultados = datos  # Asegúrate de siempre guardarlo, incluso si está vacío
+            self.resultados = datos  
 
             self.tabla.setRowCount(len(datos))
 
@@ -82,6 +96,7 @@ class AsistenciasWindow(QWidget):
             QMessageBox.critical(self, "Error", f"Ocurrió un error:\n{e}")
 
     def exportar_pdf(self):
+        """Exporta los resultados actuales de la tabla a un archivo PDF."""
         try:
             if hasattr(self, "resultados") and self.resultados:
                 exportar_asistencias_pdf(self.resultados)
