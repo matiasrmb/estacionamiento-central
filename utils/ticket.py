@@ -93,7 +93,7 @@ def imprimir_pdf_directamente(ruta):
     Notas:
         - Asegúrate de tener instalado Adobe Acrobat Reader DC.
         - Reemplaza 'POS58 Printer' por el nombre real de tu impresora.
-    """
+    """ 
     ruta_acrobat = r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"  # Ajustable
     nombre_impresora = "POS58 Printer"  # Cambiar por nombre real de la impresora
 
