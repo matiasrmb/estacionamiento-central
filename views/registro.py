@@ -7,9 +7,11 @@ from PySide6.QtCore import QTimer, Qt
 from datetime import datetime
 from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso, 
-    registrar_salida, obtener_vehiculos_activos
+    registrar_salida, obtener_vehiculos_activos,
+    marcar_ingreso_en_espera
 )
 from views.dashboard import DashboardWindow
+from views.admin_edicion import EdicionIngresosWindow
 from functools import partial
 
 class RegistroWindow(QWidget):
@@ -65,12 +67,22 @@ class RegistroWindow(QWidget):
         """)
         self.boton_salida.clicked.connect(self.registrar_salida)
 
+        self.boton_espera = QPushButton("⏸️ Marcar como en espera")
+        self.boton_espera.setEnabled(False)
+        self.boton_espera.clicked.connect(self.marcar_en_espera)
+
+        if self.rol == "administrador":
+            self.btn_edicion = QPushButton("Edición de ingresos")
+            self.btn_edicion.clicked.connect(self.abrir_edicion)
+            layout.addWidget(self.btn_edicion)
+
         layout_registro.addWidget(self.label_patente)
         layout_registro.addWidget(self.input_patente)
         layout_registro.addWidget(self.boton_buscar)
         layout_registro.addWidget(self.info_label)
         layout_registro.addWidget(self.boton_ingreso)
         layout_registro.addWidget(self.boton_salida)
+        layout_registro.addWidget(self.boton_espera)
         grupo_registro.setLayout(layout_registro)
 
         layout.addWidget(grupo_registro)
@@ -129,15 +141,25 @@ class RegistroWindow(QWidget):
             self.info_label.setText("Vehículo no registrado. Se creará al ingresar.")
             self.boton_ingreso.setEnabled(True)
             self.boton_salida.setEnabled(False)
+            self.boton_espera.setEnabled(False)  # ← NO existe aún, no se permite poner en espera
+
         elif estado == "dentro":
             self.info_label.setText("Vehículo actualmente en el estacionamiento.")
             self.boton_salida.setEnabled(True)
             self.boton_ingreso.setEnabled(False)
+            self.boton_espera.setEnabled(True)  # ← SOLO aquí se permite poner en espera
+
         elif estado == "fuera":
             self.info_label.setText("Vehículo ya salió. Puedes registrar nuevo ingreso.")
             self.boton_ingreso.setEnabled(True)
             self.boton_salida.setEnabled(False)
+            self.boton_espera.setEnabled(False)  # ← Ya no está, no se puede poner en espera
+
         else:
+            self.info_label.setText("Estado desconocido.")
+            self.boton_ingreso.setEnabled(False)
+            self.boton_salida.setEnabled(False)
+            self.boton_espera.setEnabled(False)
             QMessageBox.critical(self, "Error", "Error al consultar la patente.")
 
     def registrar_ingreso(self):
@@ -216,3 +238,27 @@ class RegistroWindow(QWidget):
     def mostrar_ocultar_tabla(self, visible):
         """Muestra u oculta la tabla de vehículos activos."""
         self.tabla_activos.setVisible(visible)
+
+    def abrir_edicion(self):
+        self.ventana_edicion = EdicionIngresosWindow(self.usuario)
+        self.ventana_edicion.show()
+
+    def marcar_en_espera(self):
+        """Marca el vehículo como 'en espera' si está estacionado."""
+        patente = self.input_patente.text().strip().upper()
+        confirm = QMessageBox.question(
+            self,
+            "Confirmar",
+            f"¿Deseas marcar la patente {patente} como 'en espera'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if confirm == QMessageBox.Yes:
+            exito = marcar_ingreso_en_espera(patente)
+            if exito:
+                QMessageBox.information(self, "Éxito", "El ingreso ha sido marcado como 'en espera'.")
+                self.reset()
+                self.actualizar_tabla_activos()
+            else:
+                QMessageBox.critical(self, "Error", "No se pudo marcar como 'en espera'. Verifica si está dentro.")
+

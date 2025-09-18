@@ -88,7 +88,6 @@ def registrar_ingreso(patente):
     generar_ticket_ingreso(patente, fecha_hora)
     return True
 
-
 def registrar_salida(patente, usuario):
     """
     Registra la salida de un vehículo y calcula la tarifa correspondiente.
@@ -174,3 +173,75 @@ def obtener_vehiculos_activos():
         })
 
     return lista
+
+def obtener_ingresos_en_espera():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso
+        FROM ingresos i
+        JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+        WHERE i.en_espera = 1 AND i.fecha_hora_salida IS NULL
+        ORDER BY i.fecha_hora_ingreso DESC
+    """)
+    resultados = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return resultados
+
+def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Obtener info original
+    cursor.execute("""
+        SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso
+        FROM ingresos i
+        JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+        WHERE i.id_ingreso = %s
+    """, (id_ingreso,))
+    ingreso = cursor.fetchone()
+
+    if ingreso:
+        # Guardar respaldo
+        cursor.execute("""
+            INSERT INTO ingresos_eliminados (id_ingreso_original, patente, fecha_hora_ingreso, usuario_eliminador)
+            VALUES (%s, %s, %s, %s)
+        """, (id_ingreso, ingreso["patente"], ingreso["fecha_hora_ingreso"], usuario))
+
+        # Eliminar el ingreso original
+        cursor.execute("DELETE FROM ingresos WHERE id_ingreso = %s", (id_ingreso,))
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+
+def marcar_ingreso_en_espera(patente):
+    """
+    Marca el ingreso activo de una patente como 'en espera'.
+    Retorna True si se marcó correctamente, False en caso contrario.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Solo si está activo y aún no tiene salida
+        cursor.execute("""
+            UPDATE ingresos
+            SET en_espera = TRUE
+            WHERE id_vehiculo = (
+                SELECT id_vehiculo FROM vehiculos WHERE patente = %s
+            ) AND fecha_hora_salida IS NULL
+            ORDER BY fecha_hora_ingreso DESC
+            LIMIT 1
+        """, (patente,))
+        conn.commit()
+        exito = cursor.rowcount > 0
+        return exito
+    except Exception as e:
+        print(f"Error al marcar en espera: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
