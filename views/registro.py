@@ -67,6 +67,9 @@ class RegistroWindow(QWidget):
         """)
         self.boton_salida.clicked.connect(self.registrar_salida)
 
+        self.boton_bano = QPushButton("🚻 Registrar Uso de Baño")
+        self.boton_bano.clicked.connect(self.mostrar_opciones_bano)
+
         self.boton_espera = QPushButton("⏸️ Marcar como en espera")
         self.boton_espera.setEnabled(False)
         self.boton_espera.clicked.connect(self.marcar_en_espera)
@@ -84,6 +87,7 @@ class RegistroWindow(QWidget):
         layout_registro.addWidget(self.boton_salida)
         layout_registro.addWidget(self.boton_espera)
         grupo_registro.setLayout(layout_registro)
+        layout.addWidget(self.boton_bano)
 
         layout.addWidget(grupo_registro)
 
@@ -262,3 +266,19 @@ class RegistroWindow(QWidget):
             else:
                 QMessageBox.critical(self, "Error", "No se pudo marcar como 'en espera'. Verifica si está dentro.")
 
+    def mostrar_opciones_bano(self):
+        """Muestra opciones para registrar uso de baño con diferentes montos."""
+        from PySide6.QtWidgets import QInputDialog
+
+        opciones = ["$300", "$400", "$500"]
+        monto_str, ok = QInputDialog.getItem(
+            self, "Registrar Baño", "Seleccione el monto:", opciones, 0, False
+        )
+        if ok and monto_str:
+            monto = int(monto_str.replace("$", ""))
+            from controllers.registro_controller import registrar_uso_bano
+            exito = registrar_uso_bano(monto, self.usuario)
+            if exito:
+                QMessageBox.information(self, "Éxito", f"Uso de baño registrado por ${monto}")
+            else:
+                QMessageBox.critical(self, "Error", "No se pudo registrar el uso del baño.")

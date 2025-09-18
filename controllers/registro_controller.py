@@ -245,3 +245,22 @@ def marcar_ingreso_en_espera(patente):
         cursor.close()
         conn.close()
 
+def registrar_uso_bano(monto, usuario):
+    """
+    Registra el uso del baño con el monto entregado.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO usos_bano (fecha_hora, monto, usuario)
+            VALUES (%s, %s, %s)
+        """, (datetime.now(), monto, usuario))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error al registrar uso de baño: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
