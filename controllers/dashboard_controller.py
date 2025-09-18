@@ -33,7 +33,6 @@ def obtener_resumen_diario():
     """)
     total_estacionados = cursor.fetchone()["estacionados"]
 
-    # ✅ Solo contar los que NO estén cerrados
     cursor.execute("""
         SELECT SUM(tarifa_aplicada) AS recaudado
         FROM ingresos
@@ -49,4 +48,29 @@ def obtener_resumen_diario():
         "total_ingresos": total_ingresos,
         "estacionados": total_estacionados,
         "recaudado": recaudado
+    }
+
+def obtener_resumen_banos():
+    """
+    Obtiene estadísticas de usos de baños del día actual.
+
+    Returns:
+        dict: Contiene cantidad de usos y total recaudado.
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT COUNT(*) AS cantidad, SUM(monto) AS total
+        FROM usos_bano
+        WHERE DATE(fecha_hora) = CURDATE()
+    """)
+    row = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "cantidad": row["cantidad"] or 0,
+        "total": row["total"] or 0
     }

@@ -2,8 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox
 )
 from PySide6.QtCore import QDate, QDateTime, QTimer, Qt
-from controllers.dashboard_controller import obtener_resumen_diario
-from controllers.cierres_controller import realizar_cierre_diario
+from controllers.dashboard_controller import obtener_resumen_diario, obtener_resumen_banos
+from controllers.cierres_controller import realizar_cierre_diario   
 from datetime import datetime
 
 class DashboardWindow(QWidget):
@@ -50,14 +50,19 @@ class DashboardWindow(QWidget):
         self.label_ingresos = QLabel()
         self.label_estacionados = QLabel()
         self.label_recaudado = QLabel()
+        self.label_banos = QLabel()
+        self.label_total_general = QLabel()
 
-        for label in [self.label_ingresos, self.label_estacionados, self.label_recaudado]:
+        for label in [
+            self.label_ingresos,
+            self.label_estacionados,
+            self.label_recaudado,
+            self.label_banos,
+            self.label_total_general
+        ]:
             label.setAlignment(Qt.AlignCenter)
             label.setStyleSheet("font-weight: bold;")
-
-        layout.addWidget(self.label_ingresos)
-        layout.addWidget(self.label_estacionados)
-        layout.addWidget(self.label_recaudado)
+            layout.addWidget(label)
 
         self.actualizar_resumen()
 
@@ -81,11 +86,22 @@ class DashboardWindow(QWidget):
         self.label_hora.setText(f"🕒 Hora actual: {hora_actual}")
 
     def actualizar_resumen(self):
-        """Consulta el resumen del día y actualiza las etiquetas de estadísticas."""
+        """
+        Consulta el resumen del día y actualiza las etiquetas de estadísticas,
+        incluyendo ingresos, estacionados, recaudación y uso de baños.
+        """
+
         resumen = obtener_resumen_diario()
+        resumen_banos = obtener_resumen_banos()
+
+        recaudacion_total = resumen["recaudado"] + resumen_banos["total"]
+
         self.label_ingresos.setText(f"🚗 Ingresos hoy: {resumen['total_ingresos']}")
         self.label_estacionados.setText(f"🚘 Estacionados actualmente: {resumen['estacionados']}")
-        self.label_recaudado.setText(f"💰 Total recaudado hoy: ${resumen['recaudado']:.0f}")
+        self.label_recaudado.setText(f"💰 Recaudado vehículos: ${resumen['recaudado']:.0f}")
+
+        self.label_banos.setText(f"🚽 Baños: {resumen_banos['cantidad']} usos, ${resumen_banos['total']:.0f}")
+        self.label_total_general.setText(f"📊 Total general: ${recaudacion_total:.0f}")
 
     def abrir_menu(self):
         """Oculta el dashboard y muestra la ventana principal del sistema."""
