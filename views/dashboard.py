@@ -17,7 +17,7 @@ class DashboardWindow(QWidget):
         self.usuario = usuario
         self.rol = rol
         self.setWindowTitle("Resumen Diario - Estacionamiento Central")
-        self.setFixedSize(400, 300)
+        self.setFixedSize(500, 400)
         self.init_ui()
 
     def init_ui(self):
