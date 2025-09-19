@@ -167,7 +167,7 @@ def obtener_vehiculos_activos():
         tarifa = calcular_tarifa(minutos) if r["en_espera"] == 0 else 0
         lista.append({
             "patente": r["patente"] + (" [EN ESPERA]" if r["en_espera"] else ""),
-            "hora": r["fecha_hora_ingreso"].strftime("%H:%M"),
+            "hora": r["fecha_hora_ingreso"].strftime("%Y-%m-%d %H:%M:%S"),
             "monto": tarifa,
             "en_espera": bool(r["en_espera"])
         })

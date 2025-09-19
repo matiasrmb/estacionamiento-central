@@ -25,7 +25,7 @@ class RegistroWindow(QWidget):
         self.usuario = usuario
         self.rol = rol
         self.setWindowTitle("Registro de Vehículos")
-        self.setFixedSize(900, 600) 
+        self.setFixedSize(900, 700) 
         self.init_ui()
 
     def init_ui(self):
@@ -72,6 +72,16 @@ class RegistroWindow(QWidget):
 
         self.boton_espera = QPushButton("⏸️ Marcar como en espera")
         self.boton_espera.setEnabled(False)
+        self.boton_espera.setStyleSheet("""
+            QPushButton {
+                padding: 6px;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+                border: 1px solid #aaaaaa;
+            }
+        """)
         self.boton_espera.clicked.connect(self.marcar_en_espera)
 
         if self.rol == "administrador":
@@ -99,16 +109,14 @@ class RegistroWindow(QWidget):
 
         # Grupo para tabla de vehículos activos
         self.grupo_tabla = QGroupBox("🚗 Vehículos actualmente estacionados")
-        self.grupo_tabla.setCheckable(True)
-        self.grupo_tabla.setChecked(False)
-        self.grupo_tabla.toggled.connect(self.mostrar_ocultar_tabla)
+        self.grupo_tabla.setVisible(False)
 
         layout_tabla = QVBoxLayout()
         layout_tabla.setContentsMargins(10, 20, 10, 20)
 
         self.tabla_activos = QTableWidget()
-        self.tabla_activos.setColumnCount(3)
-        self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Monto Actual"])
+        self.tabla_activos.setColumnCount(4)
+        self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Minutos", "Monto Actual"])
         self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.tabla_activos.setMaximumHeight(200)
 
@@ -117,6 +125,7 @@ class RegistroWindow(QWidget):
         self.tabla_activos.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.tabla_activos.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
         layout_tabla.addWidget(self.tabla_activos)
         self.grupo_tabla.setLayout(layout_tabla)
@@ -125,7 +134,7 @@ class RegistroWindow(QWidget):
         # Timer para actualizar
         self.timer_tabla = QTimer()
         self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
-        self.timer_tabla.start(60000)
+        self.timer_tabla.start(5000)
         self.actualizar_tabla_activos()
 
         self.setLayout(layout)
@@ -210,6 +219,19 @@ class RegistroWindow(QWidget):
             patente = vehiculo["patente"]
             hora = vehiculo["hora"]
             monto = vehiculo["monto"]
+            print(f"DEBUG - hora: {hora} ({type(hora)})")
+
+            try:
+                hoy = datetime.now().date()  # Fecha actual
+                hora_dt = datetime.strptime(hora, "%Y-%m-%d %H:%M:%S").time()  # Convierte la hora a tipo time
+                hora_ingreso = datetime.combine(hoy, hora_dt)  # Une fecha y hora
+                ahora = datetime.now()
+                minutos = int((ahora - hora_ingreso).total_seconds() // 60)
+                if minutos < 0:
+                    minutos = 0  # Por si ocurre desfase horario o ingreso del día anterior
+            except Exception as e:
+                print(f"[ERROR al calcular minutos] {hora} → {e}")
+                minutos = 0
 
             item_patente = QTableWidgetItem(patente)
             item_patente.setFlags(item_patente.flags() ^ Qt.ItemIsEditable)
@@ -219,9 +241,14 @@ class RegistroWindow(QWidget):
             item_hora.setFlags(item_hora.flags() ^ Qt.ItemIsEditable)
             self.tabla_activos.setItem(i, 1, item_hora)
 
+            item_minutos = QTableWidgetItem(f"{minutos} min")
+            item_minutos.setFlags(item_minutos.flags() ^ Qt.ItemIsEditable)
+            item_minutos.setTextAlignment(Qt.AlignCenter)
+            self.tabla_activos.setItem(i, 2, item_minutos)
+
             item_monto = QTableWidgetItem(f"${monto:.0f}")
             item_monto.setFlags(item_monto.flags() ^ Qt.ItemIsEditable)
-            self.tabla_activos.setItem(i, 2, item_monto)
+            self.tabla_activos.setItem(i, 3, item_monto)
 
             total += monto
 
@@ -229,19 +256,19 @@ class RegistroWindow(QWidget):
         item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
         item_total_label.setFlags(item_total_label.flags() ^ Qt.ItemIsEditable)
         item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.tabla_activos.setItem(fila_total, 1, item_total_label)
+        self.tabla_activos.setItem(fila_total, 2, item_total_label) 
 
         item_total_monto = QTableWidgetItem(f"${total:.0f}")
         item_total_monto.setFlags(item_total_monto.flags() ^ Qt.ItemIsEditable)
         item_total_monto.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.tabla_activos.setItem(fila_total, 2, item_total_monto)
+        self.tabla_activos.setItem(fila_total, 3, item_total_monto)
 
+        # Limpiar columnas anteriores (col 0 y 1)
         self.tabla_activos.setItem(fila_total, 0, QTableWidgetItem(""))
-        self.tabla_activos.setItem(fila_total, 3, QTableWidgetItem(""))
+        self.tabla_activos.setItem(fila_total, 1, QTableWidgetItem(""))
 
-    def mostrar_ocultar_tabla(self, visible):
-        """Muestra u oculta la tabla de vehículos activos."""
-        self.tabla_activos.setVisible(visible)
+        # Mostrar grupo solo si hay vehículos
+        self.grupo_tabla.setVisible(len(datos) > 0)
 
     def abrir_edicion(self):
         self.ventana_edicion = EdicionIngresosWindow(self.usuario)
