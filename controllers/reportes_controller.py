@@ -9,7 +9,7 @@ Este módulo permite:
 
 from utils.db import get_connection
 from utils.pdf_utils import ReportePDF, abrir_pdf
-from datetime import datetime
+from datetime import datetime, time
 from fpdf import FPDF
 import os
 
@@ -49,11 +49,28 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
     cursor.execute(query, tuple(params))
     resultados = cursor.fetchall()
 
+    # Usos de baños (solo si no se filtró patente)
+    if not patente:
+        cursor.execute("""
+            SELECT fecha_hora, monto, usuario
+            FROM usos_bano
+            WHERE DATE(fecha_hora) BETWEEN %s AND %s
+        """, (fecha_inicio, fecha_fin))
+        banos = cursor.fetchall()
+        for b in banos:
+            resultados.append({
+                "patente": "[BAÑO]",
+                "fecha_hora_ingreso": b["fecha_hora"],
+                "fecha_hora_salida": b["fecha_hora"],
+                "minutos": 0,
+                "tarifa_aplicada": b["monto"]
+            })
+
     cursor.close()
     conn.close()
     return resultados
 
-def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None):
+def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
     """
     Exporta los resultados de los reportes a un archivo PDF con formato estandarizado.
 
@@ -69,6 +86,23 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None):
     pdf.set_font("Arial", size=11)
 
     total = 0
+    total_banos = 0
+    monto_banos = 0
+
+    if incluir_banos and fecha_inicio and fecha_fin:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT COUNT(*) AS cantidad, SUM(monto) AS total
+            FROM usos_bano
+            WHERE DATE(fecha_hora) BETWEEN %s AND %s
+        """, (fecha_inicio, fecha_fin))
+        resultado = cursor.fetchone()
+        total_banos = resultado["cantidad"] or 0
+        monto_banos = resultado["total"] or 0
+        cursor.close()
+        conn.close()
+
     for row in datos:
         ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
         salida = row["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M")
@@ -80,6 +114,13 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None):
     pdf.ln(5)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, f"Total recaudado: ${total:.0f}", ln=True)
+
+    if incluir_banos:
+        pdf.set_font("Arial", "", 11)
+        pdf.cell(0, 8, f"Baños registrados: {total_banos}", ln=True)
+        pdf.cell(0, 8, f"Total recaudado por baños: ${monto_banos:.0f}", ln=True)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, f"Total general (vehículos + baños): ${total + monto_banos:.0f}", ln=True)
 
     carpeta = "reportes"
     os.makedirs(carpeta, exist_ok=True)

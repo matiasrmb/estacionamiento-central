@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton, 
     QVBoxLayout, QHBoxLayout, QTableWidget, 
     QTableWidgetItem, QHeaderView, QDateEdit, 
-    QGroupBox, QMessageBox
+    QGroupBox, QMessageBox, QCheckBox
 )
 from PySide6.QtCore import QDate, Qt
 from controllers.reportes_controller import obtener_reportes, exportar_pdf
@@ -53,7 +53,7 @@ class ReportesWindow(QWidget):
         # Tabla de resultados
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(5)
-        self.tabla.setHorizontalHeaderLabels(["Patente", "Ingreso", "Salida", "Minutos", "Tarifa"])
+        self.tabla.setHorizontalHeaderLabels(["Patente", "Ingreso", "Salida", "Minutos", "Monto"])
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setStyleSheet("QTableWidget { font-size: 13px; }")
         layout.addWidget(self.tabla)
