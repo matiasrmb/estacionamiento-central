@@ -19,12 +19,9 @@ def generar_pdf_cierre(tipo, datos):
     pdf.add_page()
     pdf.set_font("Arial", size=11)
 
-    # Insertar cada línea del reporte
     for clave, valor in datos.items():
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(60, 8, f"{clave}:", border=0)
-        pdf.set_font("Arial", "", 11)
-        pdf.cell(0, 8, str(valor), ln=True)
+        texto = f"{clave}: {valor}"
+        pdf.multi_cell(0, 8, texto)
 
     # Crear carpeta de salida si no existe
     carpeta = "cierres"
