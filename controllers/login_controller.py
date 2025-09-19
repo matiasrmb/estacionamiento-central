@@ -116,3 +116,15 @@ def registrar_asistencia_salida(usuario):
     conn.close()
 
     return resumen
+
+def hay_usuarios_registrados():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        resultado = cursor.fetchone()
+        conn.close()
+        return resultado[0] > 0
+    except Exception as e:
+        print(f"Error al verificar usuarios: {e}")
+        return False  # Por defecto, si falla, se asume que no hay usuarios

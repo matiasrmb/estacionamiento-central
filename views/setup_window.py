@@ -9,11 +9,11 @@ class SetupWindow(QWidget):
     Ventana de configuración inicial para crear el primer usuario administrador.
     Esta ventana se muestra solo si no existen usuarios en el sistema.
     """
-    def __init__(self, app):
+    def __init__(self, callback_mostrar_login):
         super().__init__()
-        self.app = app
+        self.callback_mostrar_login = callback_mostrar_login 
         self.setWindowTitle("Configuración Inicial - Crear Usuario")
-        self.setFixedSize(350, 250)
+        self.setFixedSize(900, 600)
         self.init_ui()
 
     def init_ui(self):
@@ -74,6 +74,6 @@ class SetupWindow(QWidget):
             crear_usuario(usuario, clave, rol)
             QMessageBox.information(self, "Éxito", f"Usuario '{usuario}' creado.")
             self.close()
-            self.app.mostrar_login()
+            self.callback_mostrar_login()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo crear el usuario.\n{e}")
