@@ -39,19 +39,21 @@ class MainWindow(QWidget):
 
         # Botones principales
         botones = [
-            ("🚗 Registro de Vehículos", self.abrir_registro),
-            ("📊 Reportes", self.abrir_reportes if self.rol == "administrador" else None),
-            ("👥 Clientes Mensuales", self.abrir_mensuales if self.rol == "administrador" else None),
-            ("⚙️ Configuración", self.abrir_configuracion if self.rol == "administrador" else None),
-            ("📈 Editar tarifas personalizadas", self.abrir_tarifas if self.rol == "administrador" else None),
-            ("🔐 Gestión de Usuarios", self.abrir_usuarios if self.rol == "administrador" else None),
-            ("🕒 Ver asistencias", self.abrir_asistencias if self.rol == "administrador" else None)
+            ("🚗 Registro de Vehículos", self.abrir_registro, True),
+            ("📊 Reportes", self.abrir_reportes, self.rol == "administrador"),
+            ("👥 Clientes Mensuales", self.abrir_mensuales, self.rol == "administrador"),
+            ("⚙️ Configuración", self.abrir_configuracion, self.rol == "administrador"),
+            ("📈 Editar tarifas personalizadas", self.abrir_tarifas, self.rol == "administrador"),
+            ("🔐 Gestión de Usuarios", self.abrir_usuarios, self.rol == "administrador"),
+            ("🕒 Ver asistencias", self.abrir_asistencias, self.rol == "administrador")
         ]
 
         # Crear y añadir botones al layout
-        for texto, funcion in botones:
+        for texto, funcion, habilitado in botones:
             btn = QPushButton(texto)
             btn.setMinimumHeight(42)
+            btn.setVisible(habilitado)
+
             btn.setStyleSheet("""
                 QPushButton {
                     font-size: 14px;
@@ -59,10 +61,10 @@ class MainWindow(QWidget):
                     padding-left: 12px;
                 }
             """)
-            if funcion:
+
+            if habilitado:
                 btn.clicked.connect(funcion)
-            else:
-                btn.setDisabled(True)
+
             layout.addWidget(btn)
 
         # Espacio flexible
