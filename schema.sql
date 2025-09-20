@@ -33,12 +33,10 @@ CREATE TABLE IF NOT EXISTS ingresos (
     FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo)
 );
 
--- Tabla de configuraciones del sistema
+-- Tabla de configuración del sistema (clave/valor)
 CREATE TABLE IF NOT EXISTS configuracion (
     clave VARCHAR(50) PRIMARY KEY,
-    valor VARCHAR(255) NOT NULL,
-    valor_minuto INT DEFAULT 25,
-    modo_auto_simplificado TINYINT(1) DEFAULT 0
+    valor VARCHAR(255) NOT NULL
 );
 
 -- Tabla de tarifas personalizadas
@@ -49,6 +47,14 @@ CREATE TABLE IF NOT EXISTS tarifas_personalizadas (
     valor INT NOT NULL
 );
 
+-- Tabla de usos de baño
+CREATE TABLE IF NOT EXISTS usos_bano (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    fecha_hora DATETIME NOT NULL,
+    monto INT NOT NULL,
+    usuario VARCHAR(50) NOT NULL
+);
+
 -- Tabla de cierres diarios
 CREATE TABLE IF NOT EXISTS cierres_diarios (
     id_cierre INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,6 +63,8 @@ CREATE TABLE IF NOT EXISTS cierres_diarios (
     total_recaudado INT NOT NULL,
     total_ingresos INT NOT NULL,
     total_salidas INT NOT NULL,
+    total_banos INT DEFAULT 0,
+    total_banos_monto INT DEFAULT 0,
     usuario VARCHAR(50) NOT NULL
 );
 
@@ -69,3 +77,11 @@ CREATE TABLE IF NOT EXISTS asistencias (
     cantidad_movimientos INT DEFAULT 0,
     total_recaudado DECIMAL(10,2) DEFAULT 0
 );
+
+-- Inserción inicial de configuración
+INSERT INTO configuracion (clave, valor) VALUES
+('modo_cobro', 'minuto'),
+('tarifa_minima', '300'),
+('tarifa_hora', '1300'),
+('modo_auto_simplificado', '0')
+ON DUPLICATE KEY UPDATE valor = VALUES(valor);
