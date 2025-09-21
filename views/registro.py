@@ -4,11 +4,12 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QGroupBox, QHeaderView
 )
 from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QKeyEvent
 from datetime import datetime
 from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso, 
     registrar_salida, obtener_vehiculos_activos,
-    marcar_ingreso_en_espera
+    marcar_ingreso_en_espera, alternar_estado_espera
 )
 from views.dashboard import DashboardWindow
 from views.admin_edicion import EdicionIngresosWindow
@@ -309,3 +310,102 @@ class RegistroWindow(QWidget):
                 QMessageBox.information(self, "Éxito", f"Uso de baño registrado por ${monto}")
             else:
                 QMessageBox.critical(self, "Error", "No se pudo registrar el uso del baño.")
+
+    def reingresar_vehiculo(self):
+        """
+        Permite reingresar un vehículo que ya fue cerrado recientemente.
+        """
+        from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado
+
+        patente = self.input_patente.text().strip().upper()
+        if not patente:
+            QMessageBox.warning(self, "Error", "Primero escribe una patente.")
+            return
+
+        # Buscar si tiene un ingreso reciente cerrrado
+        ingresos = obtener_ingresos_editables()
+        ingreso = next((i for i in ingresos if i["patente"] == patente and i["estado"] == "CERRADO"), None)
+
+        if not ingreso:
+            QMessageBox.information(self, "No encontrado", "No hay registros cerrados recientes para reingresar.")
+            return
+
+        confirmar = QMessageBox.question(
+            self, "Confirmar reingreso",
+            f"¿Deseas reingresar a {patente} manteniendo su hora original?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if confirmar == QMessageBox.Yes:
+            exito = reingresar_vehiculo_cerrado(ingreso["id_ingreso"])
+            if exito:
+                QMessageBox.information(self, "Reingresado", "Vehículo reingresado con éxito.")
+                self.actualizar_tabla_activos()
+            else:
+                QMessageBox.critical(self, "Error", "No se pudo reingresar el vehículo.")
+
+    def consultar_tarifa_actual(self):
+        """
+        Muestra la tarifa acumulada actual del vehículo si está estacionado.
+        """
+        from controllers.registro_controller import obtener_vehiculos_activos
+
+        patente = self.input_patente.text().strip().upper()
+        if not patente:
+            QMessageBox.warning(self, "Error", "Primero escribe una patente.")
+            return
+
+        activos = obtener_vehiculos_activos()
+        vehiculo = next((v for v in activos if patente in v["patente"]), None)
+
+        if vehiculo:
+            monto = vehiculo["monto"]
+            QMessageBox.information(self, "Tarifa Actual", f"Tarifa acumulada: ${monto}")
+        else:
+            QMessageBox.information(self, "No encontrado", "El vehículo no está actualmente en el estacionamiento.")
+
+    def alternar_espera_desde_tecla(self):
+        """Alterna el estado de espera de la patente ingresada al presionar F8."""
+        from controllers.registro_controller import alternar_estado_espera
+        patente = self.input_patente.text().strip().upper()
+
+        if not patente:
+            QMessageBox.warning(self, "Atención", "Ingresa una patente.")
+            return
+
+        exito, mensaje = alternar_estado_espera(patente)
+
+        if exito:
+            QMessageBox.information(self, "Listo", mensaje)
+            self.reset()
+            self.actualizar_tabla_activos()
+        else:
+            QMessageBox.critical(self, "Error", mensaje)
+
+
+    def keyPressEvent(self, event):
+        """
+        Detecta teclas rápidas presionadas en la ventana de registro.
+        """
+        tecla = event.key()
+
+        if tecla == Qt.Key_F1:
+            if self.boton_ingreso.isEnabled():
+                self.registrar_ingreso()
+            elif self.boton_salida.isEnabled():
+                self.registrar_salida()
+            else:
+                QMessageBox.information(self, "Sin acción", "No hay acción disponible para F1.")
+        elif tecla == Qt.Key_F2:
+            self.reset()
+        elif tecla == Qt.Key_F6:
+            self.mostrar_opciones_bano()
+        elif tecla == Qt.Key_F7:
+            self.reingresar_vehiculo()
+        elif tecla == Qt.Key_F8:
+            self.alternar_espera_desde_tecla()
+        elif tecla == Qt.Key_F10:
+            self.consultar_tarifa_actual()
+        elif tecla == Qt.Key_Return or tecla == Qt.Key_Enter:
+            self.buscar_vehiculo()
+

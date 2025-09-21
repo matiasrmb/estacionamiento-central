@@ -198,9 +198,14 @@ def obtener_ingresos_editables():
         SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso, 'CERRADO' AS estado
         FROM ingresos i
         JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
-        WHERE i.fecha_hora_salida IS NOT NULL
-        AND i.fecha_hora_salida >= NOW() - INTERVAL 1 DAY
-        AND i.reingresado = 0
+        WHERE i.fecha_hora_salida IS NOT NULL AND i.reingresado = 0
+        AND i.id_ingreso IN (
+            SELECT MAX(i2.id_ingreso)
+            FROM ingresos i2
+            JOIN vehiculos v2 ON i2.id_vehiculo = v2.id_vehiculo
+            WHERE i2.fecha_hora_salida IS NOT NULL AND i2.reingresado = 0
+            GROUP BY v2.patente
+        )
     """)
     cerrados = cursor.fetchall()
 
@@ -208,7 +213,6 @@ def obtener_ingresos_editables():
     conn.close()
 
     return en_espera + cerrados
-
 
 def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
     conn = get_connection()
@@ -351,6 +355,40 @@ def reingresar_vehiculo_cerrado(id_ingreso_original):
     except Exception as e:
         print(f"Error al reingresar vehículo cerrado: {e}")
         return False
+    finally:
+        cursor.close()
+        conn.close()
+
+def alternar_estado_espera(patente):
+    """
+    Cambia el estado de 'en espera' a normal o viceversa para el ingreso activo de una patente.
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT id_ingreso, en_espera
+            FROM ingresos
+            JOIN vehiculos ON ingresos.id_vehiculo = vehiculos.id_vehiculo
+            WHERE vehiculos.patente = %s AND fecha_hora_salida IS NULL
+            ORDER BY fecha_hora_ingreso DESC
+            LIMIT 1
+        """, (patente,))
+        ingreso = cursor.fetchone()
+
+        if not ingreso:
+            return False, "No hay ingreso activo para esta patente."
+
+        if ingreso["en_espera"]:
+            exito = revertir_en_espera(ingreso["id_ingreso"])
+            return exito, "Revertido de estado 'en espera'." if exito else "No se pudo revertir."
+        else:
+            exito = marcar_ingreso_en_espera(patente)
+            return exito, "Marcado como 'en espera'." if exito else "No se pudo marcar como espera."
+    except Exception as e:
+        print(f"Error en alternar_estado_espera: {e}")
+        return False, str(e)
     finally:
         cursor.close()
         conn.close()
