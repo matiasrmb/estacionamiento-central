@@ -174,21 +174,41 @@ def obtener_vehiculos_activos():
 
     return lista
 
-def obtener_ingresos_en_espera():
+def obtener_ingresos_editables():
+    """
+    Obtiene ingresos marcados como 'en espera' o 'cerrados', aún visibles para edición manual.
+
+    Returns:
+        list[dict]: Lista con id_ingreso, patente, fecha_hora_ingreso y estado.
+    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
+    # Ingresos en espera (no cerrados)
     cursor.execute("""
-        SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso
+        SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso, 'EN ESPERA' AS estado
         FROM ingresos i
         JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
         WHERE i.en_espera = 1 AND i.fecha_hora_salida IS NULL
-        ORDER BY i.fecha_hora_ingreso DESC
     """)
-    resultados = cursor.fetchall()
+    en_espera = cursor.fetchall()
+
+    # Últimos ingresos cerrados en las últimas 24 horas
+    cursor.execute("""
+        SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso, 'CERRADO' AS estado
+        FROM ingresos i
+        JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+        WHERE i.fecha_hora_salida IS NOT NULL
+        AND i.fecha_hora_salida >= NOW() - INTERVAL 1 DAY
+        AND i.reingresado = 0
+    """)
+    cerrados = cursor.fetchall()
+
     cursor.close()
     conn.close()
-    return resultados
+
+    return en_espera + cerrados
+
 
 def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
     conn = get_connection()
@@ -264,3 +284,74 @@ def registrar_uso_bano(monto, usuario):
     finally:
         cursor.close()
         conn.close()
+
+def revertir_en_espera(id_ingreso):
+    """
+    Revierte el estado 'en espera' de un ingreso activo para volverlo a estado normal.
+
+    Args:
+        id_ingreso (int): ID del ingreso a revertir.
+
+    Returns:
+        bool: True si fue exitoso.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE ingresos
+            SET en_espera = 0
+            WHERE id_ingreso = %s AND fecha_hora_salida IS NULL
+        """, (id_ingreso,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error al revertir ingreso en espera: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+def reingresar_vehiculo_cerrado(id_ingreso_original):
+    """
+    Reingresa un vehículo que ya fue cerrado, manteniendo la hora original y la tarifa acumulada.
+    Marca el ingreso original como 'reingresado'.
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT id_vehiculo, fecha_hora_ingreso, tarifa_aplicada
+            FROM ingresos
+            WHERE id_ingreso = %s AND fecha_hora_salida IS NOT NULL AND reingresado = 0
+        """, (id_ingreso_original,))
+        ingreso = cursor.fetchone()
+
+        if not ingreso:
+            return False
+
+        # Crear nuevo ingreso con misma hora
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso, tarifa_aplicada, en_espera)
+            VALUES (%s, %s, %s, 0)
+        """, (ingreso["id_vehiculo"], ingreso["fecha_hora_ingreso"], ingreso["tarifa_aplicada"]))
+
+        # Marcar el original como reingresado
+        cursor.execute("""
+            UPDATE ingresos
+            SET reingresado = 1
+            WHERE id_ingreso = %s
+        """, (id_ingreso_original,))
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        print(f"Error al reingresar vehículo cerrado: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+

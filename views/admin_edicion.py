@@ -3,73 +3,125 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHBoxLayout,
     QMessageBox
 )
-from controllers.registro_controller import obtener_ingresos_en_espera, eliminar_ingreso_con_respaldo
-
+from controllers.registro_controller import (
+    obtener_ingresos_editables,
+    eliminar_ingreso_con_respaldo,
+    revertir_en_espera,
+    reingresar_vehiculo_cerrado
+)
 
 class EdicionIngresosWindow(QWidget):
     """
-    Ventana exclusiva para administradores que permite eliminar manualmente registros de ingresos
-    marcados como 'en espera'. Al eliminar, se guarda automáticamente un respaldo en la tabla 
-    'ingresos_eliminados' para auditoría.
+    Ventana para administradores: permite editar ingresos especiales.
+    - Eliminar ingresos en espera (con respaldo).
+    - Revertir ingresos en espera a estado activo.
+    - Reingresar ingresos cerrados manteniendo hora y tarifa.
     """
     def __init__(self, usuario_admin):
         super().__init__()
         self.usuario_admin = usuario_admin
         self.setWindowTitle("Panel de Edición Manual de Ingresos")
-        self.setFixedSize(700, 400)
+        self.setFixedSize(750, 460)
         self.setup_ui()
         self.cargar_datos()
 
     def setup_ui(self):
         layout = QVBoxLayout()
 
-        self.label = QLabel("Ingresos marcados como 'en espera'")
+        self.label = QLabel("Ingresos marcados como 'en espera' o 'cerrados recientes'")
         layout.addWidget(self.label)
 
         self.tabla = QTableWidget()
-        self.tabla.setColumnCount(3)
-        self.tabla.setHorizontalHeaderLabels(["ID Ingreso", "Patente", "Hora de Ingreso"])
+        self.tabla.setColumnCount(4)
+        self.tabla.setHorizontalHeaderLabels(["ID", "Patente", "Hora ingreso", "Estado"])
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         layout.addWidget(self.tabla)
 
-        # Botón para eliminar seleccionado
-        boton_layout = QHBoxLayout()
-        self.btn_eliminar = QPushButton("Eliminar ingreso seleccionado")
-        self.btn_eliminar.clicked.connect(self.eliminar_ingreso)
-        boton_layout.addStretch()
-        boton_layout.addWidget(self.btn_eliminar)
-        layout.addLayout(boton_layout)
+        botones_layout = QHBoxLayout()
 
+        self.btn_revertir = QPushButton("Revertir ingreso en espera")
+        self.btn_revertir.clicked.connect(self.revertir_en_espera)
+        botones_layout.addWidget(self.btn_revertir)
+
+        self.btn_reingresar = QPushButton("Reingresar vehículo cerrado")
+        self.btn_reingresar.clicked.connect(self.reingresar)
+        botones_layout.addWidget(self.btn_reingresar)
+
+        self.btn_eliminar = QPushButton("Eliminar ingreso en espera")
+        self.btn_eliminar.clicked.connect(self.eliminar_ingreso)
+        botones_layout.addWidget(self.btn_eliminar)
+
+        layout.addLayout(botones_layout)
         self.setLayout(layout)
 
     def cargar_datos(self):
         self.tabla.setRowCount(0)
-        ingresos = obtener_ingresos_en_espera()
+        ingresos = obtener_ingresos_editables()
 
         for fila, ingreso in enumerate(ingresos):
             self.tabla.insertRow(fila)
             self.tabla.setItem(fila, 0, QTableWidgetItem(str(ingreso["id_ingreso"])))
             self.tabla.setItem(fila, 1, QTableWidgetItem(ingreso["patente"]))
             self.tabla.setItem(fila, 2, QTableWidgetItem(ingreso["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")))
+            self.tabla.setItem(fila, 3, QTableWidgetItem(ingreso["estado"]))
+
+    def revertir_en_espera(self):
+        fila = self.tabla.currentRow()
+        if fila == -1:
+            QMessageBox.warning(self, "Selecciona", "Selecciona una fila primero.")
+            return
+
+        estado = self.tabla.item(fila, 3).text()
+        if estado != "EN ESPERA":
+            QMessageBox.warning(self, "No válido", "Solo puedes revertir ingresos marcados como 'EN ESPERA'.")
+            return
+
+        id_ingreso = int(self.tabla.item(fila, 0).text())
+        if revertir_en_espera(id_ingreso):
+            QMessageBox.information(self, "Éxito", "Ingreso revertido correctamente.")
+            self.cargar_datos()
+        else:
+            QMessageBox.critical(self, "Error", "No se pudo revertir el ingreso.")
+
+    def reingresar(self):
+        fila = self.tabla.currentRow()
+        if fila == -1:
+            QMessageBox.warning(self, "Selecciona", "Selecciona una fila primero.")
+            return
+
+        estado = self.tabla.item(fila, 3).text()
+        if estado != "CERRADO":
+            QMessageBox.warning(self, "No válido", "Solo puedes reingresar vehículos cerrados.")
+            return
+
+        id_ingreso = int(self.tabla.item(fila, 0).text())
+        if reingresar_vehiculo_cerrado(id_ingreso):
+            QMessageBox.information(self, "Éxito", "Vehículo reingresado correctamente.")
+            self.cargar_datos()
+        else:
+            QMessageBox.critical(self, "Error", "No se pudo reingresar el vehículo.")
 
     def eliminar_ingreso(self):
         fila = self.tabla.currentRow()
         if fila == -1:
-            QMessageBox.warning(self, "Atención", "Selecciona un ingreso para eliminar.")
+            QMessageBox.warning(self, "Selecciona", "Selecciona una fila primero.")
+            return
+
+        estado = self.tabla.item(fila, 3).text()
+        if estado != "EN ESPERA":
+            QMessageBox.warning(self, "No válido", "Solo puedes eliminar ingresos 'en espera'.")
             return
 
         id_ingreso = int(self.tabla.item(fila, 0).text())
         patente = self.tabla.item(fila, 1).text()
 
         confirmacion = QMessageBox.question(
-            self,
-            "Confirmar eliminación",
-            f"¿Seguro que deseas eliminar el ingreso de {patente}?\n"
-            "Esta acción no se puede deshacer.",
+            self, "Eliminar ingreso",
+            f"¿Eliminar ingreso en espera de {patente}? Esta acción no se puede deshacer.",
             QMessageBox.Yes | QMessageBox.No
         )
 
         if confirmacion == QMessageBox.Yes:
             eliminar_ingreso_con_respaldo(id_ingreso, self.usuario_admin)
-            QMessageBox.information(self, "Ingreso eliminado", "Ingreso eliminado correctamente.")
+            QMessageBox.information(self, "Eliminado", "Ingreso eliminado correctamente.")
             self.cargar_datos()
