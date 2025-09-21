@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS ingresos (
     tarifa_aplicada DECIMAL(10,2) DEFAULT NULL,
     en_espera TINYINT(1) DEFAULT 0,
     cerrado TINYINT(1) DEFAULT 0,
+    reingresado TINYINT(1) DEFAULT 0,
     usuario VARCHAR(50),
     FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo)
 );
