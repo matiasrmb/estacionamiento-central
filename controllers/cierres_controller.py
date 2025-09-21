@@ -56,11 +56,13 @@ def realizar_cierre_diario(usuario):
     cursor.execute("""
         INSERT INTO cierres_diarios (
             fecha_inicio, fecha_cierre, total_recaudado,
-            total_ingresos, total_salidas, usuario
+            total_ingresos, total_salidas, total_banos,
+            total_banos_monto, usuario
         )
-        VALUES (%s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """, (fecha_inicio, fecha_cierre, total_recaudado,
-          total_ingresos, total_salidas, usuario))
+          total_ingresos, total_salidas, total_banos,
+          total_banos_monto, usuario))
 
     # Marcar ingresos como cerrados
     ids = [r["id_ingreso"] for r in registros]
