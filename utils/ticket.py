@@ -23,7 +23,7 @@ def generar_ticket_ingreso(patente, fecha_hora):
     """
     pdf = FPDF(format=(58, 100), unit="mm")
     pdf.add_page()
-    pdf.set_font("Courier", size=8)
+    pdf.set_font("Courier", size=10)
 
     pdf.cell(0, 5, "ESTACIONAMIENTO CENTRAL", ln=True, align='C')
     pdf.cell(0, 5, "Ticket de Ingreso", ln=True, align='C')
@@ -58,7 +58,7 @@ def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa
     """
     pdf = FPDF(format=(58, 120), unit="mm")
     pdf.add_page()
-    pdf.set_font("Courier", size=8)
+    pdf.set_font("Courier", size=10)
 
     pdf.cell(0, 5, "ESTACIONAMIENTO CENTRAL", ln=True, align='C')
     pdf.cell(0, 5, "Ticket de Salida", ln=True, align='C')
@@ -106,7 +106,7 @@ def imprimir_pdf_directamente(ruta):
             ruta,
             nombre_impresora
         ])
-        time.sleep(5)  # Espera a que se complete la impresión
+        time.sleep(2)  # Espera a que se complete la impresión
 
         # Cierra Acrobat para evitar bloqueos
         subprocess.run(["taskkill", "/f", "/im", "Acrobat.exe"],

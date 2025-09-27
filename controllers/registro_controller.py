@@ -59,7 +59,6 @@ def registrar_ingreso(patente):
     Returns:
         bool: True si se registró correctamente.
     """
-    from datetime import datetime
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -99,7 +98,6 @@ def registrar_salida(patente, usuario):
     Returns:
         int or None: Tarifa calculada o None si hubo error.
     """
-    from datetime import datetime
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
