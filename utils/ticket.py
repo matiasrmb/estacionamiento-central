@@ -43,7 +43,7 @@ def generar_ticket_ingreso(patente, fecha_hora):
     imprimir_pdf_directamente(ruta)
     return ruta
 
-def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa):
+def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa, subida_aplicada=False, monto_extra=0):
     """
     Genera e imprime automáticamente un ticket de salida para un vehículo.
 
@@ -70,6 +70,8 @@ def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa
     pdf.cell(0, 5, fecha_hora_salida.strftime('%d-%m-%Y %H:%M'), ln=True)
     pdf.cell(0, 5, "-" * 28, ln=True, align='C')
     pdf.cell(0, 5, f"Total a pagar: ${tarifa:.0f}", ln=True, align='C')
+    if subida_aplicada:
+        pdf.cell(0, 5, f"(Incluye subida +${monto_extra})", ln=True, align='C')
     pdf.cell(0, 5, "-" * 28, ln=True, align='C')
     pdf.cell(0, 5, "Gracias por su visita", ln=True, align='C')
 

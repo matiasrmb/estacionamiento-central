@@ -126,44 +126,39 @@ def timedelta_to_str(tdelta):
     minutes = (total_seconds % 3600) // 60
     return f"{hours:02}:{minutes:02}"
 
-def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None):
+def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, devolver_flag=False):
+    """
+    Calcula la tarifa según el modo configurado.
+    Si devolver_flag=True, retorna (total, subida_aplicada).
+    """
     config = obtener_configuracion()
     modo = config["modo_cobro"]
     tarifa_minima = int(config["tarifa_minima"])
     tarifa_hora = int(config["tarifa_hora"])
     total = 0
+    subida_aplicada = False
+    monto_extra_aplicado = 0
 
     if modo == "minuto":
         total = tarifa_minima + ((tarifa_hora - tarifa_minima) / 60) * max(minutos - 1, 0)
 
     elif modo == "personalizado":
         tramos = obtener_tarifas_personalizadas()
-
         subida = obtener_subida_activa()
         if subida:
             hora_actual = fecha_hora_salida or datetime.now()
-
-            # 🔧 Convertir de string (MySQL) a objeto time
-            try:
-                h_inicio_time = datetime.strptime(str(subida["hora_inicio"]), "%H:%M:%S").time()
-                h_fin_time = datetime.strptime(str(subida["hora_fin"]), "%H:%M:%S").time()
-            except ValueError:
-                # fallback por si vienen como "HH:MM"
-                h_inicio_time = datetime.strptime(str(subida["hora_inicio"]), "%H:%M").time()
-                h_fin_time = datetime.strptime(str(subida["hora_fin"]), "%H:%M").time()
-
+            h_inicio_time = datetime.strptime(str(subida["hora_inicio"]), "%H:%M:%S").time()
+            h_fin_time = datetime.strptime(str(subida["hora_fin"]), "%H:%M:%S").time()
             h_inicio = datetime.combine(hora_actual.date(), h_inicio_time)
             h_fin = datetime.combine(hora_actual.date(), h_fin_time)
-
-            if h_fin <= h_inicio:  # cruza medianoche
+            if h_fin <= h_inicio:
                 h_fin = h_fin.replace(day=h_fin.day + 1)
 
             if h_inicio <= hora_actual <= h_fin:
+                subida_aplicada = True
                 monto_extra = int(subida["monto_adicional"])
-                tramos = [
-                    {**tramo, "valor": tramo["valor"] + monto_extra}
-                    for tramo in tramos
-                ]
+                monto_extra_aplicado = monto_extra
+                tramos = [{**tramo, "valor": tramo["valor"] + monto_extra} for tramo in tramos]
 
         for tramo in tramos:
             if tramo["minuto_inicio"] <= minutos <= tramo["minuto_fin"]:
@@ -175,7 +170,6 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None):
     elif modo == "auto":
         bloques = (minutos // 60) + (1 if minutos % 60 > 0 else 0)
         total = tarifa_minima + ((bloques - 1) * tarifa_minima)
-
         subida = obtener_subida_activa()
         if subida and fecha_hora_ingreso and fecha_hora_salida:
             minutos_extra = calcular_minutos_en_subida(
@@ -183,10 +177,12 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None):
                 timedelta_to_str(subida["hora_inicio"]),
                 timedelta_to_str(subida["hora_fin"])
             )
-            monto_extra = (minutos_extra // 5) * int(subida["monto_adicional"])
-            total += monto_extra
+            if minutos_extra > 0:
+                subida_aplicada = True
+                monto_extra = (minutos_extra // 5) * int(subida["monto_adicional"])
+                total += monto_extra
 
-    return round(total)
+    return (round(total), subida_aplicada, monto_extra_aplicado) if devolver_flag else round(total)
 
 def generar_tramos_automaticos():
     """

@@ -6,6 +6,7 @@ from utils.db import get_connection
 from datetime import datetime
 from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
 from controllers.tarifas_controller import calcular_tarifa
+from controllers.subida_controller import obtener_subida_activa
 
 def buscar_estado_vehiculo(patente):
     """
@@ -121,7 +122,13 @@ def registrar_salida(patente, usuario):
     fecha_ingreso = ingreso["fecha_hora_ingreso"]
     ahora = datetime.now()
     minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
-    tarifa = calcular_tarifa(minutos, fecha_ingreso, ahora)
+    tarifa, subida_aplicada, monto_extra = calcular_tarifa(minutos, fecha_ingreso, ahora, devolver_flag=True)
+
+    monto_extra = 0
+    if subida_aplicada:
+        subida = obtener_subida_activa()
+        if subida:
+            monto_extra = int(subida["monto_adicional"])
 
     cursor.execute("""
         UPDATE ingresos
@@ -133,7 +140,7 @@ def registrar_salida(patente, usuario):
     cursor.close()
     conn.close()
 
-    generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa)
+    generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa, subida_aplicada, monto_extra)
     return tarifa
     
 def obtener_vehiculos_activos():
