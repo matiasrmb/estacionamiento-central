@@ -5,13 +5,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QKeyEvent
-from datetime import datetime
+from datetime import datetime, timedelta
 from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso, 
     registrar_salida, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera
 )
-from controllers.subida_controller import crear_subida_temporal
+from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from views.dashboard import DashboardWindow
 from views.admin_edicion import EdicionIngresosWindow
 from views.subida_dialog import SubidaDialog
@@ -217,7 +217,35 @@ class RegistroWindow(QWidget):
 
     def actualizar_tabla_activos(self):
         """Actualiza la tabla de vehículos actualmente estacionados."""
+
         datos = obtener_vehiculos_activos()
+
+        # --- Verificar si hay subida activa en este momento ---
+        subida = obtener_subida_activa()
+        hay_subida_activa = False
+        if subida:
+            try:
+                hora_actual = datetime.now()
+                # Convertir hora_inicio y hora_fin a datetime
+                h_inicio = datetime.combine(
+                    hora_actual.date(),
+                    datetime.strptime(str(subida["hora_inicio"]), "%H:%M:%S").time()
+                )
+                h_fin = datetime.combine(
+                    hora_actual.date(),
+                    datetime.strptime(str(subida["hora_fin"]), "%H:%M:%S").time()
+                )
+
+                # Si la subida cruza medianoche, sumar un día a h_fin
+                if h_fin <= h_inicio:
+                    h_fin += timedelta(days=1)
+
+                if h_inicio <= hora_actual <= h_fin:
+                    hay_subida_activa = True
+            except Exception as e:
+                print(f"[WARN] No se pudo verificar el rango de la subida: {e}")
+
+        # --- Renderizar tabla ---
         self.tabla_activos.setRowCount(len(datos) + 1)
         total = 0
 
@@ -225,21 +253,25 @@ class RegistroWindow(QWidget):
             patente = vehiculo["patente"]
             hora = vehiculo["hora"]
             monto = vehiculo["monto"]
-            print(f"DEBUG - hora: {hora} ({type(hora)})")
 
             try:
-                hoy = datetime.now().date()  # Fecha actual
-                hora_dt = datetime.strptime(hora, "%Y-%m-%d %H:%M:%S").time()  # Convierte la hora a tipo time
-                hora_ingreso = datetime.combine(hoy, hora_dt)  # Une fecha y hora
+                hoy = datetime.now().date()
+                hora_dt = datetime.strptime(hora, "%Y-%m-%d %H:%M:%S").time()
+                hora_ingreso = datetime.combine(hoy, hora_dt)
                 ahora = datetime.now()
                 minutos = int((ahora - hora_ingreso).total_seconds() // 60)
                 if minutos < 0:
-                    minutos = 0  # Por si ocurre desfase horario o ingreso del día anterior
+                    minutos = 0
             except Exception as e:
                 print(f"[ERROR al calcular minutos] {hora} → {e}")
                 minutos = 0
 
-            item_patente = QTableWidgetItem(patente)
+            # --- Patente con icono si hay subida activa ---
+            patente_mostrar = patente
+            if hay_subida_activa:
+                patente_mostrar = f"▲ {patente}"
+
+            item_patente = QTableWidgetItem(patente_mostrar)
             item_patente.setFlags(item_patente.flags() ^ Qt.ItemIsEditable)
             self.tabla_activos.setItem(i, 0, item_patente)
 
@@ -258,18 +290,19 @@ class RegistroWindow(QWidget):
 
             total += monto
 
+        # --- Fila de total recaudado ---
         fila_total = len(datos)
         item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
         item_total_label.setFlags(item_total_label.flags() ^ Qt.ItemIsEditable)
         item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.tabla_activos.setItem(fila_total, 2, item_total_label) 
+        self.tabla_activos.setItem(fila_total, 2, item_total_label)
 
         item_total_monto = QTableWidgetItem(f"${total:.0f}")
         item_total_monto.setFlags(item_total_monto.flags() ^ Qt.ItemIsEditable)
         item_total_monto.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.tabla_activos.setItem(fila_total, 3, item_total_monto)
 
-        # Limpiar columnas anteriores (col 0 y 1)
+        # Limpiar columnas 0 y 1 en la fila de totales
         self.tabla_activos.setItem(fila_total, 0, QTableWidgetItem(""))
         self.tabla_activos.setItem(fila_total, 1, QTableWidgetItem(""))
 
