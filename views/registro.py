@@ -11,8 +11,10 @@ from controllers.registro_controller import (
     registrar_salida, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera
 )
+from controllers.subida_controller import crear_subida_temporal
 from views.dashboard import DashboardWindow
 from views.admin_edicion import EdicionIngresosWindow
+from views.subida_dialog import SubidaDialog
 from functools import partial
 
 class RegistroWindow(QWidget):
@@ -88,7 +90,10 @@ class RegistroWindow(QWidget):
         if self.rol == "administrador":
             self.btn_edicion = QPushButton("Edición de ingresos")
             self.btn_edicion.clicked.connect(self.abrir_edicion)
+            self.boton_subida = QPushButton("Subida de precios")
+            self.boton_subida.clicked.connect(self.abrir_dialogo_subida)
             layout.addWidget(self.btn_edicion)
+            layout.addWidget(self.boton_subida)
 
         layout_registro.addWidget(self.label_patente)
         layout_registro.addWidget(self.input_patente)
@@ -382,6 +387,16 @@ class RegistroWindow(QWidget):
         else:
             QMessageBox.critical(self, "Error", mensaje)
 
+    def abrir_dialogo_subida(self):
+        dialogo = SubidaDialog()
+        if dialogo.exec():
+            hora_inicio, hora_fin, monto = dialogo.obtener_datos()
+
+            exito = crear_subida_temporal(hora_inicio, hora_fin, monto)
+            if exito:
+                QMessageBox.information(self, "Éxito", f"Subida temporal registrada correctamente:\n+${monto} desde {hora_inicio} hasta {hora_fin}")
+            else:
+                QMessageBox.warning(self, "Error", "No se pudo registrar la subida.")
 
     def keyPressEvent(self, event):
         """

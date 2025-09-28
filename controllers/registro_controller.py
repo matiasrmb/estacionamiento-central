@@ -121,7 +121,7 @@ def registrar_salida(patente, usuario):
     fecha_ingreso = ingreso["fecha_hora_ingreso"]
     ahora = datetime.now()
     minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
-    tarifa = calcular_tarifa(minutos)
+    tarifa = calcular_tarifa(minutos, fecha_ingreso, ahora)
 
     cursor.execute("""
         UPDATE ingresos
@@ -162,7 +162,7 @@ def obtener_vehiculos_activos():
     lista = []
     for r in resultados:
         minutos = int((ahora - r["fecha_hora_ingreso"]).total_seconds() / 60)
-        tarifa = calcular_tarifa(minutos) if r["en_espera"] == 0 else 0
+        tarifa = calcular_tarifa(minutos, r["fecha_hora_ingreso"], ahora) if r["en_espera"] == 0 else 0
         lista.append({
             "patente": r["patente"] + (" [EN ESPERA]" if r["en_espera"] else ""),
             "hora": r["fecha_hora_ingreso"].strftime("%Y-%m-%d %H:%M:%S"),

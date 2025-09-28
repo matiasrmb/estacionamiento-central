@@ -79,6 +79,15 @@ CREATE TABLE IF NOT EXISTS asistencias (
     total_recaudado DECIMAL(10,2) DEFAULT 0
 );
 
+-- Tabla para registrar subidas temporales de precios
+CREATE TABLE IF NOT EXISTS subida_precios (
+    id_subida INT AUTO_INCREMENT PRIMARY KEY,
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL,
+    monto_adicional INT NOT NULL,
+    activa BOOLEAN DEFAULT TRUE
+);
+
 -- Inserción inicial de configuración
 INSERT INTO configuracion (clave, valor) VALUES
 ('modo_cobro', 'minuto'),

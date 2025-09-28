@@ -7,7 +7,9 @@ eliminar y calcular tarifas según los modos configurados por el administrador
 """
 
 from utils.db import get_connection
+from datetime import datetime
 from controllers.config_controller import obtener_configuracion
+from controllers.subida_controller import obtener_subida_activa, calcular_minutos_en_subida
 
 def obtener_tarifas_personalizadas():
     """
@@ -80,7 +82,6 @@ def actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor):
     cursor.close()
     conn.close()
 
-
 def eliminar_intervalo(id_tarifa):
     """
     Elimina un tramo de tarifa personalizada según su ID.
@@ -119,59 +120,73 @@ def actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor):
     cursor.close()
     conn.close()
 
-def calcular_tarifa(minutos):
-    """
-    Calcula la tarifa según el tiempo transcurrido y el modo configurado.
+def timedelta_to_str(tdelta):
+    total_seconds = int(tdelta.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    return f"{hours:02}:{minutes:02}"
 
-    Args:
-        minutos (int): Tiempo total en minutos.
-
-    Returns:
-        int: Valor monetario calculado.
-    """
+def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None):
     config = obtener_configuracion()
-    modo = config.get("modo_cobro", "minuto")
+    modo = config["modo_cobro"]
+    tarifa_minima = int(config["tarifa_minima"])
+    tarifa_hora = int(config["tarifa_hora"])
+    total = 0
 
     if modo == "minuto":
-        tarifa_por_minuto = int(config.get("tarifa_hora", 1300)) / 60
-        return round(minutos * tarifa_por_minuto)
+        total = tarifa_minima + ((tarifa_hora - tarifa_minima) / 60) * max(minutos - 1, 0)
 
     elif modo == "personalizado":
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        tramos = obtener_tarifas_personalizadas()
 
-        cursor.execute("""
-            SELECT minuto_inicio, minuto_fin, valor
-            FROM tarifas_personalizadas
-            ORDER BY minuto_inicio ASC
-        """)
-        intervalos = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        subida = obtener_subida_activa()
+        if subida:
+            hora_actual = fecha_hora_salida or datetime.now()
 
-        if not intervalos:
-            return int(config.get("tarifa_minima", 300))
+            # 🔧 Convertir de string (MySQL) a objeto time
+            try:
+                h_inicio_time = datetime.strptime(str(subida["hora_inicio"]), "%H:%M:%S").time()
+                h_fin_time = datetime.strptime(str(subida["hora_fin"]), "%H:%M:%S").time()
+            except ValueError:
+                # fallback por si vienen como "HH:MM"
+                h_inicio_time = datetime.strptime(str(subida["hora_inicio"]), "%H:%M").time()
+                h_fin_time = datetime.strptime(str(subida["hora_fin"]), "%H:%M").time()
 
-        minutos_en_hora = minutos % 60
-        horas_completas = minutos // 60
+            h_inicio = datetime.combine(hora_actual.date(), h_inicio_time)
+            h_fin = datetime.combine(hora_actual.date(), h_fin_time)
 
-        # Calcular cuánto vale una hora completa (suma de intervalos dentro de 0–59)
-        total_hora_base = 0
-        for tramo in intervalos:
-            if tramo["minuto_fin"] <= 59:
-                total_hora_base = tramo["valor"]  # Siempre toma el último válido antes de minuto 60
+            if h_fin <= h_inicio:  # cruza medianoche
+                h_fin = h_fin.replace(day=h_fin.day + 1)
 
-        # Buscar tramo dentro del ciclo de 0–59
-        tarifa_tramo = intervalos[-1]["valor"]  # fallback
-        for tramo in intervalos:
-            if tramo["minuto_inicio"] <= minutos_en_hora <= tramo["minuto_fin"]:
-                tarifa_tramo = tramo["valor"]
+            if h_inicio <= hora_actual <= h_fin:
+                monto_extra = int(subida["monto_adicional"])
+                tramos = [
+                    {**tramo, "valor": tramo["valor"] + monto_extra}
+                    for tramo in tramos
+                ]
+
+        for tramo in tramos:
+            if tramo["minuto_inicio"] <= minutos <= tramo["minuto_fin"]:
+                total = tramo["valor"]
                 break
+        else:
+            total = tramos[-1]["valor"]
 
-        return tarifa_tramo + horas_completas * total_hora_base
+    elif modo == "auto":
+        bloques = (minutos // 60) + (1 if minutos % 60 > 0 else 0)
+        total = tarifa_minima + ((bloques - 1) * tarifa_minima)
 
-    else:
-        return int(config.get("tarifa_minima", 300))
+        subida = obtener_subida_activa()
+        if subida and fecha_hora_ingreso and fecha_hora_salida:
+            minutos_extra = calcular_minutos_en_subida(
+                fecha_hora_ingreso, fecha_hora_salida,
+                timedelta_to_str(subida["hora_inicio"]),
+                timedelta_to_str(subida["hora_fin"])
+            )
+            monto_extra = (minutos_extra // 5) * int(subida["monto_adicional"])
+            total += monto_extra
+
+    return round(total)
 
 def generar_tramos_automaticos():
     """
