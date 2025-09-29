@@ -129,7 +129,7 @@ def timedelta_to_str(tdelta):
 def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, devolver_flag=False):
     """
     Calcula la tarifa según el modo configurado.
-    Si devolver_flag=True, retorna (total, subida_aplicada).
+    Si devolver_flag=True, retorna (total, subida_aplicada, monto_extra_aplicado).
     """
     config = obtener_configuracion()
     modo = config["modo_cobro"]
@@ -144,6 +144,8 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, de
 
     elif modo == "personalizado":
         tramos = obtener_tarifas_personalizadas()
+
+        # Subida temporal (si aplica)
         subida = obtener_subida_activa()
         if subida:
             hora_actual = fecha_hora_salida or datetime.now()
@@ -160,12 +162,23 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, de
                 monto_extra_aplicado = monto_extra
                 tramos = [{**tramo, "valor": tramo["valor"] + monto_extra} for tramo in tramos]
 
-        for tramo in tramos:
-            if tramo["minuto_inicio"] <= minutos <= tramo["minuto_fin"]:
-                total = tramo["valor"]
-                break
-        else:
-            total = tramos[-1]["valor"]
+        if tramos:
+            # Duración total de los tramos (último minuto definido)
+            ultimo_tramo = tramos[-1]
+            duracion_ciclo = ultimo_tramo["minuto_fin"] + 1  # p.ej. si último tramo es 0-59 → ciclo=60
+            horas_completas = minutos // duracion_ciclo
+            minutos_restantes = minutos % duracion_ciclo
+
+            # Calcular base de las horas completas
+            total = horas_completas * tramos[-1]["valor"]
+
+            # Buscar tramo que corresponde a los minutos restantes dentro de este ciclo
+            for tramo in tramos:
+                if tramo["minuto_inicio"] <= minutos_restantes <= tramo["minuto_fin"]:
+                    total += tramo["valor"]
+                    break
+            else:
+                total += tramos[-1]["valor"]
 
     elif modo == "auto":
         bloques = (minutos // 60) + (1 if minutos % 60 > 0 else 0)
