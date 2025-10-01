@@ -18,6 +18,7 @@ class DashboardWindow(QWidget):
         self.rol = rol
         self.setWindowTitle("Resumen Diario - Estacionamiento Central")
         self.setFixedSize(500, 400)
+        self.actualizacion_habilitada = True
         self.init_ui()
 
     def init_ui(self):
@@ -80,6 +81,11 @@ class DashboardWindow(QWidget):
 
         self.setLayout(layout)
 
+        # Timer para refrescar estadísticas en tiempo real
+        self.timer_resumen = QTimer()
+        self.timer_resumen.timeout.connect(self.actualizar_resumen)
+        self.timer_resumen.start(5000)  # Dada 5 segundos
+
     def actualizar_hora(self):
         """Actualiza el label de hora con la hora actual cada segundo."""
         hora_actual = QDateTime.currentDateTime().toString("hh:mm:ss")
@@ -91,17 +97,22 @@ class DashboardWindow(QWidget):
         incluyendo ingresos, estacionados, recaudación y uso de baños.
         """
 
+        if not self.actualizacion_habilitada:
+            return  # Si se deshabilitó, no consultar DB
+
         resumen = obtener_resumen_diario()
         resumen_banos = obtener_resumen_banos()
-
         recaudacion_total = resumen["recaudado"] + resumen_banos["total"]
 
         self.label_ingresos.setText(f"🚗 Ingresos hoy: {resumen['total_ingresos']}")
         self.label_estacionados.setText(f"🚘 Estacionados actualmente: {resumen['estacionados']}")
         self.label_recaudado.setText(f"💰 Recaudado vehículos: ${resumen['recaudado']:.0f}")
-
         self.label_banos.setText(f"🚽 Baños: {resumen_banos['cantidad']} usos, ${resumen_banos['total']:.0f}")
         self.label_total_general.setText(f"📊 Total general: ${recaudacion_total:.0f}")
+
+        # Si detecta un nuevo movimiento, reactivar auto-actualización
+        if resumen["total_ingresos"] > 0 or resumen_banos["cantidad"] > 0 or resumen["recaudado"] > 0:
+            self.actualizacion_habilitada = True
 
     def abrir_menu(self):
         """Oculta el dashboard y muestra la ventana principal del sistema."""
@@ -125,7 +136,14 @@ class DashboardWindow(QWidget):
             exito, mensaje = realizar_cierre_diario(self.usuario)
             if exito:
                 QMessageBox.information(self, "Éxito", mensaje)
-                self.actualizar_resumen()
+
+                # Reinicia manualmente los labels
+                self.label_ingresos.setText("🚗 Ingresos hoy: 0")
+                self.label_estacionados.setText("🚘 Estacionados actualmente: 0")
+                self.label_recaudado.setText("💰 Recaudado vehículos: $0")
+                self.label_banos.setText("🚽 Baños: 0 usos, $0")
+                self.label_total_general.setText("📊 Total general: $0")
+                self.actualizacion_habilitada = False
             else:
                 QMessageBox.information(self, "Sin registros", mensaje)
 
