@@ -255,9 +255,7 @@ class RegistroWindow(QWidget):
             monto = vehiculo["monto"]
 
             try:
-                hoy = datetime.now().date()
-                hora_dt = datetime.strptime(hora, "%Y-%m-%d %H:%M:%S").time()
-                hora_ingreso = datetime.combine(hoy, hora_dt)
+                hora_ingreso = datetime.strptime(hora, "%Y-%m-%d %H:%M:%S")  # ← usar fecha completa
                 ahora = datetime.now()
                 minutos = int((ahora - hora_ingreso).total_seconds() // 60)
                 if minutos < 0:
