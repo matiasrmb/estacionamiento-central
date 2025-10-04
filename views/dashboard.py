@@ -87,7 +87,7 @@ class DashboardWindow(QWidget):
         # Timer para refrescar estadísticas en tiempo real
         self.timer_resumen = QTimer()
         self.timer_resumen.timeout.connect(self.actualizar_resumen)
-        self.timer_resumen.start(5000)  # Cada 5 segundos
+        self.timer_resumen.start(1000)  # Cada 1 segundo
 
     def actualizar_hora(self):
         """Actualiza el label de hora con la hora actual cada segundo."""
