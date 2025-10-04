@@ -1,15 +1,17 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox
 )
-from PySide6.QtCore import QDate, QDateTime, QTimer, Qt
+from PySide6.QtCore import QDateTime, QTimer, Qt
 from controllers.dashboard_controller import obtener_resumen_diario, obtener_resumen_banos
 from controllers.cierres_controller import realizar_cierre_diario   
+from utils.db import get_connection
 from datetime import datetime
+
 
 class DashboardWindow(QWidget):
     """
     Ventana de resumen diario del estacionamiento.
-    Muestra estadísticas del día, como ingresos, vehículos estacionados y recaudación.
+    Muestra estadísticas del turno actual (desde el último cierre hasta ahora).
     También permite realizar el cierre diario.
     """
     def __init__(self, usuario, rol):
@@ -17,7 +19,7 @@ class DashboardWindow(QWidget):
         self.usuario = usuario
         self.rol = rol
         self.setWindowTitle("Resumen Diario - Estacionamiento Central")
-        self.setFixedSize(500, 400)
+        self.setFixedSize(500, 420)
         self.actualizacion_habilitada = True
         self.init_ui()
 
@@ -26,11 +28,12 @@ class DashboardWindow(QWidget):
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(10)
 
-        # Fecha actual
-        fecha = QDate.currentDate().toString("dd/MM/yyyy")
-        label_fecha = QLabel(f"📅 Fecha: {fecha}")
-        label_fecha.setAlignment(Qt.AlignCenter)
-        layout.addWidget(label_fecha)
+        # Mostrar período del resumen (desde último cierre hasta ahora)
+        periodo_texto = self.obtener_periodo_resumen()
+        self.label_periodo = QLabel(periodo_texto)
+        self.label_periodo.setAlignment(Qt.AlignCenter)
+        self.label_periodo.setStyleSheet("font-size: 13px; color: gray;")
+        layout.addWidget(self.label_periodo)
 
         # Hora actual
         self.label_hora = QLabel()
@@ -47,7 +50,7 @@ class DashboardWindow(QWidget):
         label_usuario.setAlignment(Qt.AlignCenter)
         layout.addWidget(label_usuario)
 
-        # Estadísticas del día
+        # Estadísticas del turno
         self.label_ingresos = QLabel()
         self.label_estacionados = QLabel()
         self.label_recaudado = QLabel()
@@ -84,19 +87,38 @@ class DashboardWindow(QWidget):
         # Timer para refrescar estadísticas en tiempo real
         self.timer_resumen = QTimer()
         self.timer_resumen.timeout.connect(self.actualizar_resumen)
-        self.timer_resumen.start(5000)  # Dada 5 segundos
+        self.timer_resumen.start(5000)  # Cada 5 segundos
 
     def actualizar_hora(self):
         """Actualiza el label de hora con la hora actual cada segundo."""
         hora_actual = QDateTime.currentDateTime().toString("hh:mm:ss")
         self.label_hora.setText(f"🕒 Hora actual: {hora_actual}")
 
+    def obtener_periodo_resumen(self):
+        """
+        Devuelve el período desde el último cierre diario hasta ahora
+        en formato amigable.
+        """
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT MAX(fecha_cierre) AS ultima_cierre FROM cierres_diarios")
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if row and row["ultima_cierre"]:
+            fecha_inicio = row["ultima_cierre"].strftime("%d/%m/%Y %H:%M")
+        else:
+            fecha_inicio = "Inicio del sistema"
+
+        fecha_fin = datetime.now().strftime("%d/%m/%Y %H:%M")
+        return f"📅 Período: {fecha_inicio} → {fecha_fin}"
+
     def actualizar_resumen(self):
         """
-        Consulta el resumen del día y actualiza las etiquetas de estadísticas,
+        Consulta el resumen del turno y actualiza las etiquetas de estadísticas,
         incluyendo ingresos, estacionados, recaudación y uso de baños.
         """
-
         if not self.actualizacion_habilitada:
             return  # Si se deshabilitó, no consultar DB
 
@@ -104,11 +126,14 @@ class DashboardWindow(QWidget):
         resumen_banos = obtener_resumen_banos()
         recaudacion_total = resumen["recaudado"] + resumen_banos["total"]
 
-        self.label_ingresos.setText(f"🚗 Ingresos hoy: {resumen['total_ingresos']}")
+        self.label_ingresos.setText(f"🚗 Ingresos: {resumen['total_ingresos']}")
         self.label_estacionados.setText(f"🚘 Estacionados actualmente: {resumen['estacionados']}")
         self.label_recaudado.setText(f"💰 Recaudado vehículos: ${resumen['recaudado']:.0f}")
         self.label_banos.setText(f"🚽 Baños: {resumen_banos['cantidad']} usos, ${resumen_banos['total']:.0f}")
         self.label_total_general.setText(f"📊 Total general: ${recaudacion_total:.0f}")
+
+        # Refrescar período mostrado
+        self.label_periodo.setText(self.obtener_periodo_resumen())
 
         # Si detecta un nuevo movimiento, reactivar auto-actualización
         if resumen["total_ingresos"] > 0 or resumen_banos["cantidad"] > 0 or resumen["recaudado"] > 0:
@@ -124,7 +149,7 @@ class DashboardWindow(QWidget):
     def confirmar_cierre_diario(self):
         """
         Muestra una ventana de confirmación para realizar el cierre diario.
-        Si el usuario confirma, realiza el cierre y muestra un mensaje con el resultado.
+        Si el usuario confirma, realiza el cierre y reinicia los labels.
         """
         respuesta = QMessageBox.question(
             self,
@@ -138,12 +163,12 @@ class DashboardWindow(QWidget):
                 QMessageBox.information(self, "Éxito", mensaje)
 
                 # Reinicia manualmente los labels
-                self.label_ingresos.setText("🚗 Ingresos hoy: 0")
+                self.label_ingresos.setText("🚗 Ingresos: 0")
                 self.label_estacionados.setText("🚘 Estacionados actualmente: 0")
                 self.label_recaudado.setText("💰 Recaudado vehículos: $0")
                 self.label_banos.setText("🚽 Baños: 0 usos, $0")
                 self.label_total_general.setText("📊 Total general: $0")
+                self.label_periodo.setText(self.obtener_periodo_resumen())
                 self.actualizacion_habilitada = False
             else:
                 QMessageBox.information(self, "Sin registros", mensaje)
-
