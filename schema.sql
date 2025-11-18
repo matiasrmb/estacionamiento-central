@@ -34,6 +34,16 @@ CREATE TABLE IF NOT EXISTS ingresos (
     FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo)
 );
 
+-- Tabla de ingresos eliminados
+CREATE TABLE IF NOT EXISTS ingresos_eliminados (
+    id_respaldo INT AUTO_INCREMENT PRIMARY KEY,
+    id_ingreso_original INT NOT NULL,
+    patente VARCHAR(10) NOT NULL,
+    fecha_hora_ingreso DATETIME NOT NULL,
+    usuario_eliminador VARCHAR(50) NOT NULL,
+    fecha_eliminacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Tabla de configuración del sistema (clave/valor)
 CREATE TABLE IF NOT EXISTS configuracion (
     clave VARCHAR(50) PRIMARY KEY,
