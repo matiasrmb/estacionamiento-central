@@ -2,6 +2,7 @@ from views.login import LoginWindow
 from views.setup_window import SetupWindow
 from controllers.login_controller import hay_usuarios_registrados
 from PySide6.QtWidgets import QApplication
+from styles import GLOBAL_STYLESHEET
 import sys
 
 
@@ -13,8 +14,8 @@ def mostrar_login():
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    with open("styles/estilos.qss", "r") as f:
-        app.setStyleSheet(f.read())
+        
+    app.setStyleSheet(GLOBAL_STYLESHEET)
 
     if hay_usuarios_registrados():
         print("✅ Usuarios encontrados. Abriendo LoginWindow.")

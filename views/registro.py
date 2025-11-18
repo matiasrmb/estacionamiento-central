@@ -10,8 +10,7 @@ from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso, 
     registrar_salida, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera,
-    obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
-    eliminar_vehiculo_por_patente
+    obtener_patentes_existentes, eliminar_ingreso_activo_por_patente
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from views.dashboard import DashboardWindow
@@ -29,7 +28,7 @@ class RegistroWindow(QWidget):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
-        self.setWindowTitle("Registro de Vehículos")
+        self.setWindowTitle("ESTACIONAMIENTO CENTRAL - Registro de Vehículos")
         self.setFixedSize(900, 700) 
         self.init_ui()
 
@@ -38,6 +37,11 @@ class RegistroWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
+        titulo = QLabel("Registro de vehículos")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(titulo)
+
         # Grupo de Registro
         grupo_registro = QGroupBox("🔎 Registro de Vehículo")
         layout_registro = QVBoxLayout()
@@ -45,8 +49,8 @@ class RegistroWindow(QWidget):
 
         self.label_patente = QLabel("Patente del vehículo:")
         self.input_patente = QLineEdit()
+        self.input_patente.setObjectName("InputPatente")
         self.input_patente.setPlaceholderText("Ej: ABCD12")
-        self.input_patente.setStyleSheet("padding: 6px; font-size: 14px;")
         self.input_patente.textChanged.connect(self.normalizar_patente)
 
         # Autocompletado de patentes
@@ -63,16 +67,7 @@ class RegistroWindow(QWidget):
         self.boton_buscar.clicked.connect(self.buscar_vehiculo)
 
         self.boton_refrescar_patentes = QPushButton("🔄 Actualizar lista de patentes")
-        self.boton_refrescar_patentes.setStyleSheet("""
-            QPushButton {
-                padding: 6px;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-                border: 1px solid #aaaaaa;
-            }
-        """)
+        self.boton_refrescar_patentes.setObjectName("BotonSecundario")
         self.boton_refrescar_patentes.clicked.connect(self.actualizar_lista_patentes)
 
         self.info_label = QLabel("")
@@ -84,16 +79,6 @@ class RegistroWindow(QWidget):
 
         self.boton_salida = QPushButton("🏁 Registrar Salida")
         self.boton_salida.setEnabled(False)
-        self.boton_salida.setStyleSheet("""
-            QPushButton {
-                padding: 6px;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-                border: 1px solid #aaaaaa;
-            }
-        """)
         self.boton_salida.clicked.connect(self.registrar_salida)
 
         self.boton_bano = QPushButton("🚻 Registrar Uso de Baño")
@@ -101,16 +86,6 @@ class RegistroWindow(QWidget):
 
         self.boton_espera = QPushButton("⏸️ Marcar como en espera")
         self.boton_espera.setEnabled(False)
-        self.boton_espera.setStyleSheet("""
-            QPushButton {
-                padding: 6px;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-                border: 1px solid #aaaaaa;
-            }
-        """)
         self.boton_espera.clicked.connect(self.marcar_en_espera)
 
         if self.rol == "administrador":
@@ -502,7 +477,7 @@ class RegistroWindow(QWidget):
             self.actualizar_tabla_activos()
         else:
             QMessageBox.warning(self, "No se pudo eliminar", msg)
-            
+
     def abrir_dialogo_subida(self):
         dialogo = SubidaDialog()
         if dialogo.exec():
