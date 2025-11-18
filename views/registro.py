@@ -287,28 +287,22 @@ class RegistroWindow(QWidget):
                 print(f"[WARN] No se pudo verificar el rango de la subida: {e}")
 
         # --- Renderizar tabla ---
+        self.tabla_activos.setUpdatesEnabled(False) 
+
+        # +1 para la fila de total
+        self.tabla_activos.clearContents()
         self.tabla_activos.setRowCount(len(datos) + 1)
+
         total = 0
 
         for i, vehiculo in enumerate(datos):
             patente = vehiculo["patente"]
             hora = vehiculo["hora"]
             monto = vehiculo["monto"]
-
-            try:
-                hora_ingreso = datetime.strptime(hora, "%Y-%m-%d %H:%M:%S")  # ← usar fecha completa
-                ahora = datetime.now()
-                minutos = int((ahora - hora_ingreso).total_seconds() // 60)
-                if minutos < 0:
-                    minutos = 0
-            except Exception as e:
-                print(f"[ERROR al calcular minutos] {hora} → {e}")
-                minutos = 0
+            minutos = vehiculo.get("minutos", 0)
 
             # --- Patente con icono si hay subida activa ---
-            patente_mostrar = patente
-            if hay_subida_activa:
-                patente_mostrar = f"▲ {patente}"
+            patente_mostrar = f"▲ {patente}" if hay_subida_activa else patente
 
             item_patente = QTableWidgetItem(patente_mostrar)
             item_patente.setFlags(item_patente.flags() ^ Qt.ItemIsEditable)
@@ -347,6 +341,9 @@ class RegistroWindow(QWidget):
 
         # Mostrar grupo solo si hay vehículos
         self.grupo_tabla.setVisible(len(datos) > 0)
+
+        self.tabla_activos.setUpdatesEnabled(True) 
+        self.tabla_activos.viewport().update()
 
     def abrir_edicion(self):
         self.ventana_edicion = EdicionIngresosWindow(self.usuario)

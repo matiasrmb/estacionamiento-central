@@ -168,13 +168,19 @@ def obtener_vehiculos_activos():
     ahora = datetime.now()
     lista = []
     for r in resultados:
-        minutos = int((ahora - r["fecha_hora_ingreso"]).total_seconds() / 60)
-        tarifa = calcular_tarifa(minutos, r["fecha_hora_ingreso"], ahora) if r["en_espera"] == 0 else 0
+        fecha_ingreso = r["fecha_hora_ingreso"]
+        minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
+        if minutos < 0:
+            minutos = 0
+
+        tarifa = calcular_tarifa(minutos, fecha_ingreso, ahora) if r["en_espera"] == 0 else 0
+
         lista.append({
             "patente": r["patente"] + (" [EN ESPERA]" if r["en_espera"] else ""),
-            "hora": r["fecha_hora_ingreso"].strftime("%Y-%m-%d %H:%M:%S"),
+            "hora": fecha_ingreso.strftime("%Y-%m-%d %H:%M:%S"),
             "monto": tarifa,
-            "en_espera": bool(r["en_espera"])
+            "en_espera": bool(r["en_espera"]),
+            "minutos": minutos,
         })
 
     return lista
