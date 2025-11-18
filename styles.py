@@ -2,9 +2,8 @@
 """
 Hoja de estilos global para Estacionamiento Central (Qt StyleSheet / QSS).
 
-La idea es:
-- Unificar tipografía, colores y bordes.
-- Dar un look consistente a botones, inputs, tablas y groupboxes.
+- Unifica tipografía, colores y bordes.
+- Da un look consistente a botones, inputs, tablas y groupboxes.
 """
 
 GLOBAL_STYLESHEET = """
@@ -23,8 +22,9 @@ QWidget {
 
 /* Labels principales (títulos dentro de ventanas) */
 QLabel#TituloVentana {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: bold;
+    padding: 8px 0;
 }
 
 /* ================== BOTONES ================== */
@@ -64,6 +64,21 @@ QPushButton#BotonSecundario:hover {
     text-decoration: underline;
 }
 
+/* Botón peligroso (eliminar, desactivar, etc.) */
+QPushButton#BotonPeligro {
+    background-color: #dc2626;
+    border-color: #b91c1c;
+    color: #f9fafb;
+}
+
+QPushButton#BotonPeligro:hover {
+    background-color: #b91c1c;
+}
+
+QPushButton#BotonPeligro:pressed {
+    background-color: #991b1b;
+}
+
 /* ================== INPUTS ================== */
 
 QLineEdit, QPlainTextEdit, QSpinBox, QComboBox {
@@ -80,6 +95,13 @@ QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QComboBox:focus {
 /* Placeholder más suave */
 QLineEdit[echoMode="0"]::placeholder { 
     color: #9ca3af;
+}
+
+/* Campo especial para patentes */
+QLineEdit#InputPatente {
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
 }
 
 /* ================== GROUPBOX ================== */
@@ -149,14 +171,5 @@ QScrollBar::sub-line:vertical {
 
 QMessageBox {
     background-color: #ffffff;
-}
-
-/* ================== CAMPOS ESPECÍFICOS ================== */
-
-/* Por si quieres un input de patente con estilo ligeramente distinto */
-QLineEdit#InputPatente {
-    font-weight: bold;
-    letter-spacing: 1px;
-    text-transform: uppercase;
 }
 """

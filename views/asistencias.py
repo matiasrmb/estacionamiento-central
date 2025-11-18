@@ -3,7 +3,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QTableWidget, 
     QTableWidgetItem, QDateEdit, QMessageBox
 )
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
+
 from controllers.asistencias_controller import obtener_asistencias
 from utils.pdf_asistencias import exportar_asistencias_pdf
 
@@ -22,6 +23,12 @@ class AsistenciasWindow(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
+
+        # Título
+        titulo = QLabel("🕒 Registro de asistencias")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(titulo)
 
         # Filtros
         filtro_layout = QHBoxLayout()
@@ -65,7 +72,6 @@ class AsistenciasWindow(QWidget):
             "Usuario", "Hora de Inicio", "Hora de Salida", "Movimientos", "Total Recaudado"
         ])
         self.tabla.setAlternatingRowColors(True)
-        self.tabla.setStyleSheet("QTableWidget::item { padding: 6px; }")
         layout.addWidget(self.tabla)
 
         self.setLayout(layout)
@@ -103,5 +109,4 @@ class AsistenciasWindow(QWidget):
             else:
                 QMessageBox.warning(self, "Sin datos", "Primero realiza una búsqueda con resultados.")
         except Exception as e:
-            from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Error", f"No se pudo exportar el PDF:\n{e}")

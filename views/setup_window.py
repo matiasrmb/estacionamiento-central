@@ -2,6 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QMessageBox
 )
+from PySide6.QtCore import Qt
+
 from controllers.usuarios_controller import crear_usuario
 
 class SetupWindow(QWidget):
@@ -18,8 +20,14 @@ class SetupWindow(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(15)
+
+        # Título
+        titulo = QLabel("🧩 Configuración inicial del sistema")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(titulo)
 
         # Campo de usuario
         label_usuario = QLabel("👤 Nombre de usuario:")
@@ -46,10 +54,8 @@ class SetupWindow(QWidget):
 
         layout.addWidget(label_usuario)
         layout.addWidget(self.input_usuario)
-
         layout.addWidget(label_clave)
         layout.addWidget(self.input_clave)
-
         layout.addWidget(label_rol)
         layout.addWidget(self.combo_rol)
 

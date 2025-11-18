@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QMessageBox, QCheckBox
 )
 from PySide6.QtCore import QDate, Qt
+
 from controllers.reportes_controller import obtener_reportes, exportar_pdf
 
 class ReportesWindow(QWidget):
@@ -23,6 +24,12 @@ class ReportesWindow(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
+
+        # Título
+        titulo = QLabel("📊 Reportes de ingresos y salidas")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(titulo)
 
         # Filtro de fechas y patente
         filtro_layout = QHBoxLayout()
@@ -55,7 +62,7 @@ class ReportesWindow(QWidget):
         self.tabla.setColumnCount(5)
         self.tabla.setHorizontalHeaderLabels(["Patente", "Ingreso", "Salida", "Minutos", "Monto"])
         self.tabla.setAlternatingRowColors(True)
-        self.tabla.setStyleSheet("QTableWidget { font-size: 13px; }")
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(self.tabla)
 
         # Botón de exportar PDF

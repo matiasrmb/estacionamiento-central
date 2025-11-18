@@ -2,11 +2,11 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox
 )
 from PySide6.QtCore import QDateTime, QTimer, Qt
+
 from controllers.dashboard_controller import obtener_resumen_diario, obtener_resumen_banos
 from controllers.cierres_controller import realizar_cierre_diario   
 from utils.db import get_connection
 from datetime import datetime
-
 
 class DashboardWindow(QWidget):
     """
@@ -27,6 +27,12 @@ class DashboardWindow(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(10)
+
+        # Título
+        titulo = QLabel("📊 Resumen diario")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(titulo)
 
         # Mostrar período del resumen (desde último cierre hasta ahora)
         periodo_texto = self.obtener_periodo_resumen()

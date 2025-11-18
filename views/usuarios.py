@@ -29,7 +29,8 @@ class UsuariosWindow(QWidget):
 
         # Título
         titulo = QLabel("👥 Usuarios Registrados")
-        titulo.setStyleSheet("font-weight: bold; font-size: 16px; margin: 10px 0;")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
         layout.addWidget(titulo)
 
         # Tabla
@@ -37,10 +38,6 @@ class UsuariosWindow(QWidget):
         self.tabla.setColumnCount(3)
         self.tabla.setHorizontalHeaderLabels(["Usuario", "Rol", "Acciones"])
         self.tabla.setAlternatingRowColors(True)
-        self.tabla.setStyleSheet("""
-            QTableWidget::item { padding: 6px; }
-            QTableWidget { font-size: 13px; }
-        """)
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
@@ -51,6 +48,7 @@ class UsuariosWindow(QWidget):
         grupo_formulario = QGroupBox("➕ Crear nuevo usuario")
         form_layout = QHBoxLayout()
         form_layout.setContentsMargins(10, 20, 10, 20)
+        form_layout.setSpacing(10)
 
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Usuario")
@@ -63,7 +61,6 @@ class UsuariosWindow(QWidget):
         self.select_rol.addItems(["Operador", "Administrador"])
 
         btn_crear = QPushButton("📝 Crear")
-        btn_crear.setStyleSheet("padding: 6px;")
         btn_crear.clicked.connect(self.crear_usuario)
 
         form_layout.addWidget(self.input_usuario)
@@ -93,7 +90,6 @@ class UsuariosWindow(QWidget):
 
             # Botón para cambiar clave
             btn_clave = QPushButton("🔑 Clave")
-            btn_clave.setStyleSheet("padding: 5px;")
             btn_clave.clicked.connect(partial(self.preguntar_nueva_clave, u["usuario"]))
             layout_btn.addWidget(btn_clave)
 
@@ -101,7 +97,6 @@ class UsuariosWindow(QWidget):
             estado = "Desactivar" if u["activo"] else "Activar"
             icono_estado = "❌" if u["activo"] else "✅"
             btn_estado = QPushButton(f"{icono_estado} {estado}")
-            btn_estado.setStyleSheet("padding: 5px;")
             btn_estado.clicked.connect(partial(self.toggle_estado_usuario, u["usuario"], not u["activo"]))
             layout_btn.addWidget(btn_estado)
 
@@ -129,7 +124,12 @@ class UsuariosWindow(QWidget):
 
     def preguntar_nueva_clave(self, usuario):
         """Pregunta por una nueva clave y la actualiza en la base de datos."""
-        clave, ok = QInputDialog.getText(self, "Cambiar contraseña", f"Ingresar nueva clave para '{usuario}':", QLineEdit.Password)
+        clave, ok = QInputDialog.getText(
+            self,
+            "Cambiar contraseña",
+            f"Ingresar nueva clave para '{usuario}':",
+            QLineEdit.Password
+        )
         if ok and clave:
             if cambiar_contrasena(usuario, clave):
                 QMessageBox.information(self, "Éxito", "Contraseña actualizada.")
