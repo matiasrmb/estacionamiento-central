@@ -239,6 +239,7 @@ class RegistroWindow(QWidget):
         tarifa = registrar_salida(patente, self.usuario) 
         if tarifa is not None:
             QMessageBox.information(self, "Salida registrada", f"Tarifa: ${tarifa:.0f}")
+            self.actualizar_lista_patentes()
             self.reset()
         else:
             QMessageBox.critical(self, "Error", "No se pudo registrar la salida.")

@@ -406,18 +406,21 @@ def alternar_estado_espera(patente):
 
 def obtener_patentes_existentes():
     """
-    Obtiene todas las patentes registradas en el sistema (vehículos activos).
+    Obtiene las patentes de vehículos que actualmente tienen un ingreso activo
+    (es decir, ingresos sin fecha de salida).
+
     Returns:
-        list[str]: Lista de patentes.
+        list[str]: Lista de patentes con ingreso abierto.
     """
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT patente
-        FROM vehiculos
-        WHERE activo = 1
-        ORDER BY patente ASC
+        SELECT DISTINCT v.patente
+        FROM ingresos i
+        JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+        WHERE i.fecha_hora_salida IS NULL
+        ORDER BY v.patente ASC
     """)
     filas = cursor.fetchall()
 
@@ -426,3 +429,4 @@ def obtener_patentes_existentes():
 
     # filas es una lista de tuplas (('ABC123',), ('BCD234',)...)
     return [f[0] for f in filas]
+
