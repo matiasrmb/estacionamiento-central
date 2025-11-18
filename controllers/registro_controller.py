@@ -430,3 +430,46 @@ def obtener_patentes_existentes():
     # filas es una lista de tuplas (('ABC123',), ('BCD234',)...)
     return [f[0] for f in filas]
 
+def eliminar_ingreso_activo_por_patente(patente, usuario):
+    """
+    Elimina (con respaldo) el ingreso ACTIVO de una patente, si existe.
+
+    Busca el último ingreso sin salida de la patente indicada,
+    lo respalda en la tabla ingresos_eliminados y luego lo borra.
+
+    Args:
+        patente (str): Patente del vehículo.
+        usuario (str): Usuario que realiza la eliminación.
+
+    Returns:
+        (bool, str): (exito, mensaje)
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT i.id_ingreso
+            FROM ingresos i
+            JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+            WHERE v.patente = %s
+              AND i.fecha_hora_salida IS NULL
+            ORDER BY i.fecha_hora_ingreso DESC
+            LIMIT 1
+        """, (patente,))
+        ingreso = cursor.fetchone()
+
+        if not ingreso:
+            return False, "No hay un ingreso activo para esta patente."
+
+        id_ingreso = ingreso["id_ingreso"]
+
+        eliminar_ingreso_con_respaldo(id_ingreso, usuario)
+        return True, f"Ingreso activo de {patente} eliminado con respaldo."
+
+    except Exception as e:
+        print(f"Error al eliminar ingreso activo por patente: {e}")
+        return False, "Ocurrió un error al eliminar el ingreso."
+    finally:
+        cursor.close()
+        conn.close()

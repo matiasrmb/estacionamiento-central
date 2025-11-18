@@ -10,7 +10,8 @@ from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso, 
     registrar_salida, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera,
-    obtener_patentes_existentes
+    obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
+    eliminar_vehiculo_por_patente
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from views.dashboard import DashboardWindow
@@ -458,6 +459,50 @@ class RegistroWindow(QWidget):
         else:
             QMessageBox.critical(self, "Error", mensaje)
 
+    def eliminar_ingreso_desde_tecla(self):
+        """
+        Elimina el ingreso activo de la patente escrita, usando F9.
+        Solo permitido para administradores.
+        """
+        if self.rol != "administrador":
+            QMessageBox.warning(
+                self,
+                "Permisos insuficientes",
+                "Solo un administrador puede eliminar ingresos."
+            )
+            return
+
+        patente = self.input_patente.text().strip().upper()
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            QMessageBox.warning(self, "Atención", mensaje)
+            return
+
+        # Confirmación
+        respuesta = QMessageBox.question(
+            self,
+            "Confirmar eliminación",
+            (
+                f"¿Deseas eliminar el ingreso ACTIVO de la patente {patente}?\n\n"
+                "Este movimiento se respaldará en la tabla de ingresos eliminados."
+            ),
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if respuesta != QMessageBox.Yes:
+            return
+
+        exito, msg = eliminar_ingreso_activo_por_patente(patente, self.usuario)
+
+        if exito:
+            QMessageBox.information(self, "Ingreso eliminado", msg)
+            # Actualizar autocompletado: ya no debe aparecer
+            self.actualizar_lista_patentes()
+            self.reset()
+            self.actualizar_tabla_activos()
+        else:
+            QMessageBox.warning(self, "No se pudo eliminar", msg)
+            
     def abrir_dialogo_subida(self):
         dialogo = SubidaDialog()
         if dialogo.exec():
@@ -539,6 +584,8 @@ class RegistroWindow(QWidget):
             self.reingresar_vehiculo()
         elif tecla == Qt.Key_F8:
             self.alternar_espera_desde_tecla()
+        elif tecla == Qt.Key_F9:
+            self.eliminar_ingreso_desde_tecla()
         elif tecla == Qt.Key_F10:
             self.consultar_tarifa_actual()
         elif tecla == Qt.Key_Return or tecla == Qt.Key_Enter:
