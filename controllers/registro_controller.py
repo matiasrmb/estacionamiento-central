@@ -140,7 +140,7 @@ def registrar_salida(patente, usuario):
     cursor.close()
     conn.close()
 
-    generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa, subida_aplicada, monto_extra)
+    generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa, subida_aplicada, monto_extra, minutos)
     return tarifa
     
 def obtener_vehiculos_activos():
