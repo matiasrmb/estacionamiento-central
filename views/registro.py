@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, 
     QPushButton, QMessageBox, QTableWidget, 
-    QTableWidgetItem, QGroupBox, QHeaderView
+    QTableWidgetItem, QGroupBox, QHeaderView, QCompleter
 )
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QKeyEvent
@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso, 
     registrar_salida, obtener_vehiculos_activos,
-    marcar_ingreso_en_espera, alternar_estado_espera
+    marcar_ingreso_en_espera, alternar_estado_espera,
+    obtener_patentes_existentes
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from views.dashboard import DashboardWindow
@@ -45,9 +46,33 @@ class RegistroWindow(QWidget):
         self.input_patente = QLineEdit()
         self.input_patente.setPlaceholderText("Ej: ABCD12")
         self.input_patente.setStyleSheet("padding: 6px; font-size: 14px;")
+        self.input_patente.textChanged.connect(self.normalizar_patente)
+
+        # Autocompletado de patentes
+        patentes = obtener_patentes_existentes()
+        self.completer_patentes = QCompleter(patentes, self)
+        self.completer_patentes.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer_patentes.setFilterMode(Qt.MatchContains)  # no solo prefijo
+        self.input_patente.setCompleter(self.completer_patentes)
+        
+        self.input_patente.setMaxLength(8)
+        self.input_patente.textChanged.connect(self.normalizar_patente)
 
         self.boton_buscar = QPushButton("🔍 Buscar")
         self.boton_buscar.clicked.connect(self.buscar_vehiculo)
+
+        self.boton_refrescar_patentes = QPushButton("🔄 Actualizar lista de patentes")
+        self.boton_refrescar_patentes.setStyleSheet("""
+            QPushButton {
+                padding: 6px;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+                border: 1px solid #aaaaaa;
+            }
+        """)
+        self.boton_refrescar_patentes.clicked.connect(self.actualizar_lista_patentes)
 
         self.info_label = QLabel("")
         self.info_label.setStyleSheet("color: gray; font-size: 13px; padding: 5px 0;")
@@ -98,6 +123,7 @@ class RegistroWindow(QWidget):
         layout_registro.addWidget(self.label_patente)
         layout_registro.addWidget(self.input_patente)
         layout_registro.addWidget(self.boton_buscar)
+        layout_registro.addWidget(self.boton_refrescar_patentes)
         layout_registro.addWidget(self.info_label)
         layout_registro.addWidget(self.boton_ingreso)
         layout_registro.addWidget(self.boton_salida)
@@ -142,6 +168,7 @@ class RegistroWindow(QWidget):
         self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
         self.timer_tabla.start(5000)
         self.actualizar_tabla_activos()
+        self.actualizar_lista_patentes()
 
         self.setLayout(layout)
 
@@ -149,8 +176,9 @@ class RegistroWindow(QWidget):
         """Busca el estado del vehículo por patente e indica si puede ingresar o salir."""
         patente = self.input_patente.text().strip().upper()
 
-        if not patente:
-            QMessageBox.warning(self, "Atención", "Ingresa una patente.")
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            QMessageBox.warning(self, "Atención", mensaje)
             return
 
         estado = buscar_estado_vehiculo(patente)
@@ -184,9 +212,16 @@ class RegistroWindow(QWidget):
     def registrar_ingreso(self):
         """Registra el ingreso del vehículo."""
         patente = self.input_patente.text().strip().upper()
+
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            QMessageBox.warning(self, "Atención", mensaje)
+            return
+
         exito = registrar_ingreso(patente)
         if exito:
             QMessageBox.information(self, "Éxito", f"Ingreso registrado para {patente}")
+            self.actualizar_lista_patentes()
             self.reset()
         else:
             QMessageBox.critical(self, "Error", "No se pudo registrar el ingreso.")
@@ -195,7 +230,13 @@ class RegistroWindow(QWidget):
     def registrar_salida(self):
         """Registra la salida del vehículo y muestra la tarifa aplicada."""
         patente = self.input_patente.text().strip().upper()
-        tarifa = registrar_salida(patente, self.usuario)  # ← aquí se pasa el usuario
+
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            QMessageBox.warning(self, "Atención", mensaje)
+            return
+
+        tarifa = registrar_salida(patente, self.usuario) 
         if tarifa is not None:
             QMessageBox.information(self, "Salida registrada", f"Tarifa: ${tarifa:.0f}")
             self.reset()
@@ -212,7 +253,7 @@ class RegistroWindow(QWidget):
 
     def abrir_dashboard(self):
         """Abre la ventana del dashboard."""
-        self.dashboard = DashboardWindow(self.usuario, rol="operador")  # o self.rol si lo tienes
+        self.dashboard = DashboardWindow(self.usuario, rol="operador") 
         self.dashboard.show()
 
     def actualizar_tabla_activos(self):
@@ -354,8 +395,10 @@ class RegistroWindow(QWidget):
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado
 
         patente = self.input_patente.text().strip().upper()
-        if not patente:
-            QMessageBox.warning(self, "Error", "Primero escribe una patente.")
+
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            QMessageBox.warning(self, "Atención", mensaje)
             return
 
         # Buscar si tiene un ingreso reciente cerrrado
@@ -384,7 +427,6 @@ class RegistroWindow(QWidget):
         """
         Muestra la tarifa acumulada actual del vehículo si está estacionado.
         """
-        from controllers.registro_controller import obtener_vehiculos_activos
 
         patente = self.input_patente.text().strip().upper()
         if not patente:
@@ -402,11 +444,11 @@ class RegistroWindow(QWidget):
 
     def alternar_espera_desde_tecla(self):
         """Alterna el estado de espera de la patente ingresada al presionar F8."""
-        from controllers.registro_controller import alternar_estado_espera
         patente = self.input_patente.text().strip().upper()
 
-        if not patente:
-            QMessageBox.warning(self, "Atención", "Ingresa una patente.")
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            QMessageBox.warning(self, "Atención", mensaje)
             return
 
         exito, mensaje = alternar_estado_espera(patente)
@@ -428,6 +470,55 @@ class RegistroWindow(QWidget):
                 QMessageBox.information(self, "Éxito", f"Subida temporal registrada correctamente:\n+${monto} desde {hora_inicio} hasta {hora_fin}")
             else:
                 QMessageBox.warning(self, "Error", "No se pudo registrar la subida.")
+
+    def normalizar_patente(self, texto: str):
+        """
+        Fuerza que la patente se muestre en mayúsculas.
+        """
+
+        texto_mayus = texto.upper()
+        if texto != texto_mayus:
+            cursor_pos = self.input_patente.cursorPosition()
+            self.input_patente.blockSignals(True)
+            self.input_patente.setText(texto_mayus)
+            self.input_patente.setCursorPosition(cursor_pos)
+            self.input_patente.blockSignals(False)
+
+    def validar_patente(self, patente: str) -> tuple[bool, str]:
+        """
+        Valida formato básico de la patente:
+        - No vacía
+        - Longitud entre 4 y 8
+        - Solo caracteres A-Z y 0-9
+
+        Returns:
+            (es_valida, mensaje_error)
+        """
+        if not patente:
+            return False, "Ingresa una patente."
+        
+        if len(patente) < 4 or len(patente) > 8:
+            return False, "La patente debe tener entre 4 y 8 caracteres."
+        
+        if not patente.isalnum():
+            return False, "La patente solo puede contener letras y números."
+        
+        return True, ""
+    
+    def actualizar_lista_patentes(self):
+        """
+        Recarga la lista de patentes para el autocompletado
+        desde la base de datos.
+        """
+        try:
+            patentes = obtener_patentes_existentes()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"No se pudieron cargar las patentes:\n{e}")
+            return
+
+        modelo = self.completer_patentes.model()
+        if modelo is not None:
+            modelo.setStringList(patentes)
 
     def keyPressEvent(self, event):
         """

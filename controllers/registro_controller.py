@@ -398,3 +398,25 @@ def alternar_estado_espera(patente):
         cursor.close()
         conn.close()
 
+def obtener_patentes_existentes():
+    """
+    Obtiene todas las patentes registradas en el sistema (vehículos activos).
+    Returns:
+        list[str]: Lista de patentes.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT patente
+        FROM vehiculos
+        WHERE activo = 1
+        ORDER BY patente ASC
+    """)
+    filas = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    # filas es una lista de tuplas (('ABC123',), ('BCD234',)...)
+    return [f[0] for f in filas]
