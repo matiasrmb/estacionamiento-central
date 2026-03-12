@@ -5,10 +5,10 @@ en formato PDF optimizado para impresoras térmicas de 58mm.
 
 from fpdf import FPDF
 from datetime import datetime
-import time
 import os
 import platform
 import subprocess
+
 
 def generar_ticket_ingreso(patente, fecha_hora):
     """
@@ -36,14 +36,22 @@ def generar_ticket_ingreso(patente, fecha_hora):
 
     carpeta = "tickets"
     os.makedirs(carpeta, exist_ok=True)
-    nombre = f"Ticket_ingreso_{patente}_{fecha_hora.strftime('%Y%m%d%H%M%S')}.pdf"
+    nombre = f"ticket_ingreso_{patente}_{fecha_hora.strftime('%Y%m%d%H%M%S')}.pdf"
     ruta = os.path.join(carpeta, nombre)
 
     pdf.output(ruta)
     imprimir_pdf_directamente(ruta)
     return ruta
 
-def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa, subida_aplicada=False, monto_extra=0):
+
+def generar_ticket_salida(
+    patente,
+    fecha_hora_ingreso,
+    fecha_hora_salida,
+    tarifa,
+    subida_aplicada=False,
+    monto_extra=0
+):
     """
     Genera e imprime automáticamente un ticket de salida para un vehículo.
 
@@ -52,6 +60,8 @@ def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa
         fecha_hora_ingreso (datetime): Fecha y hora de ingreso.
         fecha_hora_salida (datetime): Fecha y hora de salida.
         tarifa (int or float): Monto total a pagar.
+        subida_aplicada (bool): Indica si hubo subida temporal aplicada.
+        monto_extra (int or float): Monto extra aplicado por subida temporal.
 
     Returns:
         str: Ruta del archivo PDF generado.
@@ -70,8 +80,10 @@ def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa
     pdf.cell(0, 5, fecha_hora_salida.strftime('%d-%m-%Y %H:%M'), ln=True)
     pdf.cell(0, 5, "-" * 28, ln=True, align='C')
     pdf.cell(0, 5, f"Total a pagar: ${tarifa:.0f}", ln=True, align='C')
+
     if subida_aplicada:
-        pdf.cell(0, 5, f"(Incluye subida +${monto_extra})", ln=True, align='C')
+        pdf.cell(0, 5, f"(Incluye subida +${monto_extra:.0f})", ln=True, align='C')
+
     pdf.cell(0, 5, "-" * 28, ln=True, align='C')
     pdf.cell(0, 5, "Gracias por su visita", ln=True, align='C')
 
@@ -84,38 +96,45 @@ def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa
     imprimir_pdf_directamente(ruta)
     return ruta
 
-def imprimir_pdf_directamente(ruta):
+
+def imprimir_pdf_directamente(ruta, nombre_impresora="POS58 Printer"):
     """
-    Envía el archivo PDF a imprimir directamente a la impresora definida,
-    usando Adobe Acrobat Reader en modo silencioso.
+    Envía un archivo PDF a imprimir directamente usando SumatraPDF.
 
     Args:
-        ruta (str): Ruta absoluta del archivo PDF.
+        ruta (str): Ruta del archivo PDF.
+        nombre_impresora (str): Nombre de la impresora de destino.
 
-    Notas:
-        - Asegúrate de tener instalado Adobe Acrobat Reader DC.
-        - Reemplaza 'POS58 Printer' por el nombre real de tu impresora.
-    """ 
-    ruta_acrobat = r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"  # Ajustable
-    nombre_impresora = "POS58 Printer"  # Cambiar por nombre real de la impresora
+    Returns:
+        bool: True si el comando fue lanzado correctamente, False en caso contrario.
+    """
+    ruta_sumatra = r"C:\Users\matia\AppData\Local\SumatraPDF\SumatraPDF.exe"
 
     try:
-        # Abrir Acrobat e imprimir silenciosamente
-        subprocess.Popen([
-            ruta_acrobat,
-            '/h',  # Minimiza
-            '/t',  # Imprimir
-            ruta,
-            nombre_impresora
-        ])
-        time.sleep(2)  # Espera a que se complete la impresión
+        if not os.path.isfile(ruta):
+            raise FileNotFoundError(f"No existe el PDF: {ruta}")
 
-        # Cierra Acrobat para evitar bloqueos
-        subprocess.run(["taskkill", "/f", "/im", "Acrobat.exe"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if not os.path.isfile(ruta_sumatra):
+            raise FileNotFoundError(f"No existe SumatraPDF: {ruta_sumatra}")
+
+        comando = [
+            ruta_sumatra,
+            "-print-to", nombre_impresora,
+            "-silent",
+            "-exit-on-print",
+            ruta
+        ]
+
+        subprocess.Popen(
+            comando,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        return True
 
     except Exception as e:
-        print(f"Error al imprimir el ticket o cerrar Acrobat Reader: {e}")
+        print(f"Error al imprimir el ticket con SumatraPDF: {e}")
+        return False
 
 def abrir_pdf(ruta):
     """
@@ -126,7 +145,7 @@ def abrir_pdf(ruta):
     """
     if platform.system() == "Windows":
         os.startfile(ruta)
-    elif platform.system() == "Darwin":  # macOS
+    elif platform.system() == "Darwin":
         subprocess.run(["open", ruta])
-    else:  # Linux
+    else:
         subprocess.run(["xdg-open", ruta])
