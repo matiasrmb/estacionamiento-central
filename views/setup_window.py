@@ -76,10 +76,15 @@ class SetupWindow(QWidget):
             QMessageBox.warning(self, "Campos requeridos", "Debes ingresar usuario y contraseña.")
             return
 
-        try:
-            crear_usuario(usuario, clave, rol)
+        exito = crear_usuario(usuario, clave, rol)
+
+        if exito:
             QMessageBox.information(self, "Éxito", f"Usuario '{usuario}' creado.")
             self.close()
             self.callback_mostrar_login()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"No se pudo crear el usuario.\n{e}")
+        else:
+            QMessageBox.critical(
+                self,
+                "Error",
+                "No se pudo crear el usuario. Verifica la conexión a la base de datos y la existencia de la tabla usuarios."
+            )
