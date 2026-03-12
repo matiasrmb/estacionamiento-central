@@ -2,6 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton, 
     QVBoxLayout, QComboBox, QMessageBox, QGroupBox
 )
+from PySide6.QtCore import Qt
+
 from controllers.config_controller import obtener_configuracion, actualizar_configuracion
 from controllers.tarifas_controller import generar_tramos_automaticos
 
@@ -20,6 +22,12 @@ class ConfiguracionWindow(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
+
+        # Título
+        titulo = QLabel("⚙️ Configuración del sistema")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(titulo)
 
         self.config = obtener_configuracion()
 

@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 from PySide6.QtCore import Qt
+
 from views.registro import RegistroWindow
 from views.reportes import ReportesWindow
 from views.mensuales import MensualesWindow
@@ -32,9 +33,9 @@ class MainWindow(QWidget):
         layout.setSpacing(15)
 
         # Encabezado
-        bienvenida = QLabel(f"👋 Bienvenido, <b>{self.usuario}</b> <span style='color:gray;'>({self.rol})</span>")
+        bienvenida = QLabel(f"👋 Bienvenido, {self.usuario} ({self.rol})")
+        bienvenida.setObjectName("TituloVentana")
         bienvenida.setAlignment(Qt.AlignCenter)
-        bienvenida.setStyleSheet("font-size: 16px; padding: 10px;")
         layout.addWidget(bienvenida)
 
         # Botones principales
@@ -48,17 +49,17 @@ class MainWindow(QWidget):
             ("🕒 Ver asistencias", self.abrir_asistencias, self.rol == "administrador")
         ]
 
-        # Crear y añadir botones al layout
         for texto, funcion, habilitado in botones:
             btn = QPushButton(texto)
             btn.setMinimumHeight(42)
             btn.setVisible(habilitado)
 
+            # Alineamos el texto a la izquierda pero dejamos colores al stylesheet global
             btn.setStyleSheet("""
                 QPushButton {
-                    font-size: 14px;
                     text-align: left;
                     padding-left: 12px;
+                    font-size: 14px;
                 }
             """)
 

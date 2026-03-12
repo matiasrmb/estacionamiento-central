@@ -25,9 +25,10 @@ class TarifasPersonalizadasWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # Título
+        # Título principal
         self.label_titulo = QLabel("📐 Configuración de Tramos de Tarifas")
-        self.label_titulo.setStyleSheet("font-weight: bold; font-size: 16px; padding: 10px 0;")
+        self.label_titulo.setObjectName("TituloVentana")
+        self.label_titulo.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.label_titulo)
 
         # Grupo de botones de acción
@@ -36,15 +37,12 @@ class TarifasPersonalizadasWindow(QWidget):
         botones_layout.setContentsMargins(10, 20, 10, 20)
 
         self.btn_agregar = QPushButton("➕ Agregar intervalo")
-        self.btn_agregar.setStyleSheet("padding: 6px;")
         self.btn_agregar.clicked.connect(self.agregar)
 
         self.btn_actualizar = QPushButton("✏️ Actualizar seleccionado")
-        self.btn_actualizar.setStyleSheet("padding: 6px;")
         self.btn_actualizar.clicked.connect(self.actualizar)
 
         self.btn_eliminar = QPushButton("🗑️ Eliminar seleccionado")
-        self.btn_eliminar.setStyleSheet("padding: 6px; color: white;")
         self.btn_eliminar.clicked.connect(self.eliminar)
 
         botones_layout.addWidget(self.btn_agregar)
@@ -59,7 +57,6 @@ class TarifasPersonalizadasWindow(QWidget):
         self.tabla.setHorizontalHeaderLabels(["ID", "Desde (min)", "Hasta (min)", "Valor (CLP)"])
         self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla.setAlternatingRowColors(True)
-        self.tabla.setStyleSheet("QTableWidget::item { padding: 6px; }")
 
         layout.addWidget(self.tabla)
         self.setLayout(layout)
@@ -81,13 +78,16 @@ class TarifasPersonalizadasWindow(QWidget):
     def agregar(self):
         """Agrega un nuevo tramo de tarifa personalizada."""
         min_inicio, ok1 = QInputDialog.getInt(self, "Nuevo intervalo", "Desde (minutos):", 0)
-        if not ok1: return
+        if not ok1:
+            return
 
         min_fin, ok2 = QInputDialog.getInt(self, "Nuevo intervalo", "Hasta (minutos):", min_inicio + 1)
-        if not ok2: return
+        if not ok2:
+            return
 
         valor, ok3 = QInputDialog.getInt(self, "Nuevo intervalo", "Valor (CLP):", 0)
-        if not ok3: return
+        if not ok3:
+            return
 
         agregar_intervalo(min_inicio, min_fin, valor)
         self.cargar_datos()
@@ -112,17 +112,27 @@ class TarifasPersonalizadasWindow(QWidget):
 
         id_tarifa = int(self.tabla.item(fila, 0).text())
 
+        min_inicio_actual = int(self.tabla.item(fila, 1).text())
+        min_fin_actual = int(self.tabla.item(fila, 2).text())
+        valor_actual = int(self.tabla.item(fila, 3).text())
+
         min_inicio, ok1 = QInputDialog.getInt(
-            self, "Editar intervalo", "Desde (minutos):", int(self.tabla.item(fila, 1).text()))
-        if not ok1: return
+            self, "Editar intervalo", "Desde (minutos):", min_inicio_actual
+        )
+        if not ok1:
+            return
 
         min_fin, ok2 = QInputDialog.getInt(
-            self, "Editar intervalo", "Hasta (minutos):", int(self.tabla.item(fila, 2).text()))
-        if not ok2: return
+            self, "Editar intervalo", "Hasta (minutos):", min_fin_actual
+        )
+        if not ok2:
+            return
 
         valor, ok3 = QInputDialog.getInt(
-            self, "Editar intervalo", "Valor (CLP):", int(self.tabla.item(fila, 3).text()))
-        if not ok3: return
+            self, "Editar intervalo", "Valor (CLP):", valor_actual
+        )
+        if not ok3:
+            return
 
         actualizar_intervalo(id_tarifa, min_inicio, min_fin, valor)
         self.cargar_datos()

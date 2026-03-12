@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHBoxLayout,
-    QMessageBox
+    QMessageBox, QGroupBox
 )
+from PySide6.QtCore import Qt
 from controllers.registro_controller import (
     obtener_ingresos_editables,
     eliminar_ingreso_con_respaldo,
@@ -27,16 +28,33 @@ class EdicionIngresosWindow(QWidget):
 
     def setup_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
 
-        self.label = QLabel("Ingresos marcados como 'en espera' o 'cerrados recientes'")
-        layout.addWidget(self.label)
+        # Título
+        titulo = QLabel("✏️ Edición Manual de Ingresos")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(titulo)
 
+        # Descripción
+        descripcion = QLabel("Ingresos marcados como 'EN ESPERA' o 'CERRADO reciente'.")
+        descripcion.setAlignment(Qt.AlignCenter)
+        layout.addWidget(descripcion)
+
+        # Tabla dentro de un grupo
+        grupo_tabla = QGroupBox("Ingresos disponibles para edición")
+        layout_tabla = QVBoxLayout()
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(4)
         self.tabla.setHorizontalHeaderLabels(["ID", "Patente", "Hora ingreso", "Estado"])
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
-        layout.addWidget(self.tabla)
+        self.tabla.setAlternatingRowColors(True)
+        layout_tabla.addWidget(self.tabla)
+        grupo_tabla.setLayout(layout_tabla)
+        layout.addWidget(grupo_tabla)
 
+        # Botones de acción
         botones_layout = QHBoxLayout()
 
         self.btn_revertir = QPushButton("Revertir ingreso en espera")
@@ -48,6 +66,7 @@ class EdicionIngresosWindow(QWidget):
         botones_layout.addWidget(self.btn_reingresar)
 
         self.btn_eliminar = QPushButton("Eliminar ingreso en espera")
+        self.btn_eliminar.setObjectName("BotonPeligro")
         self.btn_eliminar.clicked.connect(self.eliminar_ingreso)
         botones_layout.addWidget(self.btn_eliminar)
 
@@ -62,7 +81,10 @@ class EdicionIngresosWindow(QWidget):
             self.tabla.insertRow(fila)
             self.tabla.setItem(fila, 0, QTableWidgetItem(str(ingreso["id_ingreso"])))
             self.tabla.setItem(fila, 1, QTableWidgetItem(ingreso["patente"]))
-            self.tabla.setItem(fila, 2, QTableWidgetItem(ingreso["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")))
+            self.tabla.setItem(
+                fila, 2,
+                QTableWidgetItem(ingreso["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M:%S"))
+            )
             self.tabla.setItem(fila, 3, QTableWidgetItem(ingreso["estado"]))
 
     def revertir_en_espera(self):

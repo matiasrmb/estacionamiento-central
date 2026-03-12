@@ -2,7 +2,9 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, 
     QPushButton, QVBoxLayout, QMessageBox
 )
+from PySide6.QtCore import Qt
 import sys
+
 from controllers.login_controller import validar_usuario
 from views.main_window import MainWindow
 from views.dashboard import DashboardWindow
@@ -15,15 +17,21 @@ class LoginWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Inicio de Sesión - Estacionamiento Central")
-        self.setFixedSize(350, 220)
+        self.setFixedSize(450, 360)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(25, 25, 25, 25)
-        layout.setSpacing(0)
+        layout.setSpacing(10)
 
-        #Etiqueta y campo de usuario
+        # Título
+        titulo = QLabel("🅿️ Estacionamiento Central")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(titulo)
+
+        # Etiqueta y campo de usuario
         self.user_label = QLabel("Usuario:")
         self.user_input = QLineEdit()
         self.user_input.setMinimumHeight(35)
@@ -64,9 +72,9 @@ class LoginWindow(QWidget):
             QMessageBox.warning(self, "Campos requeridos", "Debes ingresar usuario y contraseña.")
             return
 
-        exito, rol = validar_usuario(usuario,clave)
+        exito, rol = validar_usuario(usuario, clave)
 
-        if exito == True:
+        if exito is True:
             QMessageBox.information(self, "Acceso correcto", f"Bienvenido, {usuario}. Rol: {rol}")
             self.hide()
             self.dashboard = DashboardWindow(usuario, rol)

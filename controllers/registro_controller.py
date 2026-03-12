@@ -140,7 +140,7 @@ def registrar_salida(patente, usuario):
     cursor.close()
     conn.close()
 
-    generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa, subida_aplicada, monto_extra)
+    generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa, subida_aplicada, monto_extra, minutos)
     return tarifa
     
 def obtener_vehiculos_activos():
@@ -168,13 +168,19 @@ def obtener_vehiculos_activos():
     ahora = datetime.now()
     lista = []
     for r in resultados:
-        minutos = int((ahora - r["fecha_hora_ingreso"]).total_seconds() / 60)
-        tarifa = calcular_tarifa(minutos, r["fecha_hora_ingreso"], ahora) if r["en_espera"] == 0 else 0
+        fecha_ingreso = r["fecha_hora_ingreso"]
+        minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
+        if minutos < 0:
+            minutos = 0
+
+        tarifa = calcular_tarifa(minutos, fecha_ingreso, ahora) if r["en_espera"] == 0 else 0
+
         lista.append({
             "patente": r["patente"] + (" [EN ESPERA]" if r["en_espera"] else ""),
-            "hora": r["fecha_hora_ingreso"].strftime("%Y-%m-%d %H:%M:%S"),
+            "hora": fecha_ingreso.strftime("%Y-%m-%d %H:%M:%S"),
             "monto": tarifa,
-            "en_espera": bool(r["en_espera"])
+            "en_espera": bool(r["en_espera"]),
+            "minutos": minutos,
         })
 
     return lista
@@ -398,3 +404,72 @@ def alternar_estado_espera(patente):
         cursor.close()
         conn.close()
 
+def obtener_patentes_existentes():
+    """
+    Obtiene las patentes de vehículos que actualmente tienen un ingreso activo
+    (es decir, ingresos sin fecha de salida).
+
+    Returns:
+        list[str]: Lista de patentes con ingreso abierto.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT DISTINCT v.patente
+        FROM ingresos i
+        JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+        WHERE i.fecha_hora_salida IS NULL
+        ORDER BY v.patente ASC
+    """)
+    filas = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    # filas es una lista de tuplas (('ABC123',), ('BCD234',)...)
+    return [f[0] for f in filas]
+
+def eliminar_ingreso_activo_por_patente(patente, usuario):
+    """
+    Elimina (con respaldo) el ingreso ACTIVO de una patente, si existe.
+
+    Busca el último ingreso sin salida de la patente indicada,
+    lo respalda en la tabla ingresos_eliminados y luego lo borra.
+
+    Args:
+        patente (str): Patente del vehículo.
+        usuario (str): Usuario que realiza la eliminación.
+
+    Returns:
+        (bool, str): (exito, mensaje)
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT i.id_ingreso
+            FROM ingresos i
+            JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+            WHERE v.patente = %s
+              AND i.fecha_hora_salida IS NULL
+            ORDER BY i.fecha_hora_ingreso DESC
+            LIMIT 1
+        """, (patente,))
+        ingreso = cursor.fetchone()
+
+        if not ingreso:
+            return False, "No hay un ingreso activo para esta patente."
+
+        id_ingreso = ingreso["id_ingreso"]
+
+        eliminar_ingreso_con_respaldo(id_ingreso, usuario)
+        return True, f"Ingreso activo de {patente} eliminado con respaldo."
+
+    except Exception as e:
+        print(f"Error al eliminar ingreso activo por patente: {e}")
+        return False, "Ocurrió un error al eliminar el ingreso."
+    finally:
+        cursor.close()
+        conn.close()

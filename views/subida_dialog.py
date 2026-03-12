@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QTimeEdit, 
     QSpinBox, QHBoxLayout, QPushButton
 )
-from PySide6.QtCore import QTime
+from PySide6.QtCore import QTime, Qt
 
 class SubidaDialog(QDialog):
     def __init__(self):
@@ -11,23 +11,28 @@ class SubidaDialog(QDialog):
         self.setFixedSize(300, 300)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
 
         # Hora de inicio
-        layout.addWidget(QLabel("Hora de inicio:"))
+        label_inicio = QLabel("Hora de inicio:")
+        layout.addWidget(label_inicio)
         self.hora_inicio = QTimeEdit()
         self.hora_inicio.setDisplayFormat("HH:mm")
         self.hora_inicio.setTime(QTime.currentTime())
         layout.addWidget(self.hora_inicio)
 
         # Hora de término
-        layout.addWidget(QLabel("Hora de término:"))
+        label_fin = QLabel("Hora de término:")
+        layout.addWidget(label_fin)
         self.hora_fin = QTimeEdit()
         self.hora_fin.setDisplayFormat("HH:mm")
         self.hora_fin.setTime(QTime.currentTime().addSecs(3600))
         layout.addWidget(self.hora_fin)
 
         # Monto adicional
-        layout.addWidget(QLabel("Monto adicional a aplicar ($CLP):"))
+        label_monto = QLabel("Monto adicional a aplicar ($CLP):")
+        layout.addWidget(label_monto)
         self.monto_extra = QSpinBox()
         self.monto_extra.setMinimum(1)
         self.monto_extra.setMaximum(10000)

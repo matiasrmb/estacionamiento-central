@@ -30,7 +30,7 @@ def generar_ticket_ingreso(patente, fecha_hora):
     pdf.cell(0, 5, "-" * 28, ln=True, align='C')
     pdf.cell(0, 5, f"Patente: {patente}", ln=True)
     pdf.cell(0, 5, "Ingreso:", ln=True)
-    pdf.cell(0, 5, fecha_hora.strftime('%d-%m-%Y %H:%M'), ln=True)
+    pdf.cell(0, 5, fecha_hora.strftime('%d-%m-%Y %H:%M:%S'), ln=True)
     pdf.cell(0, 5, "-" * 28, ln=True, align='C')
     pdf.cell(0, 5, "Gracias por su visita", ln=True, align='C')
 
@@ -43,15 +43,7 @@ def generar_ticket_ingreso(patente, fecha_hora):
     imprimir_pdf_directamente(ruta)
     return ruta
 
-
-def generar_ticket_salida(
-    patente,
-    fecha_hora_ingreso,
-    fecha_hora_salida,
-    tarifa,
-    subida_aplicada=False,
-    monto_extra=0
-):
+def generar_ticket_salida(patente, fecha_hora_ingreso, fecha_hora_salida, tarifa, subida_aplicada=False, monto_extra=0):
     """
     Genera e imprime automáticamente un ticket de salida para un vehículo.
 
@@ -60,13 +52,15 @@ def generar_ticket_salida(
         fecha_hora_ingreso (datetime): Fecha y hora de ingreso.
         fecha_hora_salida (datetime): Fecha y hora de salida.
         tarifa (int or float): Monto total a pagar.
-        subida_aplicada (bool): Indica si hubo subida temporal aplicada.
-        monto_extra (int or float): Monto extra aplicado por subida temporal.
 
     Returns:
         str: Ruta del archivo PDF generado.
     """
-    pdf = FPDF(format=(58, 120), unit="mm")
+    if minutos_estancia is None:
+        diferencia = fecha_hora_salida - fecha_hora_ingreso
+        minutos_estancia = int(diferencia.total_seconds() // 60)
+
+    pdf = FPDF(format=(58, 130), unit="mm")
     pdf.add_page()
     pdf.set_font("Courier", size=10)
 
@@ -75,9 +69,10 @@ def generar_ticket_salida(
     pdf.cell(0, 5, "-" * 28, ln=True, align='C')
     pdf.cell(0, 5, f"Patente: {patente}", ln=True)
     pdf.cell(0, 5, "Ingreso:", ln=True)
-    pdf.cell(0, 5, fecha_hora_ingreso.strftime('%d-%m-%Y %H:%M'), ln=True)
+    pdf.cell(0, 5, fecha_hora_ingreso.strftime('%d-%m-%Y %H:%M:%S'), ln=True)
     pdf.cell(0, 5, "Salida:", ln=True)
-    pdf.cell(0, 5, fecha_hora_salida.strftime('%d-%m-%Y %H:%M'), ln=True)
+    pdf.cell(0, 5, fecha_hora_salida.strftime('%d-%m-%Y %H:%M:%S'), ln=True)
+    pdf.cell(0, 5, f"Estancia: {minutos_estancia} min", ln=True)
     pdf.cell(0, 5, "-" * 28, ln=True, align='C')
     pdf.cell(0, 5, f"Total a pagar: ${tarifa:.0f}", ln=True, align='C')
 

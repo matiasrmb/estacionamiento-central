@@ -5,11 +5,12 @@ from PySide6.QtWidgets import (
     QInputDialog, QGroupBox
 )
 from PySide6.QtCore import Qt
+from functools import partial
+
 from controllers.mensuales_controller import (
     obtener_mensuales, agregar_mensual, 
     actualizar_tarifa, eliminar_mensual
 )
-from functools import partial
 
 class MensualesWindow(QWidget):
     """
@@ -29,25 +30,20 @@ class MensualesWindow(QWidget):
 
         # Encabezado
         self.label_titulo = QLabel("📘 Gestión de Clientes Mensuales")
-        self.label_titulo.setStyleSheet("font-weight: bold; font-size: 16px; padding: 8px 0;")
+        self.label_titulo.setObjectName("TituloVentana")
+        self.label_titulo.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.label_titulo)
 
         # Formulario de ingreso
         form_group = QGroupBox("➕ Agregar nuevo cliente mensual")
         form_layout = QHBoxLayout()
         form_layout.setContentsMargins(10, 20, 10, 20)
-
-        # Formulario para agregar cliente
-        form_group = QGroupBox("➕ Agregar nuevo cliente mensual")
-        form_layout = QHBoxLayout()
-        form_layout.setContentsMargins(10, 20, 10, 20)
+        form_layout.setSpacing(10)
 
         self.patente_input = QLineEdit()
         self.patente_input.setPlaceholderText("Ej: ABCD12")
-        self.patente_input.setStyleSheet("padding: 6px; font-size: 14px;")
 
         self.btn_agregar = QPushButton("Agregar")
-        self.btn_agregar.setStyleSheet("padding: 6px; font-weight: bold;")
         self.btn_agregar.clicked.connect(self.agregar_mensual)
 
         form_layout.addWidget(self.patente_input)
@@ -64,10 +60,7 @@ class MensualesWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Patente
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Tarifa Mensual
         self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Acciones
-        self.tabla.setStyleSheet("""
-            QTableWidget::item { padding: 5px; }
-            QTableWidget { font-size: 13px; }
-        """)
+        self.tabla.setAlternatingRowColors(True)
 
         layout.addWidget(self.tabla)
         self.setLayout(layout)
@@ -86,17 +79,16 @@ class MensualesWindow(QWidget):
 
             # Botones de acción
             btn_eliminar = QPushButton("🗑 Eliminar")
-            btn_eliminar.setStyleSheet("color: white; font-weight: bold; padding: 3px;")
             btn_eliminar.clicked.connect(partial(self.eliminar_cliente, row["id_vehiculo"]))
 
             btn_tarifa = QPushButton("💰 Editar Tarifa")
-            btn_tarifa.setStyleSheet("padding: 3px;")
             btn_tarifa.clicked.connect(partial(self.editar_tarifa, row["id_vehiculo"]))
 
             acciones_layout = QHBoxLayout()
             acciones_layout.addWidget(btn_tarifa)
             acciones_layout.addWidget(btn_eliminar)
             acciones_layout.setContentsMargins(0, 0, 0, 0)
+            acciones_layout.setSpacing(5)
 
             acciones_widget = QWidget()
             acciones_widget.setLayout(acciones_layout)
@@ -119,7 +111,7 @@ class MensualesWindow(QWidget):
             QMessageBox.critical(self, "Error", "No se pudo registrar o ya existe.")
 
     def eliminar_cliente(self, id_vehiculo):
-        """Agrega una nueva patente como cliente mensual."""
+        """Elimina un cliente mensual."""
         confirm = QMessageBox.question(
             self,
             "Confirmar eliminación",
