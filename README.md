@@ -32,7 +32,7 @@ Este software fue desarrollado como parte del proyecto de título técnico en an
 - Python 3.11 o superior
 - MySQL Server (local o remoto)
 - Visual Studio Code (recomendado para desarrollo)
-- Adobe Acrobat Reader (para impresión directa)
+- Sumatra PDF (para impresión directa)
 - Impresora térmica de 58mm (opcional)
 ## Instalación Paso a Paso
 
