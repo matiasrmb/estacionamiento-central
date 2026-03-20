@@ -22,7 +22,10 @@ class EdicionIngresosWindow(QWidget):
         super().__init__()
         self.usuario_admin = usuario_admin
         self.setWindowTitle("Panel de Edición Manual de Ingresos")
-        self.setFixedSize(750, 460)
+        self.setMinimumSize(750, 460)
+        resize_width = 900
+        resize_height = 560
+        self.resize(resize_width, resize_height)
         self.setup_ui()
         self.cargar_datos()
 
@@ -50,6 +53,10 @@ class EdicionIngresosWindow(QWidget):
         self.tabla.setHorizontalHeaderLabels(["ID", "Patente", "Hora ingreso", "Estado"])
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setAlternatingRowColors(True)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.verticalHeader().setDefaultSectionSize(34)
+        self.tabla.horizontalHeader().setStretchLastSection(True)
         layout_tabla.addWidget(self.tabla)
         grupo_tabla.setLayout(layout_tabla)
         layout.addWidget(grupo_tabla)
@@ -59,15 +66,18 @@ class EdicionIngresosWindow(QWidget):
 
         self.btn_revertir = QPushButton("Revertir ingreso en espera")
         self.btn_revertir.clicked.connect(self.revertir_en_espera)
+        self.btn_revertir.setMinimumHeight(40)
         botones_layout.addWidget(self.btn_revertir)
 
         self.btn_reingresar = QPushButton("Reingresar vehículo cerrado")
         self.btn_reingresar.clicked.connect(self.reingresar)
+        self.btn_reingresar.setMinimumHeight(40)
         botones_layout.addWidget(self.btn_reingresar)
 
         self.btn_eliminar = QPushButton("Eliminar ingreso en espera")
         self.btn_eliminar.setObjectName("BotonPeligro")
         self.btn_eliminar.clicked.connect(self.eliminar_ingreso)
+        self.btn_eliminar.setMinimumHeight(40)
         botones_layout.addWidget(self.btn_eliminar)
 
         layout.addLayout(botones_layout)

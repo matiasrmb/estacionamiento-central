@@ -19,7 +19,7 @@ class UsuariosWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("👤 Gestión de Usuarios")
-        self.setFixedSize(900, 600) 
+        self.setMinimumSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):
@@ -42,6 +42,8 @@ class UsuariosWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.tabla.verticalHeader().setDefaultSectionSize(42)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
         layout.addWidget(self.tabla)
 
         # Grupo para crear nuevo usuario
@@ -52,13 +54,16 @@ class UsuariosWindow(QWidget):
 
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Usuario")
+        self.input_usuario.setMinimumHeight(38)
 
         self.input_clave = QLineEdit()
         self.input_clave.setPlaceholderText("Contraseña")
         self.input_clave.setEchoMode(QLineEdit.Password)
+        self.input_clave.setMinimumHeight(38)
 
         self.select_rol = QComboBox()
         self.select_rol.addItems(["Operador", "Administrador"])
+        self.select_rol.setMinimumHeight(38)
 
         btn_crear = QPushButton("📝 Crear")
         btn_crear.clicked.connect(self.crear_usuario)

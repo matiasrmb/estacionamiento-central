@@ -16,7 +16,7 @@ class ReportesWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("📊 Reportes de Ingresos y Salidas")
-        self.setFixedSize(900, 600) 
+        self.setMinimumSize(900, 600) 
         self.resultados = []
         self.init_ui()
 
@@ -63,12 +63,16 @@ class ReportesWindow(QWidget):
         self.tabla.setHorizontalHeaderLabels(["Patente", "Ingreso", "Salida", "Minutos", "Monto"])
         self.tabla.setAlternatingRowColors(True)
         self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.verticalHeader().setDefaultSectionSize(34)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
         layout.addWidget(self.tabla)
 
         # Botón de exportar PDF
         self.boton_exportar = QPushButton("🖨️ Exportar PDF")
         self.boton_exportar.setEnabled(False)
         self.boton_exportar.clicked.connect(self.exportar_pdf)
+        self.boton_exportar.setMinimumHeight(40)
         layout.addWidget(self.boton_exportar)
 
         self.setLayout(layout)

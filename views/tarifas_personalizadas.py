@@ -17,7 +17,7 @@ class TarifasPersonalizadasWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Editor de Tarifas Personalizadas")
-        self.setFixedSize(900, 600) 
+        self.setMinimumSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):
@@ -37,12 +37,15 @@ class TarifasPersonalizadasWindow(QWidget):
         botones_layout.setContentsMargins(10, 20, 10, 20)
 
         self.btn_agregar = QPushButton("➕ Agregar intervalo")
+        self.btn_agregar.setMinimumHeight(38)
         self.btn_agregar.clicked.connect(self.agregar)
 
         self.btn_actualizar = QPushButton("✏️ Actualizar seleccionado")
+        self.btn_actualizar.setMinimumHeight(38)
         self.btn_actualizar.clicked.connect(self.actualizar)
 
         self.btn_eliminar = QPushButton("🗑️ Eliminar seleccionado")
+        self.btn_eliminar.setMinimumHeight(38)
         self.btn_eliminar.clicked.connect(self.eliminar)
 
         botones_layout.addWidget(self.btn_agregar)
@@ -57,6 +60,10 @@ class TarifasPersonalizadasWindow(QWidget):
         self.tabla.setHorizontalHeaderLabels(["ID", "Desde (min)", "Hasta (min)", "Valor (CLP)"])
         self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla.setAlternatingRowColors(True)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.verticalHeader().setDefaultSectionSize(36)
+        self.tabla.horizontalHeader().setStretchLastSection(True)
 
         layout.addWidget(self.tabla)
         self.setLayout(layout)

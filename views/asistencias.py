@@ -16,7 +16,7 @@ class AsistenciasWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Registro de Asistencias")
-        self.setFixedSize(900, 600) 
+        self.setMinimumSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):
@@ -49,10 +49,12 @@ class AsistenciasWindow(QWidget):
         self.btn_filtrar = QPushButton("Buscar")
         self.btn_filtrar.setMinimumHeight(30)
         self.btn_filtrar.clicked.connect(self.filtrar)
+        self.btn_filtrar.setMinimumHeight(38)
 
         self.btn_exportar = QPushButton("Exportar PDF")
         self.btn_exportar.setMinimumHeight(30)
         self.btn_exportar.clicked.connect(self.exportar_pdf)
+        self.btn_exportar.setMinimumHeight(38)
 
         filtro_layout.addWidget(QLabel("Usuario:"))
         filtro_layout.addWidget(self.input_usuario)
@@ -72,6 +74,10 @@ class AsistenciasWindow(QWidget):
             "Usuario", "Hora de Inicio", "Hora de Salida", "Movimientos", "Total Recaudado"
         ])
         self.tabla.setAlternatingRowColors(True)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.verticalHeader().setDefaultSectionSize(34)
+        self.tabla.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.tabla)
 
         self.setLayout(layout)

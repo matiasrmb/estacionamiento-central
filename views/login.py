@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QLabel, QLineEdit, 
+    QApplication, QWidget, QLabel, QLineEdit,
     QPushButton, QVBoxLayout, QMessageBox
 )
 from PySide6.QtCore import Qt
@@ -7,13 +7,14 @@ import sys
 
 from controllers.login_controller import validar_usuario
 from views.main_window import MainWindow
-from views.dashboard import DashboardWindow
+
 
 class LoginWindow(QWidget):
     """
     Ventana de inicio de sesión del sistema Estacionamiento Central.
     Permite al usuario ingresar su usuario y contraseña para validar el acceso.
     """
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Inicio de Sesión - Estacionamiento Central")
@@ -25,31 +26,26 @@ class LoginWindow(QWidget):
         layout.setContentsMargins(25, 25, 25, 25)
         layout.setSpacing(10)
 
-        # Título
         titulo = QLabel("🅿️ Estacionamiento Central")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignCenter)
         layout.addWidget(titulo)
 
-        # Etiqueta y campo de usuario
         self.user_label = QLabel("Usuario:")
         self.user_input = QLineEdit()
         self.user_input.setMinimumHeight(35)
         self.user_input.setPlaceholderText("Ingresa tu usuario")
 
-        # Etiqueta y campo de contraseña
         self.pass_label = QLabel("Contraseña:")
         self.pass_input = QLineEdit()
         self.pass_input.setMinimumHeight(35)
         self.pass_input.setPlaceholderText("Ingresa tu contraseña")
         self.pass_input.setEchoMode(QLineEdit.Password)
 
-        # Botón de inicio de sesión
         self.login_button = QPushButton("Ingresar")
         self.login_button.setMinimumHeight(35)
         self.login_button.clicked.connect(self.validar_credenciales)
 
-        # Añadir al layout
         layout.addWidget(self.user_label)
         layout.addWidget(self.user_input)
         layout.addSpacing(10)
@@ -60,13 +56,17 @@ class LoginWindow(QWidget):
 
         self.setLayout(layout)
 
+        self.user_input.returnPressed.connect(self.pass_input.setFocus)
+        self.pass_input.returnPressed.connect(self.validar_credenciales)
+        self.user_input.setFocus()
+
     def validar_credenciales(self):
         """
         Valida las credenciales ingresadas por el usuario.
-        Según el resultado, muestra mensajes o redirige al dashboard.
+        Según el resultado, muestra mensajes o redirige a la app principal.
         """
-        usuario = self.user_input.text()
-        clave = self.pass_input.text()
+        usuario = self.user_input.text().strip()
+        clave = self.pass_input.text().strip()
 
         if not usuario or not clave:
             QMessageBox.warning(self, "Campos requeridos", "Debes ingresar usuario y contraseña.")
@@ -77,12 +77,13 @@ class LoginWindow(QWidget):
         if exito is True:
             QMessageBox.information(self, "Acceso correcto", f"Bienvenido, {usuario}. Rol: {rol}")
             self.hide()
-            self.dashboard = DashboardWindow(usuario, rol)
-            self.dashboard.show()
+            self.main = MainWindow(usuario, rol)
+            self.main.show()
         elif exito == "inactivo":
             QMessageBox.warning(self, "Cuenta inactiva", "Tu cuenta está desactivada. Contacta al administrador.")
         else:
             QMessageBox.critical(self, "Error", "Usuario o clave incorrectas.")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

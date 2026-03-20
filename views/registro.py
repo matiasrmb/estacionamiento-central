@@ -1,35 +1,35 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QLineEdit, 
-    QPushButton, QMessageBox, QTableWidget, 
-    QTableWidgetItem, QGroupBox, QHeaderView, QCompleter
+    QWidget, QVBoxLayout, QLabel, QLineEdit,
+    QPushButton, QMessageBox, QTableWidget,
+    QTableWidgetItem, QGroupBox, QHeaderView, QCompleter,
+    QHBoxLayout
 )
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QKeyEvent
 from datetime import datetime, timedelta
 from controllers.registro_controller import (
-    buscar_estado_vehiculo, registrar_ingreso, 
+    buscar_estado_vehiculo, registrar_ingreso,
     registrar_salida, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
-from views.dashboard import DashboardWindow
 from views.admin_edicion import EdicionIngresosWindow
 from views.subida_dialog import SubidaDialog
-from functools import partial
+
 
 class RegistroWindow(QWidget):
     """
-    Ventana principal para el registro de ingresos y salidas de vehículos.
+    Vista principal para el registro de ingresos y salidas de vehículos.
     Permite buscar vehículos por patente, registrar ingresos y salidas,
-    y ver un resumen diario del estacionamiento.
+    ver vehículos activos y volver al panel principal.
     """
-    def __init__(self, usuario, rol="operador"):
+
+    def __init__(self, usuario, rol="operador", on_volver_panel=None):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
-        self.setWindowTitle("ESTACIONAMIENTO CENTRAL - Registro de Vehículos")
-        self.setFixedSize(900, 700) 
+        self.on_volver_panel = on_volver_panel
+        self.setMinimumSize(1000, 650)
         self.init_ui()
 
     def init_ui(self):
@@ -37,12 +37,24 @@ class RegistroWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
+        # Encabezado con volver
+        header_layout = QHBoxLayout()
+
+        self.boton_volver = QPushButton("⬅ Volver al panel principal")
+        self.boton_volver.setObjectName("BotonSecundario")
+        self.boton_volver.clicked.connect(self.volver_al_panel)
+
         titulo = QLabel("Registro de vehículos")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignCenter)
-        layout.addWidget(titulo)
 
-        # Grupo de Registro
+        header_layout.addWidget(self.boton_volver, alignment=Qt.AlignLeft)
+        header_layout.addStretch()
+        header_layout.addWidget(titulo)
+        header_layout.addStretch()
+
+        layout.addLayout(header_layout)
+
         grupo_registro = QGroupBox("🔎 Registro de Vehículo")
         layout_registro = QVBoxLayout()
         layout_registro.setContentsMargins(10, 20, 10, 20)
@@ -51,17 +63,14 @@ class RegistroWindow(QWidget):
         self.input_patente = QLineEdit()
         self.input_patente.setObjectName("InputPatente")
         self.input_patente.setPlaceholderText("Ej: ABCD12")
+        self.input_patente.setMaxLength(8)
         self.input_patente.textChanged.connect(self.normalizar_patente)
 
-        # Autocompletado de patentes
         patentes = obtener_patentes_existentes()
         self.completer_patentes = QCompleter(patentes, self)
         self.completer_patentes.setCaseSensitivity(Qt.CaseInsensitive)
-        self.completer_patentes.setFilterMode(Qt.MatchContains)  # no solo prefijo
+        self.completer_patentes.setFilterMode(Qt.MatchContains)
         self.input_patente.setCompleter(self.completer_patentes)
-        
-        self.input_patente.setMaxLength(8)
-        self.input_patente.textChanged.connect(self.normalizar_patente)
 
         self.boton_buscar = QPushButton("🔍 Buscar")
         self.boton_buscar.clicked.connect(self.buscar_vehiculo)
@@ -88,14 +97,6 @@ class RegistroWindow(QWidget):
         self.boton_espera.setEnabled(False)
         self.boton_espera.clicked.connect(self.marcar_en_espera)
 
-        if self.rol == "administrador":
-            self.btn_edicion = QPushButton("Edición de ingresos")
-            self.btn_edicion.clicked.connect(self.abrir_edicion)
-            self.boton_subida = QPushButton("Subida de precios")
-            self.boton_subida.clicked.connect(self.abrir_dialogo_subida)
-            layout.addWidget(self.btn_edicion)
-            layout.addWidget(self.boton_subida)
-
         layout_registro.addWidget(self.label_patente)
         layout_registro.addWidget(self.input_patente)
         layout_registro.addWidget(self.boton_buscar)
@@ -104,18 +105,21 @@ class RegistroWindow(QWidget):
         layout_registro.addWidget(self.boton_ingreso)
         layout_registro.addWidget(self.boton_salida)
         layout_registro.addWidget(self.boton_espera)
-        grupo_registro.setLayout(layout_registro)
-        layout.addWidget(self.boton_bano)
+        layout_registro.addWidget(self.boton_bano)
 
+        if self.rol == "administrador":
+            self.btn_edicion = QPushButton("✏️ Edición de ingresos")
+            self.btn_edicion.clicked.connect(self.abrir_edicion)
+
+            self.boton_subida = QPushButton("📈 Subida de precios")
+            self.boton_subida.clicked.connect(self.abrir_dialogo_subida)
+
+            layout_registro.addWidget(self.btn_edicion)
+            layout_registro.addWidget(self.boton_subida)
+
+        grupo_registro.setLayout(layout_registro)
         layout.addWidget(grupo_registro)
 
-        # Botón para dashboard
-        layout.addSpacing(10)
-        self.boton_resumen = QPushButton("📊 Ver Resumen Diario")
-        self.boton_resumen.clicked.connect(self.abrir_dashboard)
-        layout.addWidget(self.boton_resumen)
-
-        # Grupo para tabla de vehículos activos
         self.grupo_tabla = QGroupBox("🚗 Vehículos actualmente estacionados")
         self.grupo_tabla.setVisible(False)
 
@@ -126,30 +130,33 @@ class RegistroWindow(QWidget):
         self.tabla_activos.setColumnCount(4)
         self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora Ingreso", "Minutos", "Monto Actual"])
         self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.tabla_activos.setMaximumHeight(200)
 
-        # Estilo y resize
         self.tabla_activos.horizontalHeader().setStretchLastSection(True)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-
+        self.tabla_activos.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla_activos.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla_activos.verticalHeader().setDefaultSectionSize(34)
         layout_tabla.addWidget(self.tabla_activos)
         self.grupo_tabla.setLayout(layout_tabla)
         layout.addWidget(self.grupo_tabla)
 
-        # Timer para actualizar
         self.timer_tabla = QTimer()
         self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
         self.timer_tabla.start(5000)
+
         self.actualizar_tabla_activos()
         self.actualizar_lista_patentes()
 
         self.setLayout(layout)
 
+    def volver_al_panel(self):
+        if callable(self.on_volver_panel):
+            self.on_volver_panel()
+
     def buscar_vehiculo(self):
-        """Busca el estado del vehículo por patente e indica si puede ingresar o salir."""
         patente = self.input_patente.text().strip().upper()
 
         es_valida, mensaje = self.validar_patente(patente)
@@ -164,19 +171,19 @@ class RegistroWindow(QWidget):
             self.info_label.setText("Vehículo no registrado. Se creará al ingresar.")
             self.boton_ingreso.setEnabled(True)
             self.boton_salida.setEnabled(False)
-            self.boton_espera.setEnabled(False)  # ← NO existe aún, no se permite poner en espera
+            self.boton_espera.setEnabled(False)
 
         elif estado == "dentro":
             self.info_label.setText("Vehículo actualmente en el estacionamiento.")
             self.boton_salida.setEnabled(True)
             self.boton_ingreso.setEnabled(False)
-            self.boton_espera.setEnabled(True)  # ← SOLO aquí se permite poner en espera
+            self.boton_espera.setEnabled(True)
 
         elif estado == "fuera":
             self.info_label.setText("Vehículo ya salió. Puedes registrar nuevo ingreso.")
             self.boton_ingreso.setEnabled(True)
             self.boton_salida.setEnabled(False)
-            self.boton_espera.setEnabled(False)  # ← Ya no está, no se puede poner en espera
+            self.boton_espera.setEnabled(False)
 
         else:
             self.info_label.setText("Estado desconocido.")
@@ -186,7 +193,6 @@ class RegistroWindow(QWidget):
             QMessageBox.critical(self, "Error", "Error al consultar la patente.")
 
     def registrar_ingreso(self):
-        """Registra el ingreso del vehículo."""
         patente = self.input_patente.text().strip().upper()
 
         es_valida, mensaje = self.validar_patente(patente)
@@ -204,7 +210,6 @@ class RegistroWindow(QWidget):
         self.actualizar_tabla_activos()
 
     def registrar_salida(self):
-        """Registra la salida del vehículo y muestra la tarifa aplicada."""
         patente = self.input_patente.text().strip().upper()
 
         es_valida, mensaje = self.validar_patente(patente)
@@ -212,7 +217,7 @@ class RegistroWindow(QWidget):
             QMessageBox.warning(self, "Atención", mensaje)
             return
 
-        tarifa = registrar_salida(patente, self.usuario) 
+        tarifa = registrar_salida(patente, self.usuario)
         if tarifa is not None:
             QMessageBox.information(self, "Salida registrada", f"Tarifa: ${tarifa:.0f}")
             self.actualizar_lista_patentes()
@@ -222,29 +227,20 @@ class RegistroWindow(QWidget):
         self.actualizar_tabla_activos()
 
     def reset(self):
-        """Resetea el formulario de registro."""
         self.input_patente.clear()
         self.boton_ingreso.setEnabled(False)
         self.boton_salida.setEnabled(False)
+        self.boton_espera.setEnabled(False)
         self.info_label.setText("")
 
-    def abrir_dashboard(self):
-        """Abre la ventana del dashboard."""
-        self.dashboard = DashboardWindow(self.usuario, rol="operador") 
-        self.dashboard.show()
-
     def actualizar_tabla_activos(self):
-        """Actualiza la tabla de vehículos actualmente estacionados."""
-
         datos = obtener_vehiculos_activos()
 
-        # --- Verificar si hay subida activa en este momento ---
         subida = obtener_subida_activa()
         hay_subida_activa = False
         if subida:
             try:
                 hora_actual = datetime.now()
-                # Convertir hora_inicio y hora_fin a datetime
                 h_inicio = datetime.combine(
                     hora_actual.date(),
                     datetime.strptime(str(subida["hora_inicio"]), "%H:%M:%S").time()
@@ -254,7 +250,6 @@ class RegistroWindow(QWidget):
                     datetime.strptime(str(subida["hora_fin"]), "%H:%M:%S").time()
                 )
 
-                # Si la subida cruza medianoche, sumar un día a h_fin
                 if h_fin <= h_inicio:
                     h_fin += timedelta(days=1)
 
@@ -263,10 +258,7 @@ class RegistroWindow(QWidget):
             except Exception as e:
                 print(f"[WARN] No se pudo verificar el rango de la subida: {e}")
 
-        # --- Renderizar tabla ---
-        self.tabla_activos.setUpdatesEnabled(False) 
-
-        # +1 para la fila de total
+        self.tabla_activos.setUpdatesEnabled(False)
         self.tabla_activos.clearContents()
         self.tabla_activos.setRowCount(len(datos) + 1)
 
@@ -278,7 +270,6 @@ class RegistroWindow(QWidget):
             monto = vehiculo["monto"]
             minutos = vehiculo.get("minutos", 0)
 
-            # --- Patente con icono si hay subida activa ---
             patente_mostrar = f"▲ {patente}" if hay_subida_activa else patente
 
             item_patente = QTableWidgetItem(patente_mostrar)
@@ -300,8 +291,8 @@ class RegistroWindow(QWidget):
 
             total += monto
 
-        # --- Fila de total recaudado ---
         fila_total = len(datos)
+
         item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
         item_total_label.setFlags(item_total_label.flags() ^ Qt.ItemIsEditable)
         item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -312,14 +303,12 @@ class RegistroWindow(QWidget):
         item_total_monto.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.tabla_activos.setItem(fila_total, 3, item_total_monto)
 
-        # Limpiar columnas 0 y 1 en la fila de totales
         self.tabla_activos.setItem(fila_total, 0, QTableWidgetItem(""))
         self.tabla_activos.setItem(fila_total, 1, QTableWidgetItem(""))
 
-        # Mostrar grupo solo si hay vehículos
         self.grupo_tabla.setVisible(len(datos) > 0)
 
-        self.tabla_activos.setUpdatesEnabled(True) 
+        self.tabla_activos.setUpdatesEnabled(True)
         self.tabla_activos.viewport().update()
 
     def abrir_edicion(self):
@@ -327,7 +316,6 @@ class RegistroWindow(QWidget):
         self.ventana_edicion.show()
 
     def marcar_en_espera(self):
-        """Marca el vehículo como 'en espera' si está estacionado."""
         patente = self.input_patente.text().strip().upper()
         confirm = QMessageBox.question(
             self,
@@ -346,8 +334,8 @@ class RegistroWindow(QWidget):
                 QMessageBox.critical(self, "Error", "No se pudo marcar como 'en espera'. Verifica si está dentro.")
 
     def mostrar_opciones_bano(self):
-        """Muestra opciones para registrar uso de baño con diferentes montos."""
         from PySide6.QtWidgets import QInputDialog
+        from controllers.registro_controller import registrar_uso_bano
 
         opciones = ["$300", "$400", "$500"]
         monto_str, ok = QInputDialog.getItem(
@@ -355,7 +343,6 @@ class RegistroWindow(QWidget):
         )
         if ok and monto_str:
             monto = int(monto_str.replace("$", ""))
-            from controllers.registro_controller import registrar_uso_bano
             exito = registrar_uso_bano(monto, self.usuario)
             if exito:
                 QMessageBox.information(self, "Éxito", f"Uso de baño registrado por ${monto}")
@@ -363,9 +350,6 @@ class RegistroWindow(QWidget):
                 QMessageBox.critical(self, "Error", "No se pudo registrar el uso del baño.")
 
     def reingresar_vehiculo(self):
-        """
-        Permite reingresar un vehículo que ya fue cerrado recientemente.
-        """
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado
 
         patente = self.input_patente.text().strip().upper()
@@ -375,7 +359,6 @@ class RegistroWindow(QWidget):
             QMessageBox.warning(self, "Atención", mensaje)
             return
 
-        # Buscar si tiene un ingreso reciente cerrrado
         ingresos = obtener_ingresos_editables()
         ingreso = next((i for i in ingresos if i["patente"] == patente and i["estado"] == "CERRADO"), None)
 
@@ -398,10 +381,6 @@ class RegistroWindow(QWidget):
                 QMessageBox.critical(self, "Error", "No se pudo reingresar el vehículo.")
 
     def consultar_tarifa_actual(self):
-        """
-        Muestra la tarifa acumulada actual del vehículo si está estacionado.
-        """
-
         patente = self.input_patente.text().strip().upper()
         if not patente:
             QMessageBox.warning(self, "Error", "Primero escribe una patente.")
@@ -417,7 +396,6 @@ class RegistroWindow(QWidget):
             QMessageBox.information(self, "No encontrado", "El vehículo no está actualmente en el estacionamiento.")
 
     def alternar_espera_desde_tecla(self):
-        """Alterna el estado de espera de la patente ingresada al presionar F8."""
         patente = self.input_patente.text().strip().upper()
 
         es_valida, mensaje = self.validar_patente(patente)
@@ -435,10 +413,6 @@ class RegistroWindow(QWidget):
             QMessageBox.critical(self, "Error", mensaje)
 
     def eliminar_ingreso_desde_tecla(self):
-        """
-        Elimina el ingreso activo de la patente escrita, usando F9.
-        Solo permitido para administradores.
-        """
         if self.rol != "administrador":
             QMessageBox.warning(
                 self,
@@ -453,7 +427,6 @@ class RegistroWindow(QWidget):
             QMessageBox.warning(self, "Atención", mensaje)
             return
 
-        # Confirmación
         respuesta = QMessageBox.question(
             self,
             "Confirmar eliminación",
@@ -471,7 +444,6 @@ class RegistroWindow(QWidget):
 
         if exito:
             QMessageBox.information(self, "Ingreso eliminado", msg)
-            # Actualizar autocompletado: ya no debe aparecer
             self.actualizar_lista_patentes()
             self.reset()
             self.actualizar_tabla_activos()
@@ -485,15 +457,15 @@ class RegistroWindow(QWidget):
 
             exito = crear_subida_temporal(hora_inicio, hora_fin, monto)
             if exito:
-                QMessageBox.information(self, "Éxito", f"Subida temporal registrada correctamente:\n+${monto} desde {hora_inicio} hasta {hora_fin}")
+                QMessageBox.information(
+                    self,
+                    "Éxito",
+                    f"Subida temporal registrada correctamente:\n+${monto} desde {hora_inicio} hasta {hora_fin}"
+                )
             else:
                 QMessageBox.warning(self, "Error", "No se pudo registrar la subida.")
 
     def normalizar_patente(self, texto: str):
-        """
-        Fuerza que la patente se muestre en mayúsculas.
-        """
-
         texto_mayus = texto.upper()
         if texto != texto_mayus:
             cursor_pos = self.input_patente.cursorPosition()
@@ -503,31 +475,18 @@ class RegistroWindow(QWidget):
             self.input_patente.blockSignals(False)
 
     def validar_patente(self, patente: str) -> tuple[bool, str]:
-        """
-        Valida formato básico de la patente:
-        - No vacía
-        - Longitud entre 4 y 8
-        - Solo caracteres A-Z y 0-9
-
-        Returns:
-            (es_valida, mensaje_error)
-        """
         if not patente:
             return False, "Ingresa una patente."
-        
+
         if len(patente) < 4 or len(patente) > 8:
             return False, "La patente debe tener entre 4 y 8 caracteres."
-        
+
         if not patente.isalnum():
             return False, "La patente solo puede contener letras y números."
-        
+
         return True, ""
-    
+
     def actualizar_lista_patentes(self):
-        """
-        Recarga la lista de patentes para el autocompletado
-        desde la base de datos.
-        """
         try:
             patentes = obtener_patentes_existentes()
         except Exception as e:
@@ -539,9 +498,6 @@ class RegistroWindow(QWidget):
             modelo.setStringList(patentes)
 
     def keyPressEvent(self, event):
-        """
-        Detecta teclas rápidas presionadas en la ventana de registro.
-        """
         tecla = event.key()
 
         if tecla == Qt.Key_F1:
@@ -565,4 +521,3 @@ class RegistroWindow(QWidget):
             self.consultar_tarifa_actual()
         elif tecla == Qt.Key_Return or tecla == Qt.Key_Enter:
             self.buscar_vehiculo()
-

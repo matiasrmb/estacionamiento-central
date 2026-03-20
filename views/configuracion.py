@@ -15,7 +15,7 @@ class ConfiguracionWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Configuración del Sistema")
-        self.setFixedSize(900, 600) 
+        self.setMinimumSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):
@@ -41,12 +41,15 @@ class ConfiguracionWindow(QWidget):
         self.modo_combo = QComboBox()
         self.modo_combo.addItems(["minuto", "personalizado"])
         self.modo_combo.setCurrentText(self.config.get("modo_cobro", "minuto"))
+        self.modo_combo.setMinimumHeight(38)
 
         self.minima_label = QLabel("Tarifa mínima (CLP):")
         self.minima_input = QLineEdit(self.config.get("tarifa_minima", "300"))
+        self.minima_input.setMinimumHeight(38)
 
         self.hora_label = QLabel("Tarifa por hora (CLP):")
         self.hora_input = QLineEdit(self.config.get("tarifa_hora", "1300"))
+        self.hora_input.setMinimumHeight(38)
 
         layout_general.addWidget(self.modo_label)
         layout_general.addWidget(self.modo_combo)
@@ -78,6 +81,7 @@ class ConfiguracionWindow(QWidget):
         grupo_acciones.setLayout(layout_acciones)
         layout.addWidget(grupo_acciones)
 
+        layout.addStretch()
         self.setLayout(layout)
 
     def guardar(self):

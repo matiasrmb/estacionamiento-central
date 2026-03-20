@@ -20,7 +20,7 @@ class MensualesWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Clientes Mensuales")
-        self.setFixedSize(900, 600) 
+        self.setMinimumSize(900, 600) 
         self.init_ui()
 
     def init_ui(self):
@@ -42,9 +42,11 @@ class MensualesWindow(QWidget):
 
         self.patente_input = QLineEdit()
         self.patente_input.setPlaceholderText("Ej: ABCD12")
+        self.patente_input.setMinimumHeight(38)
 
         self.btn_agregar = QPushButton("Agregar")
         self.btn_agregar.clicked.connect(self.agregar_mensual)
+        self.btn_agregar.setMinimumHeight(38)
 
         form_layout.addWidget(self.patente_input)
         form_layout.addWidget(self.btn_agregar)
@@ -61,6 +63,9 @@ class MensualesWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Tarifa Mensual
         self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Acciones
         self.tabla.setAlternatingRowColors(True)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.verticalHeader().setDefaultSectionSize(40)
 
         layout.addWidget(self.tabla)
         self.setLayout(layout)
