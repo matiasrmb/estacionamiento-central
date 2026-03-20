@@ -213,4 +213,23 @@ QScrollBar::sub-line:vertical {
 QMessageBox {
     background-color: #ffffff;
 }
+
+/* ================== TARJETAS ================== */
+
+QFrame#TarjetaResumen {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+}
+
+/* ================== LABELS DE ESTADO ================== */
+
+QLabel#EstadoInfo {
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #1e3a8a;
+    font-size: 13px;
+}
 """

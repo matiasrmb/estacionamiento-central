@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox
+    QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox,
+    QGridLayout, QFrame, QSizePolicy
 )
 from PySide6.QtCore import QDateTime, QTimer, Qt
 
@@ -12,8 +13,7 @@ from datetime import datetime
 class DashboardWindow(QWidget):
     """
     Vista de resumen diario del estacionamiento.
-    Muestra estadísticas del turno actual (desde el último cierre hasta ahora)
-    y permite realizar el cierre diario.
+    Muestra estadísticas del turno actual y permite realizar el cierre diario.
     """
 
     def __init__(self, usuario, rol, on_ir_panel=None):
@@ -27,66 +27,109 @@ class DashboardWindow(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(10)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(18)
 
-        titulo = QLabel("📊 Resumen diario")
+        # =========================================================
+        # ENCABEZADO
+        # =========================================================
+        titulo = QLabel("Resumen diario")
         titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(titulo)
 
-        periodo_texto = self.obtener_periodo_resumen()
-        self.label_periodo = QLabel(periodo_texto)
-        self.label_periodo.setAlignment(Qt.AlignCenter)
-        self.label_periodo.setStyleSheet("font-size: 13px; color: gray;")
+        self.label_periodo = QLabel(self.obtener_periodo_resumen())
+        self.label_periodo.setObjectName("SubtituloSeccion")
+        self.label_periodo.setAlignment(Qt.AlignLeft)
         layout.addWidget(self.label_periodo)
 
         self.label_hora = QLabel()
-        self.label_hora.setAlignment(Qt.AlignCenter)
+        self.label_hora.setAlignment(Qt.AlignLeft)
         layout.addWidget(self.label_hora)
 
+        self.label_usuario = QLabel(f"Usuario activo: {self.usuario} ({self.rol})")
+        self.label_usuario.setAlignment(Qt.AlignLeft)
+        layout.addWidget(self.label_usuario)
+
+        # =========================================================
+        # TARJETAS DE RESUMEN
+        # =========================================================
+        grid_resumen = QGridLayout()
+        grid_resumen.setHorizontalSpacing(14)
+        grid_resumen.setVerticalSpacing(14)
+
+        self.card_ingresos = self.crear_tarjeta("Ingresos del turno", "0", "🚗")
+        self.card_estacionados = self.crear_tarjeta("Vehículos estacionados", "0", "🚘")
+        self.card_recaudado = self.crear_tarjeta("Recaudado vehículos", "$0", "💰")
+        self.card_banos = self.crear_tarjeta("Usos de baño", "0", "🚽")
+        self.card_total = self.crear_tarjeta("Total general", "$0", "📊")
+
+        grid_resumen.addWidget(self.card_ingresos["frame"], 0, 0)
+        grid_resumen.addWidget(self.card_estacionados["frame"], 0, 1)
+        grid_resumen.addWidget(self.card_recaudado["frame"], 1, 0)
+        grid_resumen.addWidget(self.card_banos["frame"], 1, 1)
+        grid_resumen.addWidget(self.card_total["frame"], 2, 0, 1, 2)
+
+        layout.addLayout(grid_resumen)
+
+        # =========================================================
+        # ACCIONES
+        # =========================================================
+        self.boton_cierre = QPushButton("Realizar cierre diario")
+        self.boton_cierre.setMinimumHeight(42)
+        self.boton_cierre.clicked.connect(self.confirmar_cierre_diario)
+        layout.addWidget(self.boton_cierre)
+
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+        # Timers
         self.timer = QTimer()
         self.timer.timeout.connect(self.actualizar_hora)
         self.timer.start(1000)
         self.actualizar_hora()
 
-        label_usuario = QLabel(f"🧍 Usuario: {self.usuario} ({self.rol})")
-        label_usuario.setAlignment(Qt.AlignCenter)
-        layout.addWidget(label_usuario)
-
-        self.label_ingresos = QLabel()
-        self.label_estacionados = QLabel()
-        self.label_recaudado = QLabel()
-        self.label_banos = QLabel()
-        self.label_total_general = QLabel()
-
-        for label in [
-            self.label_ingresos,
-            self.label_estacionados,
-            self.label_recaudado,
-            self.label_banos,
-            self.label_total_general
-        ]:
-            label.setAlignment(Qt.AlignCenter)
-            label.setStyleSheet("font-weight: bold;")
-            layout.addWidget(label)
-
-        self.actualizar_resumen()
-
-        self.boton_cierre = QPushButton("📦 Realizar Cierre Diario")
-        self.boton_cierre.setMinimumHeight(35)
-        self.boton_cierre.clicked.connect(self.confirmar_cierre_diario)
-        layout.addWidget(self.boton_cierre)
-
-        self.setLayout(layout)
-
         self.timer_resumen = QTimer()
         self.timer_resumen.timeout.connect(self.actualizar_resumen)
         self.timer_resumen.start(1000)
 
+        self.actualizar_resumen()
+
+    def crear_tarjeta(self, titulo, valor, icono):
+        frame = QFrame()
+        frame.setObjectName("TarjetaResumen")
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        frame.setMinimumHeight(120)
+
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
+
+        label_icono = QLabel(icono)
+        label_icono.setAlignment(Qt.AlignLeft)
+        label_icono.setStyleSheet("font-size: 24px;")
+        layout.addWidget(label_icono)
+
+        label_titulo = QLabel(titulo)
+        label_titulo.setStyleSheet("font-size: 13px; color: #6b7280;")
+        layout.addWidget(label_titulo)
+
+        label_valor = QLabel(valor)
+        label_valor.setStyleSheet("font-size: 24px; font-weight: 700; color: #111827;")
+        layout.addWidget(label_valor)
+
+        layout.addStretch()
+
+        return {
+            "frame": frame,
+            "titulo": label_titulo,
+            "valor": label_valor
+        }
+
     def actualizar_hora(self):
         hora_actual = QDateTime.currentDateTime().toString("hh:mm:ss")
-        self.label_hora.setText(f"🕒 Hora actual: {hora_actual}")
+        self.label_hora.setText(f"Hora actual: {hora_actual}")
 
     def obtener_periodo_resumen(self):
         conn = get_connection()
@@ -102,7 +145,7 @@ class DashboardWindow(QWidget):
             fecha_inicio = "Inicio del sistema"
 
         fecha_fin = datetime.now().strftime("%d/%m/%Y %H:%M")
-        return f"📅 Período: {fecha_inicio} → {fecha_fin}"
+        return f"Período del turno: {fecha_inicio} → {fecha_fin}"
 
     def actualizar_resumen(self):
         if not self.actualizacion_habilitada:
@@ -112,11 +155,11 @@ class DashboardWindow(QWidget):
         resumen_banos = obtener_resumen_banos()
         recaudacion_total = resumen["recaudado"] + resumen_banos["total"]
 
-        self.label_ingresos.setText(f"🚗 Ingresos: {resumen['total_ingresos']}")
-        self.label_estacionados.setText(f"🚘 Estacionados actualmente: {resumen['estacionados']}")
-        self.label_recaudado.setText(f"💰 Recaudado vehículos: ${resumen['recaudado']:.0f}")
-        self.label_banos.setText(f"🚽 Baños: {resumen_banos['cantidad']} usos, ${resumen_banos['total']:.0f}")
-        self.label_total_general.setText(f"📊 Total general: ${recaudacion_total:.0f}")
+        self.card_ingresos["valor"].setText(str(resumen["total_ingresos"]))
+        self.card_estacionados["valor"].setText(str(resumen["estacionados"]))
+        self.card_recaudado["valor"].setText(f"${resumen['recaudado']:.0f}")
+        self.card_banos["valor"].setText(f"{resumen_banos['cantidad']} | ${resumen_banos['total']:.0f}")
+        self.card_total["valor"].setText(f"${recaudacion_total:.0f}")
 
         self.label_periodo.setText(self.obtener_periodo_resumen())
 
@@ -135,11 +178,11 @@ class DashboardWindow(QWidget):
             if exito:
                 QMessageBox.information(self, "Éxito", mensaje)
 
-                self.label_ingresos.setText("🚗 Ingresos: 0")
-                self.label_estacionados.setText("🚘 Estacionados actualmente: 0")
-                self.label_recaudado.setText("💰 Recaudado vehículos: $0")
-                self.label_banos.setText("🚽 Baños: 0 usos, $0")
-                self.label_total_general.setText("📊 Total general: $0")
+                self.card_ingresos["valor"].setText("0")
+                self.card_estacionados["valor"].setText("0")
+                self.card_recaudado["valor"].setText("$0")
+                self.card_banos["valor"].setText("0 | $0")
+                self.card_total["valor"].setText("$0")
                 self.label_periodo.setText(self.obtener_periodo_resumen())
                 self.actualizacion_habilitada = False
             else:
