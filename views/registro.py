@@ -93,7 +93,8 @@ class RegistroWindow(QWidget):
         self.boton_refrescar_patentes.clicked.connect(self.actualizar_lista_patentes)
 
         self.info_label = QLabel("Escribe una patente y presiona Enter o el botón de búsqueda.")
-        self.info_label.setObjectName("EstadoInfo")
+        self.info_label.setObjectName("EstadoInfoNeutro")
+        self.actualizar_estilo_info("neutro")
         self.info_label.setWordWrap(True)
 
         layout_busqueda.addWidget(self.label_patente)
@@ -164,11 +165,14 @@ class RegistroWindow(QWidget):
 
         self.label_atajos = QLabel(
             "Atajos rápidos:\n"
-            "F1: ingresar/salir\n"
-            "F2: limpiar\n"
-            "F6: baño\n"
-            "F7: reingresar\n"
-            "F8: espera\n"
+            "F1: ingresar / salir\n"
+            "F2: limpiar formulario\n"
+            "F3: enfocar patente\n"
+            "Enter: buscar patente\n"
+            "Esc: limpiar y volver al inicio\n"
+            "F6: registrar baño\n"
+            "F7: reingresar vehículo\n"
+            "F8: alternar espera\n"
             "F9: eliminar ingreso\n"
             "F10: consultar tarifa"
         )
@@ -232,13 +236,18 @@ class RegistroWindow(QWidget):
 
         self.timer_tabla = QTimer()
         self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
+        self.timer_tabla.timeout.connect(self.actualizar_estado_subida) 
         self.timer_tabla.start(5000)
 
         self.actualizar_tabla_activos()
         self.actualizar_lista_patentes()
         self.actualizar_estado_subida()
 
+        self.input_patente.setFocus()
+
         self.setLayout(layout)
+
+        QTimer.singleShot(0, self.input_patente.setFocus)
 
     def crear_tarjeta_resumen(self, titulo, valor):
         frame = QFrame()
@@ -263,6 +272,7 @@ class RegistroWindow(QWidget):
         return frame
 
     def volver_al_panel(self):
+        self.reset()
         if callable(self.on_volver_panel):
             self.on_volver_panel()
 
@@ -271,42 +281,53 @@ class RegistroWindow(QWidget):
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
+            self.actualizar_estilo_info("warn")
+            self.info_label.setText(mensaje)
             QMessageBox.warning(self, "Atención", mensaje)
+            self.enfocar_patente()
             return
 
         estado = buscar_estado_vehiculo(patente)
 
         if estado == "no_registrado":
+            self.actualizar_estilo_info("ok")
             self.info_label.setText("Vehículo no registrado. Puedes crear su ingreso.")
             self.boton_ingreso.setEnabled(True)
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
 
         elif estado == "dentro":
+            self.actualizar_estilo_info("warn")
             self.info_label.setText("Vehículo actualmente dentro del estacionamiento. Puedes registrar salida o marcar en espera.")
             self.boton_salida.setEnabled(True)
             self.boton_ingreso.setEnabled(False)
             self.boton_espera.setEnabled(True)
 
         elif estado == "fuera":
+            self.actualizar_estilo_info("neutro")
             self.info_label.setText("Vehículo fuera del estacionamiento. Puedes registrar un nuevo ingreso.")
             self.boton_ingreso.setEnabled(True)
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
 
         else:
+            self.actualizar_estilo_info("error")
             self.info_label.setText("No fue posible determinar el estado del vehículo.")
             self.boton_ingreso.setEnabled(False)
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
             QMessageBox.critical(self, "Error", "Error al consultar la patente.")
+            self.enfocar_patente()
 
     def registrar_ingreso(self):
         patente = self.input_patente.text().strip().upper()
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
+            self.actualizar_estilo_info("warn")
+            self.info_label.setText(mensaje)
             QMessageBox.warning(self, "Atención", mensaje)
+            self.enfocar_patente()
             return
 
         exito = registrar_ingreso(patente)
@@ -315,7 +336,11 @@ class RegistroWindow(QWidget):
             self.actualizar_lista_patentes()
             self.reset()
         else:
+            self.actualizar_estilo_info("error")
+            self.info_label.setText("No se pudo registrar el ingreso.")
             QMessageBox.critical(self, "Error", "No se pudo registrar el ingreso.")
+            self.enfocar_patente()
+
         self.actualizar_tabla_activos()
 
     def registrar_salida(self):
@@ -323,7 +348,10 @@ class RegistroWindow(QWidget):
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
+            self.actualizar_estilo_info("warn")
+            self.info_label.setText(mensaje)
             QMessageBox.warning(self, "Atención", mensaje)
+            self.enfocar_patente()
             return
 
         tarifa = registrar_salida(patente, self.usuario)
@@ -332,7 +360,11 @@ class RegistroWindow(QWidget):
             self.actualizar_lista_patentes()
             self.reset()
         else:
+            self.actualizar_estilo_info("error")
+            self.info_label.setText("No se pudo registrar la salida.")
             QMessageBox.critical(self, "Error", "No se pudo registrar la salida.")
+            self.enfocar_patente()
+
         self.actualizar_tabla_activos()
 
     def reset(self):
@@ -340,7 +372,9 @@ class RegistroWindow(QWidget):
         self.boton_ingreso.setEnabled(False)
         self.boton_salida.setEnabled(False)
         self.boton_espera.setEnabled(False)
+        self.actualizar_estilo_info("neutro")
         self.info_label.setText("Escribe una patente y presiona Enter o el botón de búsqueda.")
+        self.enfocar_patente()
 
     def actualizar_tabla_activos(self):
         datos = obtener_vehiculos_activos()
@@ -425,17 +459,93 @@ class RegistroWindow(QWidget):
         self.tabla_activos.viewport().update()
 
     def actualizar_estado_subida(self):
+        """
+        Actualiza el label de subida temporal mostrando si la subida activa
+        en base de datos está vigente en este momento o solo configurada.
+        """
         subida = obtener_subida_activa()
-        if subida:
-            try:
-                self.label_subida.setText(
-                    f"Subida temporal activa/configurada: +${subida['monto_extra']} "
-                    f"desde {subida['hora_inicio']} hasta {subida['hora_fin']}"
-                )
-            except Exception:
-                self.label_subida.setText("Subida temporal: activa")
-        else:
+
+        if not subida:
+            self.label_subida.setObjectName("EstadoSubidaInactiva")
             self.label_subida.setText("Subida temporal: no activa")
+            self.label_subida.style().unpolish(self.label_subida)
+            self.label_subida.style().polish(self.label_subida)
+            self.label_subida.update()
+            return
+
+        try:
+            ahora = datetime.now()
+
+            def normalizar_hora(valor):
+                """
+                Convierte distintos formatos de hora a objeto time.
+                Soporta:
+                - datetime.time
+                - str 'HH:MM'
+                - str 'HH:MM:SS'
+                """
+                if hasattr(valor, "hour") and hasattr(valor, "minute"):
+                    return valor
+
+                valor_str = str(valor).strip()
+
+                try:
+                    return datetime.strptime(valor_str, "%H:%M:%S").time()
+                except ValueError:
+                    return datetime.strptime(valor_str, "%H:%M").time()
+
+            hora_inicio_time = normalizar_hora(subida["hora_inicio"])
+            hora_fin_time = normalizar_hora(subida["hora_fin"])
+
+            hora_inicio = datetime.combine(ahora.date(), hora_inicio_time)
+            hora_fin = datetime.combine(ahora.date(), hora_fin_time)
+
+            # Caso normal: mismo día
+            if hora_fin > hora_inicio:
+                activa_ahora = hora_inicio <= ahora <= hora_fin
+
+            # Caso cruza medianoche
+            else:
+                fin_dia_siguiente = hora_fin + timedelta(days=1)
+
+                # tramo nocturno: desde hora_inicio hasta medianoche, o desde 00:00 hasta hora_fin
+                activa_ahora = (
+                    ahora >= hora_inicio or
+                    ahora <= datetime.combine(ahora.date(), hora_fin_time)
+                )
+
+                # si estamos después de medianoche y antes de hora_fin,
+                # reconstruimos rango lógico solo para mostrar mejor
+                if ahora.time() <= hora_fin_time:
+                    hora_inicio = hora_inicio - timedelta(days=1)
+                    hora_fin = fin_dia_siguiente
+                else:
+                    hora_fin = fin_dia_siguiente
+
+            monto = subida.get("monto_adicional", 0)
+
+            texto_inicio = hora_inicio_time.strftime("%H:%M")
+            texto_fin = hora_fin_time.strftime("%H:%M")
+
+            if activa_ahora:
+                self.label_subida.setObjectName("EstadoSubidaActiva")
+                self.label_subida.setText(
+                    f"Subida temporal activa: +${monto} desde {texto_inicio} hasta {texto_fin}"
+                )
+            else:
+                self.label_subida.setObjectName("EstadoSubidaInactiva")
+                self.label_subida.setText(
+                    f"Subida configurada, pero no activa ahora: +${monto} ({texto_inicio} - {texto_fin})"
+                )
+
+        except Exception as e:
+            print(f"[WARN] No se pudo actualizar estado de subida: {e}")
+            self.label_subida.setObjectName("EstadoSubidaInactiva")
+            self.label_subida.setText("Subida temporal: no activa")
+
+        self.label_subida.style().unpolish(self.label_subida)
+        self.label_subida.style().polish(self.label_subida)
+        self.label_subida.update()
 
     def abrir_edicion(self):
         self.ventana_edicion = EdicionIngresosWindow(self.usuario)
@@ -457,7 +567,10 @@ class RegistroWindow(QWidget):
                 self.reset()
                 self.actualizar_tabla_activos()
             else:
+                self.actualizar_estilo_info("error")
+                self.info_label.setText("No se pudo marcar como 'en espera'. Verifica si el vehículo está dentro.")
                 QMessageBox.critical(self, "Error", "No se pudo marcar como 'en espera'. Verifica si está dentro.")
+                self.enfocar_patente()
 
     def mostrar_opciones_bano(self):
         from PySide6.QtWidgets import QInputDialog
@@ -472,6 +585,7 @@ class RegistroWindow(QWidget):
             exito = registrar_uso_bano(monto, self.usuario)
             if exito:
                 QMessageBox.information(self, "Éxito", f"Uso de baño registrado por ${monto}")
+                self.enfocar_patente()
             else:
                 QMessageBox.critical(self, "Error", "No se pudo registrar el uso del baño.")
 
@@ -590,6 +704,7 @@ class RegistroWindow(QWidget):
                 )
                 self.actualizar_estado_subida()
                 self.actualizar_tabla_activos()
+                self.enfocar_patente()
             else:
                 QMessageBox.warning(self, "Error", "No se pudo registrar la subida.")
 
@@ -613,6 +728,32 @@ class RegistroWindow(QWidget):
             return False, "La patente solo puede contener letras y números."
 
         return True, ""
+    
+    def actualizar_estilo_info(self, tipo: str):
+        """
+        Cambia el estilo visual del label informativo según el estado.
+        """
+        mapa = {
+            "neutro": "EstadoInfoNeutro",
+            "ok": "EstadoInfoOk",
+            "warn": "EstadoInfoWarn",
+            "error": "EstadoInfoError",
+        }
+
+        self.info_label.setObjectName(mapa.get(tipo, "EstadoInfoNeutro"))
+        self.info_label.style().unpolish(self.info_label)
+        self.info_label.style().polish(self.info_label)
+        self.info_label.update()
+
+    def enfocar_patente(self, limpiar=False):
+        """
+        Devuelve el foco al campo patente. Opcionalmente limpia el contenido.
+        """
+        if limpiar:
+            self.input_patente.clear()
+
+        self.input_patente.setFocus()
+        self.input_patente.selectAll()
 
     def actualizar_lista_patentes(self):
         try:
@@ -635,17 +776,33 @@ class RegistroWindow(QWidget):
                 self.registrar_salida()
             else:
                 QMessageBox.information(self, "Sin acción", "No hay acción disponible para F1.")
+
         elif tecla == Qt.Key_F2:
             self.reset()
+
+        elif tecla == Qt.Key_F3:
+            self.enfocar_patente()
+
         elif tecla == Qt.Key_F6:
             self.mostrar_opciones_bano()
+
         elif tecla == Qt.Key_F7:
             self.reingresar_vehiculo()
+
         elif tecla == Qt.Key_F8:
             self.alternar_espera_desde_tecla()
+
         elif tecla == Qt.Key_F9:
             self.eliminar_ingreso_desde_tecla()
+
         elif tecla == Qt.Key_F10:
             self.consultar_tarifa_actual()
+
+        elif tecla == Qt.Key_Escape:
+            self.reset()
+
         elif tecla == Qt.Key_Return or tecla == Qt.Key_Enter:
             self.buscar_vehiculo()
+
+        else:
+            super().keyPressEvent(event)

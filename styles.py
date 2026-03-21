@@ -232,4 +232,60 @@ QLabel#EstadoInfo {
     color: #1e3a8a;
     font-size: 13px;
 }
+/* ================== ESTADOS OPERATIVOS ================== */
+
+QLabel#EstadoInfoNeutro {
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #1e3a8a;
+    font-size: 13px;
+}
+
+QLabel#EstadoInfoOk {
+    background-color: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #065f46;
+    font-size: 13px;
+}
+
+QLabel#EstadoInfoWarn {
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #92400e;
+    font-size: 13px;
+}
+
+QLabel#EstadoInfoError {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #991b1b;
+    font-size: 13px;
+}
+
+QLabel#EstadoSubidaActiva {
+    background-color: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #9a3412;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#EstadoSubidaInactiva {
+    background-color: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #4b5563;
+    font-size: 13px;
+}
 """
