@@ -16,11 +16,13 @@ class DashboardWindow(QWidget):
     Muestra estadísticas del turno actual y permite realizar el cierre diario.
     """
 
-    def __init__(self, usuario, rol, on_ir_panel=None):
+    def __init__(self, usuario, rol, on_ir_panel=None, on_ir_registro=None, on_ir_reportes=None):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
         self.on_ir_panel = on_ir_panel
+        self.on_ir_registro = on_ir_registro
+        self.on_ir_reportes = on_ir_reportes
 
         self.actualizacion_habilitada = True
         self.init_ui()
@@ -79,6 +81,31 @@ class DashboardWindow(QWidget):
         self.boton_cierre.setMinimumHeight(42)
         self.boton_cierre.clicked.connect(self.confirmar_cierre_diario)
         layout.addWidget(self.boton_cierre)
+
+        # =========================================================
+        # ACCESOS RÁPIDOS
+        # =========================================================
+        accesos_titulo = QLabel("Accesos rápidos")
+        accesos_titulo.setObjectName("TituloPanelOperativo")
+        layout.addWidget(accesos_titulo)
+
+        accesos_layout = QGridLayout()
+        accesos_layout.setHorizontalSpacing(12)
+        accesos_layout.setVerticalSpacing(12)
+
+        self.btn_ir_registro = QPushButton("Ir a Registro")
+        self.btn_ir_registro.setMinimumHeight(40)
+        self.btn_ir_registro.clicked.connect(self.on_ir_registro)
+
+        accesos_layout.addWidget(self.btn_ir_registro, 0, 0)
+
+        if self.rol == "administrador":
+            self.btn_ir_reportes = QPushButton("Ir a Reportes")
+            self.btn_ir_reportes.setMinimumHeight(40)
+            self.btn_ir_reportes.clicked.connect(self.on_ir_reportes)
+            accesos_layout.addWidget(self.btn_ir_reportes, 0, 1)
+
+        layout.addLayout(accesos_layout)
 
         layout.addStretch()
 

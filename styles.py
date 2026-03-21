@@ -309,4 +309,52 @@ QLabel#LeyendaTabla {
     font-size: 12px;
     padding-top: 4px;
 }
+/* ================== PANEL OPERATIVO ================== */
+
+QFrame#PanelOperativo {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+}
+
+QFrame#PanelOperativo QLabel {
+    color: #111827;
+    background-color: transparent;
+}
+
+QFrame#PanelOperativo QLabel#TituloPanelOperativo {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+}
+
+QFrame#PanelOperativo QLabel#EstadoOperativoOk {
+    background-color: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #065f46;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QFrame#PanelOperativo QLabel#EstadoOperativoWarn {
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QFrame#PanelOperativo QLabel#EstadoOperativoNeutro {
+    background-color: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #4b5563;
+    font-size: 12px;
+    font-weight: 600;
+}
 """
