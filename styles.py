@@ -288,4 +288,25 @@ QLabel#EstadoSubidaInactiva {
     color: #4b5563;
     font-size: 13px;
 }
+/* ================== TABLA DE ACTIVOS ================== */
+
+QTableWidget#TablaActivos {
+    background-color: #ffffff;
+    alternate-background-color: #f8fafc;
+    gridline-color: #e5e7eb;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    selection-background-color: #dbeafe;
+    selection-color: #111827;
+}
+
+QTableWidget#TablaActivos::item {
+    padding: 8px 10px;
+}
+
+QLabel#LeyendaTabla {
+    color: #6b7280;
+    font-size: 12px;
+    padding-top: 4px;
+}
 """

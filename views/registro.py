@@ -217,6 +217,7 @@ class RegistroWindow(QWidget):
         layout_tabla.setContentsMargins(10, 20, 10, 20)
 
         self.tabla_activos = QTableWidget()
+        self.tabla_activos.setObjectName("TablaActivos")
         self.tabla_activos.setColumnCount(4)
         self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora ingreso", "Minutos", "Monto actual"])
         self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -230,7 +231,12 @@ class RegistroWindow(QWidget):
         self.tabla_activos.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
+        self.tabla_activos.cellDoubleClicked.connect(self.cargar_patente_desde_tabla)
+
         layout_tabla.addWidget(self.tabla_activos)
+        self.label_leyenda_tabla = QLabel("▲ indica que existe una subida temporal vigente para los vehículos mostrados.")
+        self.label_leyenda_tabla.setObjectName("LeyendaTabla")
+        layout_tabla.addWidget(self.label_leyenda_tabla)
         self.grupo_tabla.setLayout(layout_tabla)
         layout.addWidget(self.grupo_tabla)
 
@@ -378,29 +384,9 @@ class RegistroWindow(QWidget):
 
     def actualizar_tabla_activos(self):
         datos = obtener_vehiculos_activos()
+        hay_subida_activa = self.subida_vigente_ahora()
 
-        subida = obtener_subida_activa()
-        hay_subida_activa = False
-        if subida:
-            try:
-                hora_actual = datetime.now()
-                h_inicio = datetime.combine(
-                    hora_actual.date(),
-                    datetime.strptime(str(subida["hora_inicio"]), "%H:%M:%S").time()
-                )
-                h_fin = datetime.combine(
-                    hora_actual.date(),
-                    datetime.strptime(str(subida["hora_fin"]), "%H:%M:%S").time()
-                )
-
-                if h_fin <= h_inicio:
-                    h_fin += timedelta(days=1)
-
-                if h_inicio <= hora_actual <= h_fin:
-                    hay_subida_activa = True
-            except Exception as e:
-                print(f"[WARN] No se pudo verificar el rango de la subida: {e}")
-
+        self.tabla_activos.setSortingEnabled(False)
         self.tabla_activos.setUpdatesEnabled(False)
         self.tabla_activos.clearContents()
         self.tabla_activos.setRowCount(len(datos) + 1)
@@ -417,10 +403,12 @@ class RegistroWindow(QWidget):
 
             item_patente = QTableWidgetItem(patente_mostrar)
             item_patente.setFlags(item_patente.flags() ^ Qt.ItemIsEditable)
+            item_patente.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 0, item_patente)
 
-            item_hora = QTableWidgetItem(hora)
+            item_hora = QTableWidgetItem(str(hora))
             item_hora.setFlags(item_hora.flags() ^ Qt.ItemIsEditable)
+            item_hora.setTextAlignment(Qt.AlignCenter)
             self.tabla_activos.setItem(i, 1, item_hora)
 
             item_minutos = QTableWidgetItem(f"{minutos} min")
@@ -433,24 +421,36 @@ class RegistroWindow(QWidget):
             item_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 3, item_monto)
 
+            if hay_subida_activa:
+                for item in (item_patente, item_hora, item_minutos, item_monto):
+                    item.setBackground(Qt.yellow)
+
             total += monto
 
         fila_total = len(datos)
 
+        item_vacio_0 = QTableWidgetItem("")
+        item_vacio_1 = QTableWidgetItem("")
+        item_vacio_0.setFlags(item_vacio_0.flags() ^ Qt.ItemIsEditable)
+        item_vacio_1.setFlags(item_vacio_1.flags() ^ Qt.ItemIsEditable)
+
         item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
         item_total_label.setFlags(item_total_label.flags() ^ Qt.ItemIsEditable)
         item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.tabla_activos.setItem(fila_total, 2, item_total_label)
 
         item_total_monto = QTableWidgetItem(f"${total:.0f}")
         item_total_monto.setFlags(item_total_monto.flags() ^ Qt.ItemIsEditable)
         item_total_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        self.tabla_activos.setItem(fila_total, 0, item_vacio_0)
+        self.tabla_activos.setItem(fila_total, 1, item_vacio_1)
+        self.tabla_activos.setItem(fila_total, 2, item_total_label)
         self.tabla_activos.setItem(fila_total, 3, item_total_monto)
 
-        self.tabla_activos.setItem(fila_total, 0, QTableWidgetItem(""))
-        self.tabla_activos.setItem(fila_total, 1, QTableWidgetItem(""))
+        self.aplicar_estilo_fila_total(fila_total)
 
         self.grupo_tabla.setVisible(len(datos) > 0)
+        self.label_leyenda_tabla.setVisible(len(datos) > 0 and hay_subida_activa)
 
         self.card_estacionados.label_valor.setText(str(len(datos)))
         self.card_total.label_valor.setText(f"${total:.0f}")
@@ -765,6 +765,75 @@ class RegistroWindow(QWidget):
         modelo = self.completer_patentes.model()
         if modelo is not None:
             modelo.setStringList(patentes)
+
+    def normalizar_hora_tabla(self, valor):
+        """
+        Convierte distintos formatos de hora a objeto time.
+        """
+        if hasattr(valor, "hour") and hasattr(valor, "minute"):
+            return valor
+
+        valor_str = str(valor).strip()
+
+        try:
+            return datetime.strptime(valor_str, "%H:%M:%S").time()
+        except ValueError:
+            return datetime.strptime(valor_str, "%H:%M").time()
+
+    def subida_vigente_ahora(self):
+        """
+        Retorna True si la subida temporal activa en BD está vigente en este momento.
+        """
+        subida = obtener_subida_activa()
+        if not subida:
+            return False
+
+        try:
+            ahora = datetime.now()
+
+            hora_inicio_time = self.normalizar_hora_tabla(subida["hora_inicio"])
+            hora_fin_time = self.normalizar_hora_tabla(subida["hora_fin"])
+
+            hora_inicio = datetime.combine(ahora.date(), hora_inicio_time)
+            hora_fin = datetime.combine(ahora.date(), hora_fin_time)
+
+            if hora_fin > hora_inicio:
+                return hora_inicio <= ahora <= hora_fin
+
+            return ahora >= hora_inicio or ahora.time() <= hora_fin_time
+
+        except Exception as e:
+            print(f"[WARN] No se pudo evaluar subida vigente: {e}")
+            return False
+
+    def aplicar_estilo_fila_total(self, fila_total):
+        """
+        Aplica estilo visual a la fila de total recaudado.
+        """
+        for col in range(self.tabla_activos.columnCount()):
+            item = self.tabla_activos.item(fila_total, col)
+            if item:
+                fuente = item.font()
+                fuente.setBold(True)
+                item.setFont(fuente)
+                item.setBackground(self.palette().alternateBase())
+
+    def cargar_patente_desde_tabla(self, fila, columna):
+        """
+        Carga la patente de una fila seleccionada al campo de búsqueda.
+        Ignora la fila de total.
+        """
+        item_patente = self.tabla_activos.item(fila, 0)
+        if not item_patente:
+            return
+
+        patente = item_patente.text().replace("▲ ", "").strip()
+        if not patente:
+            return
+
+        self.input_patente.setText(patente)
+        self.input_patente.setFocus()
+        self.buscar_vehiculo()
 
     def keyPressEvent(self, event):
         tecla = event.key()
