@@ -22,11 +22,12 @@ class RegistroWindow(QWidget):
     Vista principal para el registro de ingresos y salidas de vehículos.
     """
 
-    def __init__(self, usuario, rol="operador", on_volver_panel=None):
+    def __init__(self, usuario, rol="operador", on_volver_panel=None, on_ir_edicion=None):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
         self.on_volver_panel = on_volver_panel
+        self.on_ir_edicion = on_ir_edicion
         self.setMinimumSize(1000, 650)
         self.init_ui()
 
@@ -548,8 +549,8 @@ class RegistroWindow(QWidget):
         self.label_subida.update()
 
     def abrir_edicion(self):
-        self.ventana_edicion = EdicionIngresosWindow(self.usuario)
-        self.ventana_edicion.show()
+        if callable(self.on_ir_edicion):
+            self.on_ir_edicion()
 
     def marcar_en_espera(self):
         patente = self.input_patente.text().strip().upper()

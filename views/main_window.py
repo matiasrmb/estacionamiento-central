@@ -13,6 +13,7 @@ from views.tarifas_personalizadas import TarifasPersonalizadasWindow
 from views.usuarios import UsuariosWindow
 from views.asistencias import AsistenciasWindow
 from views.dashboard import DashboardWindow
+from views.admin_edicion import EdicionIngresosWindow
 from controllers.login_controller import registrar_asistencia_salida
 
 
@@ -68,6 +69,7 @@ class MainWindow(QWidget):
         self.btn_tarifas = QPushButton("📈 Tarifas personalizadas")
         self.btn_usuarios = QPushButton("🔐 Gestión de usuarios")
         self.btn_asistencias = QPushButton("🕒 Asistencias")
+        self.btn_edicion = QPushButton("✏️ Edición de ingresos")
         self.btn_cerrar_sesion = QPushButton("🔙 Cerrar sesión")
 
         botones_sidebar = [
@@ -81,6 +83,7 @@ class MainWindow(QWidget):
                 self.btn_mensuales,
                 self.btn_config,
                 self.btn_tarifas,
+                self.btn_edicion,
                 self.btn_usuarios,
                 self.btn_asistencias,
             ])
@@ -132,13 +135,18 @@ class MainWindow(QWidget):
         self.registro_view = RegistroWindow(
             self.usuario,
             self.rol,
-            on_volver_panel=self.mostrar_dashboard
+            on_volver_panel=self.mostrar_dashboard,
+            on_ir_edicion=self.mostrar_edicion
         )
 
         self.reportes_view = ReportesWindow()
         self.mensuales_view = MensualesWindow()
         self.config_view = ConfiguracionWindow()
         self.tarifas_view = TarifasPersonalizadasWindow()
+        self.edicion_view = EdicionIngresosWindow(
+            self.usuario,
+            on_volver_panel=self.mostrar_dashboard
+        )
         self.usuarios_view = UsuariosWindow()
         self.asistencias_view = AsistenciasWindow()
 
@@ -148,6 +156,7 @@ class MainWindow(QWidget):
         self.stack.addWidget(self.mensuales_view)
         self.stack.addWidget(self.config_view)
         self.stack.addWidget(self.tarifas_view)
+        self.stack.addWidget(self.edicion_view)
         self.stack.addWidget(self.usuarios_view)
         self.stack.addWidget(self.asistencias_view)
 
@@ -162,6 +171,7 @@ class MainWindow(QWidget):
             self.btn_mensuales.clicked.connect(self.mostrar_mensuales)
             self.btn_config.clicked.connect(self.mostrar_configuracion)
             self.btn_tarifas.clicked.connect(self.mostrar_tarifas)
+            self.btn_edicion.clicked.connect(self.mostrar_edicion)
             self.btn_usuarios.clicked.connect(self.mostrar_usuarios)
             self.btn_asistencias.clicked.connect(self.mostrar_asistencias)
 
@@ -198,6 +208,11 @@ class MainWindow(QWidget):
     def mostrar_tarifas(self):
         self.label_modulo.setText("Tarifas personalizadas")
         self.stack.setCurrentWidget(self.tarifas_view)
+
+    def mostrar_edicion(self):
+        self.label_modulo.setText("Edición de ingresos")
+        self.edicion_view.cargar_datos()
+        self.stack.setCurrentWidget(self.edicion_view)
 
     def mostrar_usuarios(self):
         self.label_modulo.setText("Gestión de usuarios")
