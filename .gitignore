@@ -12,5 +12,12 @@ asistencias/
 *.sqlite 
 dist/ 
 build/
+venv/
+.venv/
 config.ini
 crear_usuario.py
+EstacionamientoCentral.spec
+test_cierres_mensuales.py
+test_tarifas_con_subida.py
+test_tarifas_sin_subida.py
+schema.sql
