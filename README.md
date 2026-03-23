@@ -1,21 +1,36 @@
-
 # Estacionamiento Central
 
-**Estacionamiento Central** es una aplicación de escritorio para Windows que permite gestionar de forma eficiente un estacionamiento con entradas/salidas de vehículos, cobros automáticos, generación de tickets, reportes y cierres diarios. Está diseñada para equipos con recursos limitados y es compatible con impresoras térmicas Bluetooth de 58mm.
+**Estacionamiento Central** es una aplicación de escritorio para Windows orientada a la gestión eficiente de estacionamientos vehiculares. Permite registrar ingresos y salidas, calcular tarifas automáticamente, generar tickets, emitir reportes y realizar cierres operacionales.
+
+El sistema está optimizado para funcionar en equipos de bajos recursos y es compatible con impresoras térmicas de 58mm.
 
 ---
 
 ## Descripción
 
-Este software fue desarrollado como parte del proyecto de título técnico en análisis y programación computacional de IACC. El objetivo es modernizar la gestión de estacionamientos optimizando el registro de vehículos, cálculo de tarifas y control administrativo, incluyendo:
+Este software fue desarrollado como parte del proyecto de título de la carrera **Técnico de Nivel Superior en Análisis y Programación Computacional** del Instituto Profesional IACC.
 
-- Registro de ingresos y salidas
-- Cálculo automático de tarifas por minuto, tramo o mensualidad
-- Emisión de tickets térmicos
-- Generación de reportes filtrables en PDF
-- Control de usuarios (operador, administrador)
-- Asistencias de personal
-- Cierres diarios y mensuales
+Su objetivo es modernizar la operación de estacionamientos mediante la automatización de procesos críticos, tales como:
+
+- Registro de ingresos y salidas de vehículos
+- Cálculo automático de tarifas (por minuto, tramos o mensualidad)
+- Emisión de tickets en formato PDF
+- Generación de reportes filtrables
+- Control de usuarios con roles (administrador / operador)
+- Registro de asistencias de personal
+- Gestión de cierres diarios y mensuales
+
+---
+
+## Características Principales
+
+- Interfaz gráfica intuitiva (GUI)
+- Sistema multiusuario con control de roles
+- Generación automática de tickets térmicos
+- Reportes exportables a PDF
+- Configuración flexible de tarifas
+- Compatibilidad con impresoras térmicas
+- Funcionamiento completamente local (offline)
 
 ---
 
@@ -24,8 +39,8 @@ Este software fue desarrollado como parte del proyecto de título técnico en an
 - **Lenguaje principal**: Python 3.11+
 - **Interfaz gráfica**: PySide6 (Qt para Python)
 - **Base de datos**: MySQL
-- **ORM/Conexión**: `mysql-connector-python`
-- **Estilo PDF**: FPDF
+- **Conexión a BD**: `mysql-connector-python`
+- **Generación de PDF**: FPDF
 - **Estilos visuales**: QSS (Qt Style Sheets)
 - **Control de versiones**: Git & GitHub
 
@@ -33,191 +48,163 @@ Este software fue desarrollado como parte del proyecto de título técnico en an
 
 ## Requisitos del Sistema
 
-- Sistema Operativo: Windows 10 u 11
-- Procesador: 2 GHz o superior
-- Memoria RAM: 4GB mínimo
-- Espacio disponible en disco: al l menos 1 GB
-- Sumatra PDF (para impresión directa)
-- Impresora térmica de 58mm (opcional)
+### Hardware
+- Procesador de 2 GHz o superior
+- Memoria RAM mínima de 4 GB
+- Espacio en disco: al menos 1 GB
+
+### Software
+- Sistema operativo Windows 10 o superior
+- Permisos de administrador
+- Impresora térmica instalada (opcional pero recomendada)
+- SumatraPDF (para impresión de tickets)
+
+> El sistema no requiere instalación manual de Python ni MySQL.
 
 ---
 
 ## Instalación Paso a Paso
 
----
+### 1. Requisitos previos
 
-### 1. Requisitos del sistema
-
-Antes de iniciar la instalación, se debe verificar que el equipo cumpla con los siguientes requisitos:
-
-**Requisitos de hardware**
-- Procesador de 2 GHz o superior
-- Memoria RAM mínima de 4 GB
-- Espacio disponible en disco de al menos 1 GB
-
-**Requisitos de software**
-- Sistema operativo Windows 10 o superior
-- Permisos de administrador en el equipo
-- Impresora térmica previamente instalada en el sistema operativo
-
-El sistema no requiere instalación previa de Python ni MySQL, ya que estos componentes son gestionados automáticamente por el instalador.
+Verificar que el equipo cumpla con los requisitos indicados anteriormente.
 
 ---
 
-### 2. Obtención del instalador
+### 2. Descarga del instalador
 
-El instalador del sistema se distribuye mediante el siguiente archivo ejecutable:
+- Instalador:  
+https://www.mediafire.com/file/ree1fdfj0uh81qr/Instalador_EstacionamientoCentral.exe/file  
 
-**Instalador_EstacionamientoCentral.exe**
-Descarga directa: https://www.mediafire.com/file/ree1fdfj0uh81qr/Instalador_EstacionamientoCentral.exe/file
+- Repositorio del proyecto:  
+https://github.com/matiasrmb/estacionamiento-central  
 
-**Repositorio del proyecto** 
-https://github.com/matiasrmb/estacionamiento-central
+> Nota: Es posible que Windows o el antivirus muestren advertencias de seguridad debido a la naturaleza del instalador.
 
-En algunos casos, al descargar el archivo desde internet (por ejemplo, mediante MediaFire), el sistema operativo puede mostrar advertencias de seguridad indicando que el archivo podría ser potencialmente peligroso.
+En ese caso:
 
-Esto se debe a que el instalador contiene múltiples componentes y scripts de automatización.
-
-En caso de presentarse este mensaje, se recomienda:
-
-- Desactivar temporalmente la protección en tiempo real del antivirus
-- Ejecutar el instalador manualmente con permisos de administrador
-
-Una vez finalizada la instalación, se puede reactivar la protección del sistema.
+- Desactivar temporalmente la protección en tiempo real
+- Ejecutar el instalador como administrador
 
 ---
 
 ### 3. Ejecución del instalador
 
-Para iniciar la instalación:
-
-1. Ubicar el archivo Instalador_EstacionamientoCentral.exe
-2. Hacer clic derecho sobre el archivo
-3. Seleccionar la opción “Ejecutar como administrador”
-
-Se iniciará el asistente de instalación del sistema.
+1. Ubicar el archivo `.exe`
+2. Clic derecho → **Ejecutar como administrador**
+3. Seguir las instrucciones del asistente
 
 ---
 
-### 4. Proceso de instalación
+### 4. Proceso automático de instalación
 
-El instalador guía al usuario mediante una serie de pasos automáticos.  
-
-Durante este proceso, el sistema realiza las siguientes acciones:
-
----
+El instalador realiza las siguientes acciones:
 
 #### 4.1 Copia de archivos
 
-El instalador copia todos los archivos del sistema en la siguiente ruta:
+Instala el sistema en:
+
+
 C:\EstacionamientoCentral
 
 
-En esta ubicación se incluyen:
+Incluye:
 
-- Ejecutable del sistema  
-- Archivos de configuración  
-- Estructura de base de datos  
-- Carpetas de almacenamiento (tickets, reportes, etc.)  
-
----
-
-#### 4.2 Instalación y configuración de MySQL
-
-El instalador verifica si MySQL está presente en el sistema.
-
-**Si MySQL no está instalado:**
-- Se extrae automáticamente una versión incluida del servidor MySQL  
-- Se configura el servicio **MySQL80**  
-- Se inicializa el motor de base de datos  
-
-**Si MySQL ya está instalado:**
-- Se reutiliza la instalación existente  
-- Se verifica el estado del servicio  
-- Se inicia el servicio si es necesario  
+- Ejecutable del sistema
+- Archivos de configuración
+- Base de datos
+- Carpetas de almacenamiento (tickets y reportes)
 
 ---
 
-#### 4.3 Creación de la base de datos
+#### 4.2 Configuración de MySQL
 
-El instalador verifica la existencia de la base de datos:
+- Si no existe → se instala automáticamente
+- Si existe → se reutiliza la instalación
+
+Se configura el servicio **MySQL80**.
+
+---
+
+#### 4.3 Creación de base de datos
+
+Base de datos:
+
+
 estacionamiento_db
 
-- Si la base de datos no existe:
-  - Se crea automáticamente  
-  - Se importa la estructura desde el archivo SQL  
 
-- Si ya existe:
-  - Se mantiene sin eliminar la información existente  
+- Se crea automáticamente si no existe
+- Si existe, se mantiene la información
 
 ---
 
-#### 4.4 Creación del usuario de aplicación
+#### 4.4 Usuario de aplicación
 
-El sistema crea automáticamente un usuario en MySQL para el funcionamiento de la aplicación:
+Credenciales internas:
 
-- **Usuario:** `estacionamiento_app`  
-- **Contraseña:** `ec_app_2026`  
-
-Este usuario es utilizado internamente por el sistema para conectarse a la base de datos.
+- Usuario: `estacionamiento_app`
+- Contraseña: `ec_app_2026`
 
 ---
 
-#### 4.5 Configuración del sistema
+#### 4.5 Archivo de configuración
 
-El instalador genera automáticamente el archivo de configuración:
+Ruta:
+
+
 C:\EstacionamientoCentral_internal\config.ini
 
-Este archivo contiene los parámetros necesarios para la conexión a la base de datos.
 
 ---
 
 #### 4.6 Instalación de visor PDF
 
-El instalador **no incluye** la instalación de SumatraPDF, el cual es utilizado para gestionar la visualización e impresión de tickets.
-
-Por tanto, se debe descargar desde su página oficial:
+Descargar manualmente:
 
 https://www.sumatrapdfreader.org/download-free-pdf-viewer  
 
-Luego seguir los pasos estándar de instalación.
+---
+
+#### 4.7 Accesos directos
+
+- Menú inicio
+- Escritorio (opcional)
 
 ---
 
-#### 4.7 Creación de accesos directos
+### 5. Finalización
 
-El instalador crea:
-
-- Acceso directo en el menú inicio  
-- Acceso directo en el escritorio (opcional)  
-
----
-
-### 5. Finalización de la instalación
-
-Al finalizar el proceso, el instalador ofrece la opción:
-
-- **“Ejecutar Estacionamiento Central”**
-
-Si el usuario selecciona esta opción, el sistema se abrirá automáticamente.
+El instalador permite ejecutar el sistema inmediatamente al finalizar.
 
 ---
 
 ## Uso del Sistema
 
+### Flujo básico de operación
 
-### 1. Iniciar sesión como operador o administrador.
+1. Iniciar sesión (administrador u operador)
+2. Acceder al panel principal
+3. Ejecutar acciones:
 
-### 2. Acceder a las siguientes funcionalidades desde el panel principal:
-
-- Ingresar vehículos (y emitir ticket)
-- Registrar salida (y emitir ticket con cálculo)
-- Ver vehículos activos
-- Generar reportes de ingresos/salidas
-- Generar reportes de asistencias
-- Realizar cierres diarios o mensuales
+- Registrar ingreso de vehículo
+- Registrar salida (cálculo automático)
+- Visualizar vehículos activos
+- Generar reportes
+- Realizar cierres
 - Administrar usuarios
-- Cambiar configuración del sistema
+- Configurar tarifas
+
+---
+
+## Arquitectura del Sistema
+
+El sistema sigue una arquitectura modular basada en el patrón **MVC (Modelo-Vista-Controlador)**:
+
+- **Views** → Interfaz gráfica (PySide6)
+- **Controllers** → Lógica de negocio
+- **Utils** → Funciones auxiliares (PDF, DB, etc.)
+- **MySQL** → Persistencia de datos
 
 ---
 
