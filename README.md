@@ -201,10 +201,6 @@ Al finalizar el proceso, el instalador ofrece la opción:
 
 Si el usuario selecciona esta opción, el sistema se abrirá automáticamente.
 
-### 5.Crear base de datos y tablas
-
-Puedes ejecutar el script SQL incluido 'schema.sql'
-
 ---
 
 ## Uso del Sistema
