@@ -280,6 +280,7 @@ estacionamiento-central/
 |   |   usuarios.py
 
 ```
+
 ## Público Objetivo
 
 Este proyecto fue desarrollado pensando en:
@@ -287,8 +288,6 @@ Este proyecto fue desarrollado pensando en:
 - Profesores evaluadores del proceso de titulación.
 - Desarrolladores Python que deseen estudiar una arquitectura modular y funcional.
 - Dueños de estacionamientos que necesitan una solución sencilla, económica y práctica.
-## Captura del funcionamiento
-
 
 
 ## Créditos
