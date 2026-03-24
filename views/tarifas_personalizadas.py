@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableWidget, QTableWidgetItem, QInputDialog, 
-    QMessageBox, QLabel, QGroupBox
+    QTableWidget, QTableWidgetItem, QInputDialog,
+    QMessageBox, QLabel, QGroupBox, QHeaderView
 )
 from PySide6.QtCore import Qt
 from controllers.tarifas_controller import (
@@ -9,43 +9,57 @@ from controllers.tarifas_controller import (
     eliminar_intervalo, actualizar_intervalo
 )
 
+
 class TarifasPersonalizadasWindow(QWidget):
     """
-    Ventana que permite configurar los tramos personalizados de tarifas
+    Vista para configurar los tramos personalizados de tarifas
     por tiempo de estacionamiento. Solo accesible para administradores.
     """
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Editor de Tarifas Personalizadas")
-        self.setMinimumSize(900, 600) 
+        self.setMinimumSize(900, 600)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(16)
 
-        # Título principal
-        self.label_titulo = QLabel("📐 Configuración de Tramos de Tarifas")
-        self.label_titulo.setObjectName("TituloVentana")
-        self.label_titulo.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.label_titulo)
+        # =========================================================
+        # ENCABEZADO
+        # =========================================================
+        titulo = QLabel("Configuración de tramos de tarifas")
+        titulo.setObjectName("TituloVentana")
+        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        layout.addWidget(titulo)
 
-        # Grupo de botones de acción
-        grupo_botones = QGroupBox("⚙️ Acciones disponibles")
+        subtitulo = QLabel(
+            "Administra intervalos personalizados de cobro según los minutos de permanencia."
+        )
+        subtitulo.setObjectName("SubtituloSeccion")
+        subtitulo.setWordWrap(True)
+        layout.addWidget(subtitulo)
+
+        # =========================================================
+        # ACCIONES
+        # =========================================================
+        grupo_botones = QGroupBox("Acciones disponibles")
         botones_layout = QHBoxLayout()
-        botones_layout.setContentsMargins(10, 20, 10, 20)
+        botones_layout.setContentsMargins(12, 20, 12, 20)
+        botones_layout.setSpacing(10)
 
-        self.btn_agregar = QPushButton("➕ Agregar intervalo")
-        self.btn_agregar.setMinimumHeight(38)
+        self.btn_agregar = QPushButton("Agregar intervalo")
+        self.btn_agregar.setMinimumHeight(40)
         self.btn_agregar.clicked.connect(self.agregar)
 
-        self.btn_actualizar = QPushButton("✏️ Actualizar seleccionado")
-        self.btn_actualizar.setMinimumHeight(38)
+        self.btn_actualizar = QPushButton("Actualizar seleccionado")
+        self.btn_actualizar.setMinimumHeight(40)
         self.btn_actualizar.clicked.connect(self.actualizar)
 
-        self.btn_eliminar = QPushButton("🗑️ Eliminar seleccionado")
-        self.btn_eliminar.setMinimumHeight(38)
+        self.btn_eliminar = QPushButton("Eliminar seleccionado")
+        self.btn_eliminar.setObjectName("BotonPeligro")
+        self.btn_eliminar.setMinimumHeight(40)
         self.btn_eliminar.clicked.connect(self.eliminar)
 
         botones_layout.addWidget(self.btn_agregar)
@@ -54,20 +68,25 @@ class TarifasPersonalizadasWindow(QWidget):
         grupo_botones.setLayout(botones_layout)
         layout.addWidget(grupo_botones)
 
-        # Tabla de tarifas personalizadas
+        # =========================================================
+        # TABLA
+        # =========================================================
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(4)
         self.tabla.setHorizontalHeaderLabels(["ID", "Desde (min)", "Hasta (min)", "Valor (CLP)"])
-        self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabla.verticalHeader().setDefaultSectionSize(36)
-        self.tabla.horizontalHeader().setStretchLastSection(True)
+        self.tabla.verticalHeader().setDefaultSectionSize(38)
+
+        self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
 
         layout.addWidget(self.tabla)
-        self.setLayout(layout)
 
+        self.setLayout(layout)
         self.cargar_datos()
 
     def cargar_datos(self):
@@ -77,10 +96,21 @@ class TarifasPersonalizadasWindow(QWidget):
 
         for i, row in enumerate(datos):
             self.tabla.insertRow(i)
-            self.tabla.setItem(i, 0, QTableWidgetItem(str(row["id_tarifa"])))
-            self.tabla.setItem(i, 1, QTableWidgetItem(str(row["minuto_inicio"])))
-            self.tabla.setItem(i, 2, QTableWidgetItem(str(row["minuto_fin"])))
-            self.tabla.setItem(i, 3, QTableWidgetItem(str(row["valor"])))
+
+            item_id = QTableWidgetItem(str(row["id_tarifa"]))
+            item_inicio = QTableWidgetItem(str(row["minuto_inicio"]))
+            item_fin = QTableWidgetItem(str(row["minuto_fin"]))
+            item_valor = QTableWidgetItem(str(row["valor"]))
+
+            item_id.setTextAlignment(Qt.AlignCenter)
+            item_inicio.setTextAlignment(Qt.AlignCenter)
+            item_fin.setTextAlignment(Qt.AlignCenter)
+            item_valor.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            self.tabla.setItem(i, 0, item_id)
+            self.tabla.setItem(i, 1, item_inicio)
+            self.tabla.setItem(i, 2, item_fin)
+            self.tabla.setItem(i, 3, item_valor)
 
     def agregar(self):
         """Agrega un nuevo tramo de tarifa personalizada."""
