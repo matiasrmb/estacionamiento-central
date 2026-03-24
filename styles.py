@@ -380,4 +380,40 @@ QLabel#ValorResumenModulo {
     font-weight: 700;
     color: #111827;
 }
+/* ================== FORMULARIOS DE ADMINISTRACIÓN ================== */
+
+QFrame#PanelFormulario {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+}
+
+QLabel#EtiquetaFormulario {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+/* ================== BOTONES DE TABLA ================== */
+
+QPushButton#BotonTabla {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 16px;
+    border-radius: 6px;
+}
+
+QPushButton#BotonTablaPeligro {
+    background-color: #dc2626;
+    border-color: #b91c1c;
+    color: #f9fafb;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 16px;
+    border-radius: 6px;
+}
+
+QPushButton#BotonTablaPeligro:hover {
+    background-color: #b91c1c;
+}
 """

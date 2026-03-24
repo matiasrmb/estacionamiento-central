@@ -1,55 +1,66 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHBoxLayout, 
-    QLineEdit, QComboBox, QMessageBox, QInputDialog, 
+    QTableWidget, QTableWidgetItem, QHBoxLayout,
+    QLineEdit, QComboBox, QMessageBox, QInputDialog,
     QGroupBox, QHeaderView
 )
 from PySide6.QtCore import Qt
 from controllers.usuarios_controller import (
-    obtener_usuarios, crear_usuario, 
+    obtener_usuarios, crear_usuario,
     cambiar_contrasena, cambiar_estado_usuario
 )
 from functools import partial
 
+
 class UsuariosWindow(QWidget):
     """
-    Ventana para la gestión de usuarios del sistema.
+    Vista para la gestión de usuarios del sistema.
     Permite ver, crear, activar/desactivar y cambiar contraseñas.
     """
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("👤 Gestión de Usuarios")
-        self.setMinimumSize(900, 600) 
+        self.setMinimumSize(900, 600)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(16)
 
-        # Título
-        titulo = QLabel("👥 Usuarios Registrados")
+        titulo = QLabel("Usuarios registrados")
         titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(titulo)
 
-        # Tabla
+        subtitulo = QLabel("Administra cuentas de operadores y administradores del sistema.")
+        subtitulo.setObjectName("SubtituloSeccion")
+        subtitulo.setWordWrap(True)
+        layout.addWidget(subtitulo)
+
+        # =========================================================
+        # TABLA
+        # =========================================================
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(3)
         self.tabla.setHorizontalHeaderLabels(["Usuario", "Rol", "Acciones"])
         self.tabla.setAlternatingRowColors(True)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.verticalHeader().setDefaultSectionSize(54)
+
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.tabla.verticalHeader().setDefaultSectionSize(42)
-        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+
         layout.addWidget(self.tabla)
 
-        # Grupo para crear nuevo usuario
-        grupo_formulario = QGroupBox("➕ Crear nuevo usuario")
+        # =========================================================
+        # FORMULARIO
+        # =========================================================
+        grupo_formulario = QGroupBox("Crear nuevo usuario")
         form_layout = QHBoxLayout()
-        form_layout.setContentsMargins(10, 20, 10, 20)
+        form_layout.setContentsMargins(12, 20, 12, 20)
         form_layout.setSpacing(10)
 
         self.input_usuario = QLineEdit()
@@ -65,13 +76,15 @@ class UsuariosWindow(QWidget):
         self.select_rol.addItems(["Operador", "Administrador"])
         self.select_rol.setMinimumHeight(38)
 
-        btn_crear = QPushButton("📝 Crear")
-        btn_crear.clicked.connect(self.crear_usuario)
+        self.btn_crear = QPushButton("Crear")
+        self.btn_crear.setMinimumHeight(38)
+        self.btn_crear.clicked.connect(self.crear_usuario)
 
         form_layout.addWidget(self.input_usuario)
         form_layout.addWidget(self.input_clave)
         form_layout.addWidget(self.select_rol)
-        form_layout.addWidget(btn_crear)
+        form_layout.addWidget(self.btn_crear)
+
         grupo_formulario.setLayout(form_layout)
         layout.addWidget(grupo_formulario)
 
@@ -79,38 +92,51 @@ class UsuariosWindow(QWidget):
         self.cargar_usuarios()
 
     def cargar_usuarios(self):
-        """Carga los usuarios desde la base de datos a la tabla."""
         usuarios = obtener_usuarios()
         self.tabla.setRowCount(len(usuarios))
 
         for i, u in enumerate(usuarios):
-            self.tabla.setItem(i, 0, QTableWidgetItem(u["usuario"]))
-            self.tabla.setItem(i, 1, QTableWidgetItem(u["rol"]))
+            item_usuario = QTableWidgetItem(u["usuario"])
+            item_rol = QTableWidgetItem(u["rol"])
+
+            item_usuario.setTextAlignment(Qt.AlignCenter)
+            item_rol.setTextAlignment(Qt.AlignCenter)
+
+            self.tabla.setItem(i, 0, item_usuario)
+            self.tabla.setItem(i, 1, item_rol)
 
             botones = QWidget()
             layout_btn = QHBoxLayout()
-            layout_btn.setContentsMargins(5, 5, 5, 5)
-            layout_btn.setSpacing(5)
+            layout_btn.setContentsMargins(6, 6, 6, 6)
+            layout_btn.setSpacing(6)
             layout_btn.setAlignment(Qt.AlignCenter)
 
-            # Botón para cambiar clave
-            btn_clave = QPushButton("🔑 Clave")
+            btn_clave = QPushButton("Cambiar clave")
+            btn_clave.setObjectName("BotonTabla")
+            btn_clave.setMinimumHeight(34)
             btn_clave.clicked.connect(partial(self.preguntar_nueva_clave, u["usuario"]))
-            layout_btn.addWidget(btn_clave)
 
-            # Botón para activar/desactivar
             estado = "Desactivar" if u["activo"] else "Activar"
-            icono_estado = "❌" if u["activo"] else "✅"
-            btn_estado = QPushButton(f"{icono_estado} {estado}")
-            btn_estado.clicked.connect(partial(self.toggle_estado_usuario, u["usuario"], not u["activo"]))
+            nombre_boton = f"{estado}"
+            btn_estado = QPushButton(nombre_boton)
+            btn_estado.setMinimumHeight(34)
+
+            if u["activo"]:
+                btn_estado.setObjectName("BotonTablaPeligro")
+            else:
+                btn_estado.setObjectName("BotonTabla")
+
+            btn_estado.clicked.connect(
+                partial(self.toggle_estado_usuario, u["usuario"], not u["activo"])
+            )
+
+            layout_btn.addWidget(btn_clave)
             layout_btn.addWidget(btn_estado)
 
             botones.setLayout(layout_btn)
-            self.tabla.setRowHeight(i, 45)
             self.tabla.setCellWidget(i, 2, botones)
 
     def crear_usuario(self):
-        """Crea un nuevo usuario en el sistema."""
         usuario = self.input_usuario.text().strip()
         clave = self.input_clave.text().strip()
         rol = self.select_rol.currentText()
@@ -128,7 +154,6 @@ class UsuariosWindow(QWidget):
             QMessageBox.critical(self, "Error", "No se pudo crear el usuario.")
 
     def preguntar_nueva_clave(self, usuario):
-        """Pregunta por una nueva clave y la actualiza en la base de datos."""
         clave, ok = QInputDialog.getText(
             self,
             "Cambiar contraseña",
@@ -142,7 +167,6 @@ class UsuariosWindow(QWidget):
                 QMessageBox.critical(self, "Error", "No se pudo cambiar la contraseña.")
 
     def toggle_estado_usuario(self, usuario, nuevo_estado):
-        """Activa o desactiva un usuario según su estado actual."""
         texto = "activar" if nuevo_estado else "desactivar"
         confirmar = QMessageBox.question(
             self,

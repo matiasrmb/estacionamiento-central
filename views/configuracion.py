@@ -1,78 +1,93 @@
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QLineEdit, QPushButton, 
-    QVBoxLayout, QComboBox, QMessageBox, QGroupBox
+    QWidget, QLabel, QLineEdit, QPushButton,
+    QVBoxLayout, QComboBox, QMessageBox, QGroupBox,
+    QGridLayout, QHBoxLayout, QFrame
 )
 from PySide6.QtCore import Qt
 
 from controllers.config_controller import obtener_configuracion, actualizar_configuracion
 from controllers.tarifas_controller import generar_tramos_automaticos
 
+
 class ConfiguracionWindow(QWidget):
     """
-    Ventana de configuración del sistema, permite establecer el modo de cobro,
-    tarifas y generar tramos personalizados automáticamente.
+    Vista de configuración general del sistema.
+    Permite definir modo de cobro, tarifas base y generar tramos automáticos.
     """
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Configuración del Sistema")
-        self.setMinimumSize(900, 600) 
+        self.setMinimumSize(900, 600)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(16)
 
-        # Título
-        titulo = QLabel("⚙️ Configuración del sistema")
+        titulo = QLabel("Configuración del sistema")
         titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(titulo)
+
+        subtitulo = QLabel("Define el modo de cobro y las tarifas base del estacionamiento.")
+        subtitulo.setObjectName("SubtituloSeccion")
+        subtitulo.setWordWrap(True)
+        layout.addWidget(subtitulo)
 
         self.config = obtener_configuracion()
 
-        # Grupo de configuración general
-        grupo_general = QGroupBox("⚙️ Configuración General")
-        layout_general = QVBoxLayout()
-        layout_general.setContentsMargins(10, 20, 10, 20)
-        layout_general.setSpacing(10)
+        # =========================================================
+        # CONFIGURACIÓN GENERAL
+        # =========================================================
+        grupo_general = QGroupBox("Configuración general")
+        layout_general = QGridLayout()
+        layout_general.setContentsMargins(14, 20, 14, 20)
+        layout_general.setHorizontalSpacing(14)
+        layout_general.setVerticalSpacing(12)
 
-        self.modo_label = QLabel("Modo de cobro:")
+        label_modo = QLabel("Modo de cobro:")
+        label_modo.setObjectName("EtiquetaFormulario")
         self.modo_combo = QComboBox()
         self.modo_combo.addItems(["minuto", "personalizado"])
         self.modo_combo.setCurrentText(self.config.get("modo_cobro", "minuto"))
         self.modo_combo.setMinimumHeight(38)
 
-        self.minima_label = QLabel("Tarifa mínima (CLP):")
+        label_minima = QLabel("Tarifa mínima (CLP):")
+        label_minima.setObjectName("EtiquetaFormulario")
         self.minima_input = QLineEdit(self.config.get("tarifa_minima", "300"))
         self.minima_input.setMinimumHeight(38)
 
-        self.hora_label = QLabel("Tarifa por hora (CLP):")
+        label_hora = QLabel("Tarifa por hora (CLP):")
+        label_hora.setObjectName("EtiquetaFormulario")
         self.hora_input = QLineEdit(self.config.get("tarifa_hora", "1300"))
         self.hora_input.setMinimumHeight(38)
 
-        layout_general.addWidget(self.modo_label)
-        layout_general.addWidget(self.modo_combo)
-        layout_general.addWidget(self.minima_label)
-        layout_general.addWidget(self.minima_input)
-        layout_general.addWidget(self.hora_label)
-        layout_general.addWidget(self.hora_input)
+        layout_general.addWidget(label_modo, 0, 0)
+        layout_general.addWidget(self.modo_combo, 0, 1)
+        layout_general.addWidget(label_minima, 1, 0)
+        layout_general.addWidget(self.minima_input, 1, 1)
+        layout_general.addWidget(label_hora, 2, 0)
+        layout_general.addWidget(self.hora_input, 2, 1)
 
+        layout_general.setColumnStretch(1, 1)
         grupo_general.setLayout(layout_general)
         layout.addWidget(grupo_general)
 
-        # Grupo de acciones
-        grupo_acciones = QGroupBox("🛠 Acciones disponibles")
+        # =========================================================
+        # ACCIONES
+        # =========================================================
+        grupo_acciones = QGroupBox("Acciones disponibles")
         layout_acciones = QVBoxLayout()
-        layout_acciones.setContentsMargins(15, 20, 15, 20)
+        layout_acciones.setContentsMargins(14, 20, 14, 20)
         layout_acciones.setSpacing(12)
 
-        self.btn_generar_tramos = QPushButton("📊 Generar tramos automáticamente")
-        self.btn_generar_tramos.setMinimumHeight(36)
+        self.btn_generar_tramos = QPushButton("Generar tramos automáticamente")
+        self.btn_generar_tramos.setMinimumHeight(40)
         self.btn_generar_tramos.clicked.connect(self.generar_tramos_auto)
 
-        self.btn_guardar = QPushButton("💾 Guardar configuración")
-        self.btn_guardar.setMinimumHeight(36)
+        self.btn_guardar = QPushButton("Guardar configuración")
+        self.btn_guardar.setMinimumHeight(40)
         self.btn_guardar.clicked.connect(self.guardar)
 
         layout_acciones.addWidget(self.btn_generar_tramos)
@@ -85,10 +100,6 @@ class ConfiguracionWindow(QWidget):
         self.setLayout(layout)
 
     def guardar(self):
-        """
-        Guarda los cambios realizados en la configuración del sistema,
-        validando que los valores de tarifa sean numéricos.
-        """
         modo = self.modo_combo.currentText()
         tarifa_minima = self.minima_input.text().strip()
         tarifa_hora = self.hora_input.text().strip()
@@ -96,7 +107,7 @@ class ConfiguracionWindow(QWidget):
         if not tarifa_minima.isdigit() or not tarifa_hora.isdigit():
             QMessageBox.warning(self, "Error", "Tarifas deben ser números enteros.")
             return
-        
+
         actualizar_configuracion("modo_cobro", modo)
         actualizar_configuracion("tarifa_minima", tarifa_minima)
         actualizar_configuracion("tarifa_hora", tarifa_hora)
@@ -104,10 +115,6 @@ class ConfiguracionWindow(QWidget):
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 
     def generar_tramos_auto(self):
-        """
-        Genera automáticamente los tramos personalizados según las tarifas mínimas y por hora.
-        Sobrescribe los valores existentes si el usuario lo confirma.
-        """
         confirmar = QMessageBox.question(
             self,
             "Confirmación",
