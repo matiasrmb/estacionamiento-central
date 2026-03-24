@@ -53,7 +53,8 @@ class MainWindow(QWidget):
         # =========================================================
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(260)
+        sidebar.setMinimumWidth(300)
+        sidebar.setMaximumWidth(360)
 
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(20, 20, 20, 20)
@@ -62,11 +63,13 @@ class MainWindow(QWidget):
         titulo = QLabel("Estacionamiento Central")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignCenter)
+        titulo.setWordWrap(True)
         sidebar_layout.addWidget(titulo)
 
         subtitulo = QLabel(f"{self.usuario} ({self.rol})")
         subtitulo.setObjectName("SubtituloSeccion")
         subtitulo.setAlignment(Qt.AlignCenter)
+        subtitulo.setWordWrap(True)
         sidebar_layout.addWidget(subtitulo)
 
         self.btn_dashboard = QPushButton("🏠 Panel principal")
@@ -124,12 +127,15 @@ class MainWindow(QWidget):
 
         self.label_estado_turno = QLabel("Turno en operación")
         self.label_estado_turno.setObjectName("EstadoOperativoOk")
+        self.label_estado_turno.setWordWrap(True)
 
         self.label_estado_subida = QLabel("Subida temporal: no activa")
         self.label_estado_subida.setObjectName("EstadoOperativoNeutro")
+        self.label_estado_subida.setWordWrap(True)
 
         self.label_estado_activos = QLabel("Vehículos activos: 0")
         self.label_estado_activos.setObjectName("EstadoOperativoNeutro")
+        self.label_estado_activos.setWordWrap(True)
 
         panel_layout.addWidget(self.label_estado_turno)
         panel_layout.addWidget(self.label_estado_subida)
@@ -153,7 +159,7 @@ class MainWindow(QWidget):
         contenedor_layout.setSpacing(10)
 
         self.label_modulo = QLabel("Panel principal")
-        self.label_modulo.setContentsMargins(4, 0, 0, 10)
+        self.label_modulo.setContentsMargins(4, 0, 0, 6)
         self.label_modulo.setObjectName("TituloVentana")
         self.label_modulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         contenedor_layout.addWidget(self.label_modulo)

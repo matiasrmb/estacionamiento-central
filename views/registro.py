@@ -34,7 +34,7 @@ class RegistroWindow(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
         # =========================================================
         # ENCABEZADO
@@ -61,8 +61,8 @@ class RegistroWindow(QWidget):
         # BLOQUE SUPERIOR
         # =========================================================
         superior_layout = QGridLayout()
-        superior_layout.setHorizontalSpacing(16)
-        superior_layout.setVerticalSpacing(16)
+        superior_layout.setHorizontalSpacing(12)
+        superior_layout.setVerticalSpacing(12)
 
         # -------- Búsqueda / patente --------
         grupo_busqueda = QGroupBox("Consulta de patente")
@@ -194,7 +194,7 @@ class RegistroWindow(QWidget):
         superior_layout.setColumnStretch(1, 2)
         superior_layout.setColumnStretch(2, 1)
 
-        layout.addLayout(superior_layout)
+        layout.addLayout(superior_layout, 0)
 
         # =========================================================
         # RESUMEN + TABLA
@@ -213,6 +213,7 @@ class RegistroWindow(QWidget):
 
         self.grupo_tabla = QGroupBox("Vehículos actualmente estacionados")
         self.grupo_tabla.setVisible(False)
+        self.grupo_tabla.setMinimumHeight(220)
 
         layout_tabla = QVBoxLayout()
         layout_tabla.setContentsMargins(10, 20, 10, 20)
@@ -220,6 +221,7 @@ class RegistroWindow(QWidget):
         self.tabla_activos = QTableWidget()
         self.tabla_activos.setObjectName("TablaActivos")
         self.tabla_activos.setColumnCount(4)
+        self.tabla_activos.setMinimumHeight(180)
         self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora ingreso", "Minutos", "Monto actual"])
         self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.tabla_activos.setSelectionBehavior(QTableWidget.SelectRows)
@@ -239,7 +241,7 @@ class RegistroWindow(QWidget):
         self.label_leyenda_tabla.setObjectName("LeyendaTabla")
         layout_tabla.addWidget(self.label_leyenda_tabla)
         self.grupo_tabla.setLayout(layout_tabla)
-        layout.addWidget(self.grupo_tabla)
+        layout.addWidget(self.grupo_tabla, 1)
 
         self.timer_tabla = QTimer()
         self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)

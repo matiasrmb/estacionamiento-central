@@ -44,8 +44,9 @@ QFrame#Sidebar QLabel {
 
 QFrame#Sidebar QLabel#TituloVentana {
     color: #ffffff;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
+    padding: 4px 6px;
 }
 
 QFrame#Sidebar QPushButton {
