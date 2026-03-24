@@ -416,4 +416,22 @@ QPushButton#BotonTablaPeligro {
 QPushButton#BotonTablaPeligro:hover {
     background-color: #b91c1c;
 }
+/* ================== ACCESO / SETUP ================== */
+
+QFrame#CardAcceso {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 14px;
+}
+
+QLabel#TituloAcceso {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+}
+
+QLabel#SubtituloAcceso {
+    font-size: 13px;
+    color: #6b7280;
+}
 """
