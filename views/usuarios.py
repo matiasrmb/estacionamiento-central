@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHBoxLayout,
-    QLineEdit, QComboBox, QMessageBox, QInputDialog,
-    QGroupBox, QHeaderView
+    QLineEdit, QComboBox, QMessageBox,
+    QInputDialog, QGroupBox, QHeaderView
 )
 from PySide6.QtCore import Qt
 from controllers.usuarios_controller import (
@@ -28,7 +28,7 @@ class UsuariosWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
-        titulo = QLabel("Usuarios registrados")
+        titulo = QLabel("Gestión de usuarios")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(titulo)
@@ -47,7 +47,7 @@ class UsuariosWindow(QWidget):
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabla.verticalHeader().setDefaultSectionSize(54)
+        self.tabla.verticalHeader().setDefaultSectionSize(58)
 
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -76,7 +76,7 @@ class UsuariosWindow(QWidget):
         self.select_rol.addItems(["Operador", "Administrador"])
         self.select_rol.setMinimumHeight(38)
 
-        self.btn_crear = QPushButton("Crear")
+        self.btn_crear = QPushButton("Crear usuario")
         self.btn_crear.setMinimumHeight(38)
         self.btn_crear.clicked.connect(self.crear_usuario)
 
@@ -107,19 +107,20 @@ class UsuariosWindow(QWidget):
 
             botones = QWidget()
             layout_btn = QHBoxLayout()
-            layout_btn.setContentsMargins(6, 6, 6, 6)
-            layout_btn.setSpacing(6)
+            layout_btn.setContentsMargins(8, 6, 8, 6)
+            layout_btn.setSpacing(8)
             layout_btn.setAlignment(Qt.AlignCenter)
 
             btn_clave = QPushButton("Cambiar clave")
             btn_clave.setObjectName("BotonTabla")
             btn_clave.setMinimumHeight(34)
+            btn_clave.setMinimumWidth(120)
             btn_clave.clicked.connect(partial(self.preguntar_nueva_clave, u["usuario"]))
 
-            estado = "Desactivar" if u["activo"] else "Activar"
-            nombre_boton = f"{estado}"
-            btn_estado = QPushButton(nombre_boton)
+            estado_texto = "Desactivar" if u["activo"] else "Activar"
+            btn_estado = QPushButton(estado_texto)
             btn_estado.setMinimumHeight(34)
+            btn_estado.setMinimumWidth(100)
 
             if u["activo"]:
                 btn_estado.setObjectName("BotonTablaPeligro")
