@@ -357,4 +357,27 @@ QFrame#PanelOperativo QLabel#EstadoOperativoNeutro {
     font-size: 12px;
     font-weight: 600;
 }
+/* ================== RESÚMENES DE MÓDULO ================== */
+
+QFrame#ResumenModulo {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+}
+
+QFrame#ResumenModulo QLabel {
+    background-color: transparent;
+    color: #111827;
+}
+
+QLabel#TituloResumenModulo {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+QLabel#ValorResumenModulo {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+}
 """

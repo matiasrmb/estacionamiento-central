@@ -1,73 +1,116 @@
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QLineEdit, QPushButton, 
-    QVBoxLayout, QHBoxLayout, QTableWidget, 
-    QTableWidgetItem, QDateEdit, QMessageBox
+    QWidget, QLabel, QLineEdit, QPushButton,
+    QVBoxLayout, QHBoxLayout, QTableWidget,
+    QTableWidgetItem, QDateEdit, QMessageBox,
+    QFrame, QGridLayout, QHeaderView
 )
 from PySide6.QtCore import QDate, Qt
 
 from controllers.asistencias_controller import obtener_asistencias
 from utils.pdf_asistencias import exportar_asistencias_pdf
 
+
 class AsistenciasWindow(QWidget):
     """
-    Ventana que permite visualizar y exportar asistencias de usuarios, 
+    Vista para visualizar y exportar asistencias de usuarios,
     filtradas por fecha y nombre de usuario.
     """
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Registro de Asistencias")
-        self.setMinimumSize(900, 600) 
+        self.setMinimumSize(900, 600)
+        self.resultados = []
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(16)
 
-        # Título
-        titulo = QLabel("🕒 Registro de asistencias")
+        # =========================================================
+        # ENCABEZADO
+        # =========================================================
+        titulo = QLabel("Registro de asistencias")
         titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignCenter)
+        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(titulo)
 
-        # Filtros
-        filtro_layout = QHBoxLayout()
-        filtro_layout.setSpacing(10)
+        subtitulo = QLabel("Consulta asistencias por usuario y rango de fechas, y exporta los resultados.")
+        subtitulo.setObjectName("SubtituloSeccion")
+        subtitulo.setWordWrap(True)
+        layout.addWidget(subtitulo)
 
+        # =========================================================
+        # FILTROS
+        # =========================================================
+        filtros_layout = QGridLayout()
+        filtros_layout.setHorizontalSpacing(12)
+        filtros_layout.setVerticalSpacing(10)
+
+        label_usuario = QLabel("Usuario:")
         self.input_usuario = QLineEdit()
-        self.input_usuario.setPlaceholderText("Usuario")
-        self.input_usuario.setMinimumWidth(100)
+        self.input_usuario.setPlaceholderText("Opcional")
+        self.input_usuario.setMinimumHeight(38)
 
+        label_desde = QLabel("Desde:")
         self.fecha_inicio = QDateEdit()
         self.fecha_inicio.setCalendarPopup(True)
         self.fecha_inicio.setDate(QDate.currentDate())
+        self.fecha_inicio.setMinimumHeight(38)
 
+        label_hasta = QLabel("Hasta:")
         self.fecha_fin = QDateEdit()
         self.fecha_fin.setCalendarPopup(True)
         self.fecha_fin.setDate(QDate.currentDate())
+        self.fecha_fin.setMinimumHeight(38)
 
         self.btn_filtrar = QPushButton("Buscar")
-        self.btn_filtrar.setMinimumHeight(30)
+        self.btn_filtrar.setMinimumHeight(40)
         self.btn_filtrar.clicked.connect(self.filtrar)
-        self.btn_filtrar.setMinimumHeight(38)
+
+        self.btn_limpiar = QPushButton("Limpiar filtros")
+        self.btn_limpiar.setObjectName("BotonSecundario")
+        self.btn_limpiar.setMinimumHeight(38)
+        self.btn_limpiar.clicked.connect(self.limpiar_filtros)
 
         self.btn_exportar = QPushButton("Exportar PDF")
-        self.btn_exportar.setMinimumHeight(30)
+        self.btn_exportar.setMinimumHeight(40)
+        self.btn_exportar.setEnabled(False)
         self.btn_exportar.clicked.connect(self.exportar_pdf)
-        self.btn_exportar.setMinimumHeight(38)
 
-        filtro_layout.addWidget(QLabel("Usuario:"))
-        filtro_layout.addWidget(self.input_usuario)
-        filtro_layout.addWidget(QLabel("Desde:"))
-        filtro_layout.addWidget(self.fecha_inicio)
-        filtro_layout.addWidget(QLabel("Hasta:"))
-        filtro_layout.addWidget(self.fecha_fin)
-        filtro_layout.addWidget(self.btn_filtrar)
-        filtro_layout.addWidget(self.btn_exportar)
+        filtros_layout.addWidget(label_usuario, 0, 0)
+        filtros_layout.addWidget(self.input_usuario, 0, 1)
+        filtros_layout.addWidget(label_desde, 0, 2)
+        filtros_layout.addWidget(self.fecha_inicio, 0, 3)
+        filtros_layout.addWidget(label_hasta, 0, 4)
+        filtros_layout.addWidget(self.fecha_fin, 0, 5)
+        filtros_layout.addWidget(self.btn_filtrar, 0, 6)
 
-        layout.addLayout(filtro_layout)
+        filtros_layout.addWidget(self.btn_limpiar, 1, 5)
+        filtros_layout.addWidget(self.btn_exportar, 1, 6)
 
-        # Tabla
+        filtros_layout.setColumnStretch(1, 1)
+
+        layout.addLayout(filtros_layout)
+
+        # =========================================================
+        # RESUMEN
+        # =========================================================
+        resumen_layout = QHBoxLayout()
+        resumen_layout.setSpacing(14)
+
+        self.card_registros = self.crear_tarjeta_resumen("Asistencias encontradas", "0")
+        self.card_total = self.crear_tarjeta_resumen("Total recaudado", "$0")
+
+        resumen_layout.addWidget(self.card_registros)
+        resumen_layout.addWidget(self.card_total)
+        resumen_layout.addStretch()
+
+        layout.addLayout(resumen_layout)
+
+        # =========================================================
+        # TABLA
+        # =========================================================
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(5)
         self.tabla.setHorizontalHeaderLabels([
@@ -76,39 +119,97 @@ class AsistenciasWindow(QWidget):
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabla.verticalHeader().setDefaultSectionSize(34)
-        self.tabla.horizontalHeader().setStretchLastSection(True)
+        self.tabla.verticalHeader().setDefaultSectionSize(36)
+
+        self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+
         layout.addWidget(self.tabla)
 
         self.setLayout(layout)
 
+    def crear_tarjeta_resumen(self, titulo, valor):
+        frame = QFrame()
+        frame.setObjectName("ResumenModulo")
+        frame.setMinimumHeight(90)
+
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(14, 14, 14, 14)
+        frame_layout.setSpacing(6)
+
+        label_titulo = QLabel(titulo)
+        label_titulo.setObjectName("TituloResumenModulo")
+
+        label_valor = QLabel(valor)
+        label_valor.setObjectName("ValorResumenModulo")
+
+        frame_layout.addWidget(label_titulo)
+        frame_layout.addWidget(label_valor)
+
+        frame.label_valor = label_valor
+        return frame
+
+    def limpiar_filtros(self):
+        self.input_usuario.clear()
+        self.fecha_inicio.setDate(QDate.currentDate())
+        self.fecha_fin.setDate(QDate.currentDate())
+        self.resultados = []
+        self.tabla.setRowCount(0)
+        self.card_registros.label_valor.setText("0")
+        self.card_total.label_valor.setText("$0")
+        self.btn_exportar.setEnabled(False)
+
     def filtrar(self):
-        """Ejecuta la búsqueda de asistencias según los filtros ingresados."""
         try:
             usuario = self.input_usuario.text().strip()
             fecha_inicio = self.fecha_inicio.date().toPython()
             fecha_fin = self.fecha_fin.date().toPython()
 
             datos = obtener_asistencias(usuario or None, fecha_inicio, fecha_fin)
-            self.resultados = datos  
-
-            self.tabla.setRowCount(len(datos))
-
-            for i, fila in enumerate(datos):
-                self.tabla.setItem(i, 0, QTableWidgetItem(fila["usuario"]))
-                self.tabla.setItem(i, 1, QTableWidgetItem(str(fila["hora_inicio"])))
-                self.tabla.setItem(i, 2, QTableWidgetItem(str(fila["hora_salida"] or "Activo")))
-                self.tabla.setItem(i, 3, QTableWidgetItem(str(fila["cantidad_movimientos"])))
-                self.tabla.setItem(i, 4, QTableWidgetItem(f"${fila['total_recaudado']:.0f}"))
+            self.resultados = datos
 
             if not datos:
+                self.tabla.setRowCount(0)
+                self.card_registros.label_valor.setText("0")
+                self.card_total.label_valor.setText("$0")
+                self.btn_exportar.setEnabled(False)
                 QMessageBox.information(self, "Sin resultados", "No se encontraron asistencias con esos filtros.")
+                return
+
+            self.tabla.setRowCount(len(datos))
+            total_recaudado = 0
+
+            for i, fila in enumerate(datos):
+                total_fila = float(fila["total_recaudado"])
+                total_recaudado += total_fila
+
+                item_usuario = QTableWidgetItem(fila["usuario"])
+                item_inicio = QTableWidgetItem(str(fila["hora_inicio"]))
+                item_salida = QTableWidgetItem(str(fila["hora_salida"] or "Activo"))
+                item_movs = QTableWidgetItem(str(fila["cantidad_movimientos"]))
+                item_total = QTableWidgetItem(f"${total_fila:.0f}")
+
+                item_usuario.setTextAlignment(Qt.AlignCenter)
+                item_movs.setTextAlignment(Qt.AlignCenter)
+                item_total.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+                self.tabla.setItem(i, 0, item_usuario)
+                self.tabla.setItem(i, 1, item_inicio)
+                self.tabla.setItem(i, 2, item_salida)
+                self.tabla.setItem(i, 3, item_movs)
+                self.tabla.setItem(i, 4, item_total)
+
+            self.card_registros.label_valor.setText(str(len(datos)))
+            self.card_total.label_valor.setText(f"${total_recaudado:.0f}")
+            self.btn_exportar.setEnabled(True)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ocurrió un error:\n{e}")
 
     def exportar_pdf(self):
-        """Exporta los resultados actuales de la tabla a un archivo PDF."""
         try:
             if hasattr(self, "resultados") and self.resultados:
                 exportar_asistencias_pdf(self.resultados)
