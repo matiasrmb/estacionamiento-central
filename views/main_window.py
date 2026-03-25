@@ -1,9 +1,13 @@
+from pathlib import Path
+from datetime import datetime
+
 from PySide6.QtWidgets import (
     QWidget, QPushButton, QLabel, QVBoxLayout,
     QHBoxLayout, QMessageBox, QStackedWidget,
     QSizePolicy, QFrame
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QSize
+from PySide6.QtGui import QIcon
 
 from views.registro import RegistroWindow
 from views.reportes import ReportesWindow
@@ -17,7 +21,6 @@ from views.admin_edicion import EdicionIngresosWindow
 from controllers.login_controller import registrar_asistencia_salida
 from controllers.subida_controller import obtener_subida_activa
 from controllers.registro_controller import obtener_vehiculos_activos
-from datetime import datetime
 
 
 class MainWindow(QWidget):
@@ -38,6 +41,9 @@ class MainWindow(QWidget):
         self.rol = rol
         self.sidebar_expandido = True
 
+        self.base_dir = Path(__file__).resolve().parent.parent
+        self.icons_dir = self.base_dir / "icons"
+
         self.setWindowTitle("Estacionamiento Central - Panel Principal")
         self.setMinimumSize(1280, 720)
 
@@ -48,6 +54,35 @@ class MainWindow(QWidget):
         self.timer_operativo.timeout.connect(self.actualizar_panel_operativo)
         self.timer_operativo.start(5000)
         self.actualizar_panel_operativo()
+
+    def cargar_icono(self, nombre_archivo: str) -> QIcon:
+        """
+        Carga un ícono desde la carpeta icons del proyecto.
+        Si no existe, devuelve un ícono vacío.
+        """
+        ruta = self.icons_dir / nombre_archivo
+        if ruta.exists():
+            return QIcon(str(ruta))
+        return QIcon()
+
+    def configurar_boton_sidebar(self, boton: QPushButton, texto: str, icono: str):
+        """
+        Configura propiedades comunes de un botón del sidebar.
+        """
+        boton.setProperty("texto_expandido", texto)
+        boton.setProperty("icono_archivo", icono)
+        boton.setText(texto)
+        boton.setIcon(self.cargar_icono(icono))
+        boton.setIconSize(QSize(18, 18))
+        boton.setMinimumHeight(42)
+        boton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        boton.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding-left: 12px;
+                font-size: 14px;
+            }
+        """)
 
     def init_ui(self):
         layout_principal = QHBoxLayout(self)
@@ -67,7 +102,6 @@ class MainWindow(QWidget):
         sidebar_layout.setContentsMargins(16, 16, 16, 16)
         sidebar_layout.setSpacing(10)
 
-        # Encabezado del sidebar
         header_sidebar = QHBoxLayout()
         header_sidebar.setSpacing(8)
 
@@ -76,7 +110,7 @@ class MainWindow(QWidget):
         self.titulo_sidebar.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.titulo_sidebar.setWordWrap(True)
 
-        self.btn_toggle_sidebar = QPushButton("☰")
+        self.btn_toggle_sidebar = QPushButton()
         self.btn_toggle_sidebar.setObjectName("BotonSecundario")
         self.btn_toggle_sidebar.setFixedHeight(34)
         self.btn_toggle_sidebar.setFixedWidth(42)
@@ -93,46 +127,35 @@ class MainWindow(QWidget):
         self.subtitulo_sidebar.setWordWrap(True)
         sidebar_layout.addWidget(self.subtitulo_sidebar)
 
-        # Botones del sidebar
-        self.btn_dashboard = QPushButton("Panel principal")
-        self.btn_registro = QPushButton("Registro de vehículos")
-        self.btn_reportes = QPushButton("Reportes")
-        self.btn_mensuales = QPushButton("Clientes mensuales")
-        self.btn_config = QPushButton("Configuración")
-        self.btn_tarifas = QPushButton("Tarifas personalizadas")
-        self.btn_usuarios = QPushButton("Gestión de usuarios")
-        self.btn_asistencias = QPushButton("Asistencias")
-        self.btn_edicion = QPushButton("Edición de ingresos")
-        self.btn_cerrar_sesion = QPushButton("Cerrar sesión")
+        self.btn_dashboard = QPushButton()
+        self.btn_registro = QPushButton()
+        self.btn_reportes = QPushButton()
+        self.btn_mensuales = QPushButton()
+        self.btn_config = QPushButton()
+        self.btn_tarifas = QPushButton()
+        self.btn_usuarios = QPushButton()
+        self.btn_asistencias = QPushButton()
+        self.btn_edicion = QPushButton()
+        self.btn_cerrar_sesion = QPushButton()
 
         self.sidebar_buttons_data = [
-            (self.btn_dashboard, "Panel principal", "Inicio"),
-            (self.btn_registro, "Registro de vehículos", "Registro"),
+            (self.btn_dashboard, "Panel principal", "dashboard.png"),
+            (self.btn_registro, "Registro de vehículos", "registro.png"),
         ]
 
         if self.rol == "administrador":
             self.sidebar_buttons_data.extend([
-                (self.btn_reportes, "Reportes", "Reportes"),
-                (self.btn_mensuales, "Clientes mensuales", "Mensuales"),
-                (self.btn_config, "Configuración", "Config."),
-                (self.btn_tarifas, "Tarifas personalizadas", "Tarifas"),
-                (self.btn_edicion, "Edición de ingresos", "Edición"),
-                (self.btn_usuarios, "Gestión de usuarios", "Usuarios"),
-                (self.btn_asistencias, "Asistencias", "Asistencias"),
+                (self.btn_reportes, "Reportes", "reportes.png"),
+                (self.btn_mensuales, "Clientes mensuales", "mensuales.png"),
+                (self.btn_config, "Configuración", "configuracion.png"),
+                (self.btn_tarifas, "Tarifas personalizadas", "tarifas.png"),
+                (self.btn_edicion, "Edición de ingresos", "edicion.png"),
+                (self.btn_usuarios, "Gestión de usuarios", "usuarios.png"),
+                (self.btn_asistencias, "Asistencias", "asistencias.png"),
             ])
 
-        for btn, texto_expandido, _texto_colapsado in self.sidebar_buttons_data:
-            btn.setProperty("texto_expandido", texto_expandido)
-            btn.setProperty("texto_colapsado", "")
-            btn.setMinimumHeight(42)
-            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            btn.setStyleSheet("""
-                QPushButton {
-                    text-align: left;
-                    padding-left: 12px;
-                    font-size: 14px;
-                }
-            """)
+        for btn, texto, icono in self.sidebar_buttons_data:
+            self.configurar_boton_sidebar(btn, texto, icono)
             sidebar_layout.addWidget(btn)
 
         # =========================================================
@@ -170,7 +193,7 @@ class MainWindow(QWidget):
 
         sidebar_layout.addStretch()
 
-        self.btn_cerrar_sesion.setMinimumHeight(40)
+        self.configurar_boton_sidebar(self.btn_cerrar_sesion, "Cerrar sesión", "salir.png")
         self.btn_cerrar_sesion.setObjectName("BotonPeligro")
         sidebar_layout.addWidget(self.btn_cerrar_sesion)
 
@@ -265,6 +288,11 @@ class MainWindow(QWidget):
         self.aplicar_estado_sidebar()
 
     def aplicar_estado_sidebar(self):
+        icono_menu = self.cargar_icono("menu.png")
+        self.btn_toggle_sidebar.setIcon(icono_menu)
+        self.btn_toggle_sidebar.setIconSize(QSize(18, 18))
+        self.btn_toggle_sidebar.setText("")
+
         if self.sidebar_expandido:
             self.sidebar.setMinimumWidth(self.SIDEBAR_EXPANDED_WIDTH)
             self.sidebar.setMaximumWidth(self.SIDEBAR_EXPANDED_WIDTH)
@@ -274,8 +302,10 @@ class MainWindow(QWidget):
             self.panel_operativo.show()
             self.titulo_panel_operativo.show()
 
-            for btn, texto_expandido, _texto_colapsado in self.sidebar_buttons_data:
-                btn.setText(texto_expandido)
+            for btn, texto, icono in self.sidebar_buttons_data:
+                btn.setText(texto)
+                btn.setIcon(self.cargar_icono(icono))
+                btn.setIconSize(QSize(18, 18))
                 btn.setStyleSheet("""
                     QPushButton {
                         text-align: left;
@@ -285,8 +315,8 @@ class MainWindow(QWidget):
                 """)
 
             self.btn_cerrar_sesion.setText("Cerrar sesión")
-            self.btn_cerrar_sesion.setStyleSheet("")
-            self.btn_toggle_sidebar.setText("◀")
+            self.btn_cerrar_sesion.setIcon(self.cargar_icono("salir.png"))
+            self.btn_cerrar_sesion.setIconSize(QSize(18, 18))
 
         else:
             self.sidebar.setMinimumWidth(self.SIDEBAR_COLLAPSED_WIDTH)
@@ -296,8 +326,10 @@ class MainWindow(QWidget):
             self.subtitulo_sidebar.hide()
             self.panel_operativo.hide()
 
-            for btn, _texto_expandido, texto_colapsado in self.sidebar_buttons_data:
-                btn.setText(texto_colapsado)
+            for btn, _texto, icono in self.sidebar_buttons_data:
+                btn.setText("")
+                btn.setIcon(self.cargar_icono(icono))
+                btn.setIconSize(QSize(18, 18))
                 btn.setStyleSheet("""
                     QPushButton {
                         text-align: center;
@@ -307,8 +339,9 @@ class MainWindow(QWidget):
                     }
                 """)
 
-            self.btn_cerrar_sesion.setText("Salir")
-            self.btn_toggle_sidebar.setText("▶")
+            self.btn_cerrar_sesion.setText("")
+            self.btn_cerrar_sesion.setIcon(self.cargar_icono("salir.png"))
+            self.btn_cerrar_sesion.setIconSize(QSize(18, 18))
 
     # =========================================================
     # NAVEGACIÓN
