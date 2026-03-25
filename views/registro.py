@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QMessageBox, QTableWidget,
     QTableWidgetItem, QGroupBox, QHeaderView, QCompleter,
-    QHBoxLayout, QGridLayout, QFrame
+    QHBoxLayout, QGridLayout, QFrame, QSizePolicy
 )
 from PySide6.QtCore import QTimer, Qt
 from datetime import datetime, timedelta
@@ -13,7 +13,6 @@ from controllers.registro_controller import (
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
-from views.admin_edicion import EdicionIngresosWindow
 from views.subida_dialog import SubidaDialog
 
 
@@ -28,6 +27,8 @@ class RegistroWindow(QWidget):
         self.rol = rol
         self.on_volver_panel = on_volver_panel
         self.on_ir_edicion = on_ir_edicion
+        self.panel_secundario_expandido = True
+
         self.setMinimumSize(1000, 650)
         self.init_ui()
 
@@ -40,6 +41,7 @@ class RegistroWindow(QWidget):
         # ENCABEZADO
         # =========================================================
         header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
 
         self.boton_volver = QPushButton("Volver al panel principal")
         self.boton_volver.setObjectName("BotonSecundario")
@@ -49,11 +51,12 @@ class RegistroWindow(QWidget):
         titulo = QLabel("Registro de vehículos")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignCenter)
+        titulo.setWordWrap(True)
 
-        header_layout.addWidget(self.boton_volver, alignment=Qt.AlignLeft)
-        header_layout.addStretch()
-        header_layout.addWidget(titulo)
-        header_layout.addStretch()
+        header_layout.addWidget(self.boton_volver, 0, alignment=Qt.AlignLeft)
+        header_layout.addStretch(1)
+        header_layout.addWidget(titulo, 0)
+        header_layout.addStretch(1)
 
         layout.addLayout(header_layout)
 
@@ -66,11 +69,14 @@ class RegistroWindow(QWidget):
 
         # -------- Búsqueda / patente --------
         grupo_busqueda = QGroupBox("Consulta de patente")
+        grupo_busqueda.setSizePolicy(grupo_busqueda.sizePolicy().horizontalPolicy(), QSizePolicy.Preferred)
         layout_busqueda = QVBoxLayout()
         layout_busqueda.setContentsMargins(14, 18, 14, 18)
         layout_busqueda.setSpacing(10)
 
-        self.label_patente = QLabel("Patente del vehículo:")
+        self.label_patente = QLabel("Patente del vehículo")
+        self.label_patente.setObjectName("EtiquetaFormulario")
+
         self.input_patente = QLineEdit()
         self.input_patente.setObjectName("InputPatente")
         self.input_patente.setPlaceholderText("Ej: ABCD12")
@@ -95,8 +101,8 @@ class RegistroWindow(QWidget):
 
         self.info_label = QLabel("Escribe una patente y presiona Enter o el botón de búsqueda.")
         self.info_label.setObjectName("EstadoInfoNeutro")
-        self.actualizar_estilo_info("neutro")
         self.info_label.setWordWrap(True)
+        self.actualizar_estilo_info("neutro")
 
         layout_busqueda.addWidget(self.label_patente)
         layout_busqueda.addWidget(self.input_patente)
@@ -108,28 +114,28 @@ class RegistroWindow(QWidget):
         grupo_busqueda.setLayout(layout_busqueda)
 
         # -------- Acciones --------
-        grupo_acciones = QGroupBox("Acciones disponibles")
+        grupo_acciones = QGroupBox("Acciones principales")
         layout_acciones = QVBoxLayout()
         layout_acciones.setContentsMargins(14, 18, 14, 18)
-        layout_acciones.setSpacing(10)
+        layout_acciones.setSpacing(8)
 
         self.boton_ingreso = QPushButton("Registrar ingreso")
         self.boton_ingreso.setEnabled(False)
-        self.boton_ingreso.setMinimumHeight(42)
+        self.boton_ingreso.setMinimumHeight(40)
         self.boton_ingreso.clicked.connect(self.registrar_ingreso)
 
         self.boton_salida = QPushButton("Registrar salida")
         self.boton_salida.setEnabled(False)
-        self.boton_salida.setMinimumHeight(42)
+        self.boton_salida.setMinimumHeight(40)
         self.boton_salida.clicked.connect(self.registrar_salida)
 
         self.boton_espera = QPushButton("Marcar como en espera")
         self.boton_espera.setEnabled(False)
-        self.boton_espera.setMinimumHeight(42)
+        self.boton_espera.setMinimumHeight(40)
         self.boton_espera.clicked.connect(self.marcar_en_espera)
 
         self.boton_bano = QPushButton("Registrar uso de baño")
-        self.boton_bano.setMinimumHeight(42)
+        self.boton_bano.setMinimumHeight(40)
         self.boton_bano.clicked.connect(self.mostrar_opciones_bano)
 
         layout_acciones.addWidget(self.boton_ingreso)
@@ -152,11 +158,31 @@ class RegistroWindow(QWidget):
         layout_acciones.addStretch()
         grupo_acciones.setLayout(layout_acciones)
 
-        # -------- Panel lateral informativo --------
-        grupo_estado = QGroupBox("Estado actual")
-        layout_estado = QVBoxLayout()
-        layout_estado.setContentsMargins(14, 18, 14, 18)
-        layout_estado.setSpacing(10)
+        # -------- Panel secundario --------
+        self.grupo_estado = QGroupBox("Información adicional")
+        layout_estado_principal = QVBoxLayout()
+        layout_estado_principal.setContentsMargins(14, 18, 14, 18)
+        layout_estado_principal.setSpacing(10)
+
+        header_estado = QHBoxLayout()
+        header_estado.setSpacing(8)
+
+        self.label_estado_titulo = QLabel("Estado y atajos")
+        self.label_estado_titulo.setObjectName("EtiquetaFormulario")
+
+        self.btn_toggle_panel = QPushButton("Ocultar")
+        self.btn_toggle_panel.setObjectName("BotonSecundario")
+        self.btn_toggle_panel.setMinimumHeight(34)
+        self.btn_toggle_panel.clicked.connect(self.toggle_panel_secundario)
+
+        header_estado.addWidget(self.label_estado_titulo)
+        header_estado.addStretch()
+        header_estado.addWidget(self.btn_toggle_panel)
+
+        self.panel_secundario = QWidget()
+        panel_secundario_layout = QVBoxLayout(self.panel_secundario)
+        panel_secundario_layout.setContentsMargins(0, 0, 0, 0)
+        panel_secundario_layout.setSpacing(10)
 
         self.label_usuario_activo = QLabel(f"Usuario: {self.usuario} ({self.rol})")
         self.label_usuario_activo.setWordWrap(True)
@@ -166,11 +192,11 @@ class RegistroWindow(QWidget):
 
         self.label_atajos = QLabel(
             "Atajos rápidos:\n"
-            "F1: ingresar / salir\n"
+            "F1: ingresar o salir\n"
             "F2: limpiar formulario\n"
             "F3: enfocar patente\n"
             "Enter: buscar patente\n"
-            "Esc: limpiar y volver al inicio\n"
+            "Esc: limpiar formulario\n"
             "F6: registrar baño\n"
             "F7: reingresar vehículo\n"
             "F8: alternar espera\n"
@@ -178,29 +204,32 @@ class RegistroWindow(QWidget):
             "F10: consultar tarifa"
         )
         self.label_atajos.setWordWrap(True)
+        self.label_atajos.setStyleSheet("font-size: 12px;")
 
-        layout_estado.addWidget(self.label_usuario_activo)
-        layout_estado.addWidget(self.label_subida)
-        layout_estado.addWidget(self.label_atajos)
-        layout_estado.addStretch()
+        panel_secundario_layout.addWidget(self.label_usuario_activo)
+        panel_secundario_layout.addWidget(self.label_subida)
+        panel_secundario_layout.addWidget(self.label_atajos)
+        panel_secundario_layout.addStretch()
 
-        grupo_estado.setLayout(layout_estado)
+        layout_estado_principal.addLayout(header_estado)
+        layout_estado_principal.addWidget(self.panel_secundario)
+        self.grupo_estado.setLayout(layout_estado_principal)
 
         superior_layout.addWidget(grupo_busqueda, 0, 0)
         superior_layout.addWidget(grupo_acciones, 0, 1)
-        superior_layout.addWidget(grupo_estado, 0, 2)
+        superior_layout.addWidget(self.grupo_estado, 0, 2)
 
-        superior_layout.setColumnStretch(0, 2)
-        superior_layout.setColumnStretch(1, 2)
-        superior_layout.setColumnStretch(2, 1)
+        superior_layout.setColumnStretch(0, 3)
+        superior_layout.setColumnStretch(1, 3)
+        superior_layout.setColumnStretch(2, 2)
 
         layout.addLayout(superior_layout, 0)
 
         # =========================================================
-        # RESUMEN + TABLA
+        # RESUMEN
         # =========================================================
         resumen_layout = QHBoxLayout()
-        resumen_layout.setSpacing(14)
+        resumen_layout.setSpacing(12)
 
         self.card_estacionados = self.crear_tarjeta_resumen("Vehículos activos", "0")
         self.card_total = self.crear_tarjeta_resumen("Total acumulado", "$0")
@@ -211,48 +240,68 @@ class RegistroWindow(QWidget):
 
         layout.addLayout(resumen_layout)
 
+        # =========================================================
+        # TABLA
+        # =========================================================
         self.grupo_tabla = QGroupBox("Vehículos actualmente estacionados")
         self.grupo_tabla.setVisible(False)
-        self.grupo_tabla.setMinimumHeight(220)
+        self.grupo_tabla.setMinimumHeight(240)
+        self.grupo_tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout_tabla = QVBoxLayout()
-        layout_tabla.setContentsMargins(10, 20, 10, 20)
+        layout_tabla.setContentsMargins(10, 18, 10, 16)
+        layout_tabla.setSpacing(8)
 
         self.tabla_activos = QTableWidget()
         self.tabla_activos.setObjectName("TablaActivos")
         self.tabla_activos.setColumnCount(4)
-        self.tabla_activos.setMinimumHeight(180)
         self.tabla_activos.setHorizontalHeaderLabels(["Patente", "Hora ingreso", "Minutos", "Monto actual"])
+        self.tabla_activos.setMinimumHeight(200)
+        self.tabla_activos.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.tabla_activos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.tabla_activos.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla_activos.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabla_activos.verticalHeader().setDefaultSectionSize(34)
+        self.tabla_activos.verticalHeader().setDefaultSectionSize(36)
+        self.tabla_activos.setVerticalScrollMode(QTableWidget.ScrollPerPixel)
+        self.tabla_activos.setAutoScroll(False)
 
-        self.tabla_activos.horizontalHeader().setStretchLastSection(True)
+        self.tabla_activos.horizontalHeader().setStretchLastSection(False)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
         self.tabla_activos.cellDoubleClicked.connect(self.cargar_patente_desde_tabla)
+        self.tabla_activos.verticalScrollBar().valueChanged.connect(
+            self.actualizar_visibilidad_header_tabla
+        )
 
-        layout_tabla.addWidget(self.tabla_activos)
-        self.label_leyenda_tabla = QLabel("▲ indica que existe una subida temporal vigente para los vehículos mostrados.")
+        self.label_leyenda_tabla = QLabel(
+            "▲ indica que existe una subida temporal vigente para los vehículos mostrados."
+        )
         self.label_leyenda_tabla.setObjectName("LeyendaTabla")
-        layout_tabla.addWidget(self.label_leyenda_tabla)
+        self.label_leyenda_tabla.setWordWrap(True)
+
+        layout_tabla.addWidget(self.tabla_activos, 1)
+        layout_tabla.addWidget(self.label_leyenda_tabla, 0, alignment=Qt.AlignLeft)
+        layout_tabla.setStretch(0, 1)
+        layout_tabla.setStretch(1, 0)
+
         self.grupo_tabla.setLayout(layout_tabla)
         layout.addWidget(self.grupo_tabla, 1)
 
+        # =========================================================
+        # TIMERS / ESTADO INICIAL
+        # =========================================================
         self.timer_tabla = QTimer()
         self.timer_tabla.timeout.connect(self.actualizar_tabla_activos)
-        self.timer_tabla.timeout.connect(self.actualizar_estado_subida) 
+        self.timer_tabla.timeout.connect(self.actualizar_estado_subida)
         self.timer_tabla.start(5000)
 
         self.actualizar_tabla_activos()
         self.actualizar_lista_patentes()
         self.actualizar_estado_subida()
-
-        self.input_patente.setFocus()
+        self.actualizar_visibilidad_header_tabla()
 
         self.setLayout(layout)
 
@@ -260,18 +309,21 @@ class RegistroWindow(QWidget):
 
     def crear_tarjeta_resumen(self, titulo, valor):
         frame = QFrame()
-        frame.setObjectName("TarjetaResumen")
-        frame.setMinimumHeight(90)
+        frame.setObjectName("ResumenModulo")
+        frame.setMinimumHeight(86)
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(6)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(4)
 
         label_titulo = QLabel(titulo)
-        label_titulo.setStyleSheet("font-size: 13px; color: #6b7280;")
+        label_titulo.setObjectName("TituloResumenModulo")
+        label_titulo.setWordWrap(True)
 
         label_valor = QLabel(valor)
-        label_valor.setStyleSheet("font-size: 22px; font-weight: 700; color: #111827;")
+        label_valor.setObjectName("ValorResumenModulo")
+        label_valor.setWordWrap(True)
 
         layout.addWidget(label_titulo)
         layout.addWidget(label_valor)
@@ -279,6 +331,11 @@ class RegistroWindow(QWidget):
         frame.label_titulo = label_titulo
         frame.label_valor = label_valor
         return frame
+
+    def toggle_panel_secundario(self):
+        self.panel_secundario_expandido = not self.panel_secundario_expandido
+        self.panel_secundario.setVisible(self.panel_secundario_expandido)
+        self.btn_toggle_panel.setText("Ocultar" if self.panel_secundario_expandido else "Mostrar")
 
     def volver_al_panel(self):
         self.reset()
@@ -424,10 +481,6 @@ class RegistroWindow(QWidget):
             item_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 3, item_monto)
 
-            if hay_subida_activa:
-                for item in (item_patente, item_hora, item_minutos, item_monto):
-                    item.setBackground(Qt.yellow)
-
             total += monto
 
         fila_total = len(datos)
@@ -462,10 +515,6 @@ class RegistroWindow(QWidget):
         self.tabla_activos.viewport().update()
 
     def actualizar_estado_subida(self):
-        """
-        Actualiza el label de subida temporal mostrando si la subida activa
-        en base de datos está vigente en este momento o solo configurada.
-        """
         subida = obtener_subida_activa()
 
         if not subida:
@@ -480,13 +529,6 @@ class RegistroWindow(QWidget):
             ahora = datetime.now()
 
             def normalizar_hora(valor):
-                """
-                Convierte distintos formatos de hora a objeto time.
-                Soporta:
-                - datetime.time
-                - str 'HH:MM'
-                - str 'HH:MM:SS'
-                """
                 if hasattr(valor, "hour") and hasattr(valor, "minute"):
                     return valor
 
@@ -503,22 +545,15 @@ class RegistroWindow(QWidget):
             hora_inicio = datetime.combine(ahora.date(), hora_inicio_time)
             hora_fin = datetime.combine(ahora.date(), hora_fin_time)
 
-            # Caso normal: mismo día
             if hora_fin > hora_inicio:
                 activa_ahora = hora_inicio <= ahora <= hora_fin
-
-            # Caso cruza medianoche
             else:
                 fin_dia_siguiente = hora_fin + timedelta(days=1)
-
-                # tramo nocturno: desde hora_inicio hasta medianoche, o desde 00:00 hasta hora_fin
                 activa_ahora = (
                     ahora >= hora_inicio or
                     ahora <= datetime.combine(ahora.date(), hora_fin_time)
                 )
 
-                # si estamos después de medianoche y antes de hora_fin,
-                # reconstruimos rango lógico solo para mostrar mejor
                 if ahora.time() <= hora_fin_time:
                     hora_inicio = hora_inicio - timedelta(days=1)
                     hora_fin = fin_dia_siguiente
@@ -526,7 +561,6 @@ class RegistroWindow(QWidget):
                     hora_fin = fin_dia_siguiente
 
             monto = subida.get("monto_adicional", 0)
-
             texto_inicio = hora_inicio_time.strftime("%H:%M")
             texto_fin = hora_fin_time.strftime("%H:%M")
 
@@ -581,7 +615,7 @@ class RegistroWindow(QWidget):
 
         opciones = ["$300", "$400", "$500"]
         monto_str, ok = QInputDialog.getItem(
-            self, "Registrar Baño", "Seleccione el monto:", opciones, 0, False
+            self, "Registrar baño", "Seleccione el monto:", opciones, 0, False
         )
         if ok and monto_str:
             monto = int(monto_str.replace("$", ""))
@@ -634,7 +668,7 @@ class RegistroWindow(QWidget):
 
         if vehiculo:
             monto = vehiculo["monto"]
-            QMessageBox.information(self, "Tarifa Actual", f"Tarifa acumulada: ${monto}")
+            QMessageBox.information(self, "Tarifa actual", f"Tarifa acumulada: ${monto}")
         else:
             QMessageBox.information(self, "No encontrado", "El vehículo no está actualmente en el estacionamiento.")
 
@@ -674,7 +708,7 @@ class RegistroWindow(QWidget):
             self,
             "Confirmar eliminación",
             (
-                f"¿Deseas eliminar el ingreso ACTIVO de la patente {patente}?\n\n"
+                f"¿Deseas eliminar el ingreso activo de la patente {patente}?\n\n"
                 "Este movimiento se respaldará en la tabla de ingresos eliminados."
             ),
             QMessageBox.Yes | QMessageBox.No
@@ -731,11 +765,8 @@ class RegistroWindow(QWidget):
             return False, "La patente solo puede contener letras y números."
 
         return True, ""
-    
+
     def actualizar_estilo_info(self, tipo: str):
-        """
-        Cambia el estilo visual del label informativo según el estado.
-        """
         mapa = {
             "neutro": "EstadoInfoNeutro",
             "ok": "EstadoInfoOk",
@@ -749,9 +780,6 @@ class RegistroWindow(QWidget):
         self.info_label.update()
 
     def enfocar_patente(self, limpiar=False):
-        """
-        Devuelve el foco al campo patente. Opcionalmente limpia el contenido.
-        """
         if limpiar:
             self.input_patente.clear()
 
@@ -770,9 +798,6 @@ class RegistroWindow(QWidget):
             modelo.setStringList(patentes)
 
     def normalizar_hora_tabla(self, valor):
-        """
-        Convierte distintos formatos de hora a objeto time.
-        """
         if hasattr(valor, "hour") and hasattr(valor, "minute"):
             return valor
 
@@ -784,9 +809,6 @@ class RegistroWindow(QWidget):
             return datetime.strptime(valor_str, "%H:%M").time()
 
     def subida_vigente_ahora(self):
-        """
-        Retorna True si la subida temporal activa en BD está vigente en este momento.
-        """
         subida = obtener_subida_activa()
         if not subida:
             return False
@@ -810,9 +832,6 @@ class RegistroWindow(QWidget):
             return False
 
     def aplicar_estilo_fila_total(self, fila_total):
-        """
-        Aplica estilo visual a la fila de total recaudado.
-        """
         for col in range(self.tabla_activos.columnCount()):
             item = self.tabla_activos.item(fila_total, col)
             if item:
@@ -822,10 +841,6 @@ class RegistroWindow(QWidget):
                 item.setBackground(self.palette().alternateBase())
 
     def cargar_patente_desde_tabla(self, fila, columna):
-        """
-        Carga la patente de una fila seleccionada al campo de búsqueda.
-        Ignora la fila de total.
-        """
         item_patente = self.tabla_activos.item(fila, 0)
         if not item_patente:
             return
@@ -837,6 +852,20 @@ class RegistroWindow(QWidget):
         self.input_patente.setText(patente)
         self.input_patente.setFocus()
         self.buscar_vehiculo()
+
+    def actualizar_visibilidad_header_tabla(self):
+        """
+        Oculta el encabezado horizontal de la tabla de vehículos activos
+        cuando el usuario se desplaza hacia abajo, y lo vuelve a mostrar
+        cuando regresa al inicio.
+        """
+        scrollbar = self.tabla_activos.verticalScrollBar()
+        header = self.tabla_activos.horizontalHeader()
+
+        if scrollbar.value() > 0:
+            header.hide()
+        else:
+            header.show()
 
     def keyPressEvent(self, event):
         tecla = event.key()
