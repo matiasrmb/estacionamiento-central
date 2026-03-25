@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox,
-    QGridLayout, QFrame, QSizePolicy
+    QGridLayout, QFrame, QSizePolicy, QHBoxLayout
 )
 from PySide6.QtCore import QDateTime, QTimer, Qt
 
@@ -30,7 +30,7 @@ class DashboardWindow(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(18)
+        layout.setSpacing(14)
 
         # =========================================================
         # ENCABEZADO
@@ -38,33 +38,37 @@ class DashboardWindow(QWidget):
         titulo = QLabel("Resumen diario")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        titulo.setWordWrap(True)
         layout.addWidget(titulo)
 
         self.label_periodo = QLabel(self.obtener_periodo_resumen())
         self.label_periodo.setObjectName("SubtituloSeccion")
         self.label_periodo.setAlignment(Qt.AlignLeft)
+        self.label_periodo.setWordWrap(True)
         layout.addWidget(self.label_periodo)
 
         self.label_hora = QLabel()
         self.label_hora.setAlignment(Qt.AlignLeft)
+        self.label_hora.setWordWrap(True)
         layout.addWidget(self.label_hora)
 
         self.label_usuario = QLabel(f"Usuario activo: {self.usuario} ({self.rol})")
         self.label_usuario.setAlignment(Qt.AlignLeft)
+        self.label_usuario.setWordWrap(True)
         layout.addWidget(self.label_usuario)
 
         # =========================================================
         # TARJETAS DE RESUMEN
         # =========================================================
         grid_resumen = QGridLayout()
-        grid_resumen.setHorizontalSpacing(14)
-        grid_resumen.setVerticalSpacing(14)
+        grid_resumen.setHorizontalSpacing(12)
+        grid_resumen.setVerticalSpacing(12)
 
-        self.card_ingresos = self.crear_tarjeta("Ingresos del turno", "0", "🚗")
-        self.card_estacionados = self.crear_tarjeta("Vehículos estacionados", "0", "🚘")
-        self.card_recaudado = self.crear_tarjeta("Recaudado vehículos", "$0", "💰")
-        self.card_banos = self.crear_tarjeta("Usos de baño", "0", "🚽")
-        self.card_total = self.crear_tarjeta("Total general", "$0", "📊")
+        self.card_ingresos = self.crear_tarjeta("Ingresos del turno", "0")
+        self.card_estacionados = self.crear_tarjeta("Vehículos estacionados", "0")
+        self.card_recaudado = self.crear_tarjeta("Recaudado vehículos", "$0")
+        self.card_banos = self.crear_tarjeta("Usos de baño", "0 | $0")
+        self.card_total = self.crear_tarjeta("Total general", "$0")
 
         grid_resumen.addWidget(self.card_ingresos["frame"], 0, 0)
         grid_resumen.addWidget(self.card_estacionados["frame"], 0, 1)
@@ -72,43 +76,52 @@ class DashboardWindow(QWidget):
         grid_resumen.addWidget(self.card_banos["frame"], 1, 1)
         grid_resumen.addWidget(self.card_total["frame"], 2, 0, 1, 2)
 
+        grid_resumen.setColumnStretch(0, 1)
+        grid_resumen.setColumnStretch(1, 1)
+
         layout.addLayout(grid_resumen)
 
         # =========================================================
-        # ACCIONES
+        # ACCIONES PRINCIPALES
         # =========================================================
+        acciones_layout = QHBoxLayout()
+        acciones_layout.setSpacing(10)
+
         self.boton_cierre = QPushButton("Realizar cierre diario")
         self.boton_cierre.setMinimumHeight(42)
         self.boton_cierre.clicked.connect(self.confirmar_cierre_diario)
-        layout.addWidget(self.boton_cierre)
+
+        acciones_layout.addWidget(self.boton_cierre)
+        acciones_layout.addStretch()
+
+        layout.addLayout(acciones_layout)
 
         # =========================================================
         # ACCESOS RÁPIDOS
         # =========================================================
         accesos_titulo = QLabel("Accesos rápidos")
-        accesos_titulo.setObjectName("TituloPanelOperativo")
+        accesos_titulo.setObjectName("SubtituloSeccion")
+        accesos_titulo.setAlignment(Qt.AlignLeft)
         layout.addWidget(accesos_titulo)
 
-        accesos_layout = QGridLayout()
-        accesos_layout.setHorizontalSpacing(12)
-        accesos_layout.setVerticalSpacing(12)
+        accesos_layout = QHBoxLayout()
+        accesos_layout.setSpacing(10)
 
-        self.btn_ir_registro = QPushButton("Ir a Registro")
+        self.btn_ir_registro = QPushButton("Ir a registro")
         self.btn_ir_registro.setMinimumHeight(40)
-        self.btn_ir_registro.clicked.connect(self.on_ir_registro)
-
-        accesos_layout.addWidget(self.btn_ir_registro, 0, 0)
+        self.btn_ir_registro.clicked.connect(self.ir_a_registro)
+        accesos_layout.addWidget(self.btn_ir_registro)
 
         if self.rol == "administrador":
-            self.btn_ir_reportes = QPushButton("Ir a Reportes")
+            self.btn_ir_reportes = QPushButton("Ir a reportes")
             self.btn_ir_reportes.setMinimumHeight(40)
-            self.btn_ir_reportes.clicked.connect(self.on_ir_reportes)
-            accesos_layout.addWidget(self.btn_ir_reportes, 0, 1)
+            self.btn_ir_reportes.clicked.connect(self.ir_a_reportes)
+            accesos_layout.addWidget(self.btn_ir_reportes)
 
+        accesos_layout.addStretch()
         layout.addLayout(accesos_layout)
 
         layout.addStretch()
-
         self.setLayout(layout)
 
         # Timers
@@ -123,29 +136,26 @@ class DashboardWindow(QWidget):
 
         self.actualizar_resumen()
 
-    def crear_tarjeta(self, titulo, valor, icono):
+    def crear_tarjeta(self, titulo, valor):
         frame = QFrame()
         frame.setObjectName("TarjetaResumen")
         frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        frame.setMinimumHeight(120)
+        frame.setMinimumHeight(110)
 
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(8)
-
-        label_icono = QLabel(icono)
-        label_icono.setAlignment(Qt.AlignLeft)
-        label_icono.setStyleSheet("font-size: 24px;")
-        layout.addWidget(label_icono)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(6)
 
         label_titulo = QLabel(titulo)
-        label_titulo.setStyleSheet("font-size: 13px; color: #6b7280;")
-        layout.addWidget(label_titulo)
+        label_titulo.setObjectName("TituloResumenModulo")
+        label_titulo.setWordWrap(True)
 
         label_valor = QLabel(valor)
-        label_valor.setStyleSheet("font-size: 24px; font-weight: 700; color: #111827;")
-        layout.addWidget(label_valor)
+        label_valor.setObjectName("ValorResumenModulo")
+        label_valor.setWordWrap(True)
 
+        layout.addWidget(label_titulo)
+        layout.addWidget(label_valor)
         layout.addStretch()
 
         return {
@@ -196,7 +206,7 @@ class DashboardWindow(QWidget):
     def confirmar_cierre_diario(self):
         respuesta = QMessageBox.question(
             self,
-            "Confirmar Cierre Diario",
+            "Confirmar cierre diario",
             "¿Estás seguro de que deseas realizar el cierre diario?\nEsto marcará como cerradas todas las salidas registradas hasta ahora.",
             QMessageBox.Yes | QMessageBox.No
         )
@@ -214,3 +224,11 @@ class DashboardWindow(QWidget):
                 self.actualizacion_habilitada = False
             else:
                 QMessageBox.information(self, "Sin registros", mensaje)
+
+    def ir_a_registro(self):
+        if callable(self.on_ir_registro):
+            self.on_ir_registro()
+
+    def ir_a_reportes(self):
+        if callable(self.on_ir_reportes):
+            self.on_ir_reportes()
