@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QPushButton, QLabel, QVBoxLayout,
     QHBoxLayout, QMessageBox, QStackedWidget,
-    QSizePolicy, QFrame, QGridLayout
+    QSizePolicy, QFrame
 )
 from PySide6.QtCore import Qt, QTimer
 
@@ -17,20 +17,26 @@ from views.admin_edicion import EdicionIngresosWindow
 from controllers.login_controller import registrar_asistencia_salida
 from controllers.subida_controller import obtener_subida_activa
 from controllers.registro_controller import obtener_vehiculos_activos
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 class MainWindow(QWidget):
     """
     Ventana principal contenedora del sistema.
+
     Usa navegación interna con QStackedWidget para evitar abrir múltiples
-    ventanas separadas.
+    ventanas separadas y permite contraer/expandir el sidebar para
+    adaptarse mejor a escalados altos como 125%.
     """
+
+    SIDEBAR_EXPANDED_WIDTH = 310
+    SIDEBAR_COLLAPSED_WIDTH = 78
 
     def __init__(self, usuario, rol):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
+        self.sidebar_expandido = True
 
         self.setWindowTitle("Estacionamiento Central - Panel Principal")
         self.setMinimumSize(1280, 720)
@@ -51,55 +57,73 @@ class MainWindow(QWidget):
         # =========================================================
         # SIDEBAR
         # =========================================================
-        sidebar = QFrame()
-        sidebar.setObjectName("Sidebar")
-        sidebar.setMinimumWidth(300)
-        sidebar.setMaximumWidth(360)
+        self.sidebar = QFrame()
+        self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setMinimumWidth(self.SIDEBAR_EXPANDED_WIDTH)
+        self.sidebar.setMaximumWidth(self.SIDEBAR_EXPANDED_WIDTH)
+        self.sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(20, 20, 20, 20)
-        sidebar_layout.setSpacing(12)
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setContentsMargins(16, 16, 16, 16)
+        sidebar_layout.setSpacing(10)
 
-        titulo = QLabel("Estacionamiento Central")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignCenter)
-        titulo.setWordWrap(True)
-        sidebar_layout.addWidget(titulo)
+        # Encabezado del sidebar
+        header_sidebar = QHBoxLayout()
+        header_sidebar.setSpacing(8)
 
-        subtitulo = QLabel(f"{self.usuario} ({self.rol})")
-        subtitulo.setObjectName("SubtituloSeccion")
-        subtitulo.setAlignment(Qt.AlignCenter)
-        subtitulo.setWordWrap(True)
-        sidebar_layout.addWidget(subtitulo)
+        self.titulo_sidebar = QLabel("Estacionamiento Central")
+        self.titulo_sidebar.setObjectName("TituloVentana")
+        self.titulo_sidebar.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.titulo_sidebar.setWordWrap(True)
 
-        self.btn_dashboard = QPushButton("🏠 Panel principal")
-        self.btn_registro = QPushButton("🚗 Registro de vehículos")
-        self.btn_reportes = QPushButton("📊 Reportes")
-        self.btn_mensuales = QPushButton("👥 Clientes mensuales")
-        self.btn_config = QPushButton("⚙️ Configuración")
-        self.btn_tarifas = QPushButton("📈 Tarifas personalizadas")
-        self.btn_usuarios = QPushButton("🔐 Gestión de usuarios")
-        self.btn_asistencias = QPushButton("🕒 Asistencias")
-        self.btn_edicion = QPushButton("✏️ Edición de ingresos")
-        self.btn_cerrar_sesion = QPushButton("🔙 Cerrar sesión")
+        self.btn_toggle_sidebar = QPushButton("☰")
+        self.btn_toggle_sidebar.setObjectName("BotonSecundario")
+        self.btn_toggle_sidebar.setFixedHeight(34)
+        self.btn_toggle_sidebar.setFixedWidth(42)
+        self.btn_toggle_sidebar.clicked.connect(self.toggle_sidebar)
 
-        botones_sidebar = [
-            self.btn_dashboard,
-            self.btn_registro,
+        header_sidebar.addWidget(self.titulo_sidebar, 1)
+        header_sidebar.addWidget(self.btn_toggle_sidebar, 0, alignment=Qt.AlignRight)
+
+        sidebar_layout.addLayout(header_sidebar)
+
+        self.subtitulo_sidebar = QLabel(f"{self.usuario} ({self.rol})")
+        self.subtitulo_sidebar.setObjectName("SubtituloSeccion")
+        self.subtitulo_sidebar.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.subtitulo_sidebar.setWordWrap(True)
+        sidebar_layout.addWidget(self.subtitulo_sidebar)
+
+        # Botones del sidebar
+        self.btn_dashboard = QPushButton("Panel principal")
+        self.btn_registro = QPushButton("Registro de vehículos")
+        self.btn_reportes = QPushButton("Reportes")
+        self.btn_mensuales = QPushButton("Clientes mensuales")
+        self.btn_config = QPushButton("Configuración")
+        self.btn_tarifas = QPushButton("Tarifas personalizadas")
+        self.btn_usuarios = QPushButton("Gestión de usuarios")
+        self.btn_asistencias = QPushButton("Asistencias")
+        self.btn_edicion = QPushButton("Edición de ingresos")
+        self.btn_cerrar_sesion = QPushButton("Cerrar sesión")
+
+        self.sidebar_buttons_data = [
+            (self.btn_dashboard, "Panel principal", "Inicio"),
+            (self.btn_registro, "Registro de vehículos", "Registro"),
         ]
 
         if self.rol == "administrador":
-            botones_sidebar.extend([
-                self.btn_reportes,
-                self.btn_mensuales,
-                self.btn_config,
-                self.btn_tarifas,
-                self.btn_edicion,
-                self.btn_usuarios,
-                self.btn_asistencias,
+            self.sidebar_buttons_data.extend([
+                (self.btn_reportes, "Reportes", "Reportes"),
+                (self.btn_mensuales, "Clientes mensuales", "Mensuales"),
+                (self.btn_config, "Configuración", "Config."),
+                (self.btn_tarifas, "Tarifas personalizadas", "Tarifas"),
+                (self.btn_edicion, "Edición de ingresos", "Edición"),
+                (self.btn_usuarios, "Gestión de usuarios", "Usuarios"),
+                (self.btn_asistencias, "Asistencias", "Asistencias"),
             ])
 
-        for btn in botones_sidebar:
+        for btn, texto_expandido, _texto_colapsado in self.sidebar_buttons_data:
+            btn.setProperty("texto_expandido", texto_expandido)
+            btn.setProperty("texto_colapsado", "")
             btn.setMinimumHeight(42)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             btn.setStyleSheet("""
@@ -121,9 +145,9 @@ class MainWindow(QWidget):
         panel_layout.setContentsMargins(12, 12, 12, 12)
         panel_layout.setSpacing(8)
 
-        titulo_panel = QLabel("Estado del sistema")
-        titulo_panel.setObjectName("TituloPanelOperativo")
-        panel_layout.addWidget(titulo_panel)
+        self.titulo_panel_operativo = QLabel("Estado del sistema")
+        self.titulo_panel_operativo.setObjectName("TituloPanelOperativo")
+        panel_layout.addWidget(self.titulo_panel_operativo)
 
         self.label_estado_turno = QLabel("Turno en operación")
         self.label_estado_turno.setObjectName("EstadoOperativoOk")
@@ -141,7 +165,7 @@ class MainWindow(QWidget):
         panel_layout.addWidget(self.label_estado_subida)
         panel_layout.addWidget(self.label_estado_activos)
 
-        sidebar_layout.addSpacing(8)
+        sidebar_layout.addSpacing(4)
         sidebar_layout.addWidget(self.panel_operativo)
 
         sidebar_layout.addStretch()
@@ -154,18 +178,22 @@ class MainWindow(QWidget):
         # ÁREA DE CONTENIDO
         # =========================================================
         contenedor = QFrame()
+        contenedor.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         contenedor_layout = QVBoxLayout(contenedor)
         contenedor_layout.setContentsMargins(20, 20, 20, 20)
-        contenedor_layout.setSpacing(10)
+        contenedor_layout.setSpacing(8)
 
         self.label_modulo = QLabel("Panel principal")
-        self.label_modulo.setContentsMargins(4, 0, 0, 6)
+        self.label_modulo.setContentsMargins(4, 0, 0, 4)
         self.label_modulo.setObjectName("TituloVentana")
         self.label_modulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.label_modulo.setWordWrap(True)
         contenedor_layout.addWidget(self.label_modulo)
 
         self.stack = QStackedWidget()
-        contenedor_layout.addWidget(self.stack)
+        self.stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        contenedor_layout.addWidget(self.stack, 1)
 
         # =========================================================
         # VISTAS
@@ -223,10 +251,64 @@ class MainWindow(QWidget):
 
         self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion)
 
-        layout_principal.addWidget(sidebar)
-        layout_principal.addWidget(contenedor)
+        layout_principal.addWidget(self.sidebar)
+        layout_principal.addWidget(contenedor, 1)
 
         self.mostrar_dashboard()
+        self.aplicar_estado_sidebar()
+
+    # =========================================================
+    # SIDEBAR
+    # =========================================================
+    def toggle_sidebar(self):
+        self.sidebar_expandido = not self.sidebar_expandido
+        self.aplicar_estado_sidebar()
+
+    def aplicar_estado_sidebar(self):
+        if self.sidebar_expandido:
+            self.sidebar.setMinimumWidth(self.SIDEBAR_EXPANDED_WIDTH)
+            self.sidebar.setMaximumWidth(self.SIDEBAR_EXPANDED_WIDTH)
+
+            self.titulo_sidebar.show()
+            self.subtitulo_sidebar.show()
+            self.panel_operativo.show()
+            self.titulo_panel_operativo.show()
+
+            for btn, texto_expandido, _texto_colapsado in self.sidebar_buttons_data:
+                btn.setText(texto_expandido)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 12px;
+                        font-size: 14px;
+                    }
+                """)
+
+            self.btn_cerrar_sesion.setText("Cerrar sesión")
+            self.btn_cerrar_sesion.setStyleSheet("")
+            self.btn_toggle_sidebar.setText("◀")
+
+        else:
+            self.sidebar.setMinimumWidth(self.SIDEBAR_COLLAPSED_WIDTH)
+            self.sidebar.setMaximumWidth(self.SIDEBAR_COLLAPSED_WIDTH)
+
+            self.titulo_sidebar.hide()
+            self.subtitulo_sidebar.hide()
+            self.panel_operativo.hide()
+
+            for btn, _texto_expandido, texto_colapsado in self.sidebar_buttons_data:
+                btn.setText(texto_colapsado)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: center;
+                        padding-left: 4px;
+                        padding-right: 4px;
+                        font-size: 11px;
+                    }
+                """)
+
+            self.btn_cerrar_sesion.setText("Salir")
+            self.btn_toggle_sidebar.setText("▶")
 
     # =========================================================
     # NAVEGACIÓN
@@ -277,10 +359,10 @@ class MainWindow(QWidget):
         self.stack.setCurrentWidget(self.asistencias_view)
         self.actualizar_panel_operativo()
 
+    # =========================================================
+    # PANEL OPERATIVO
+    # =========================================================
     def normalizar_hora_sidebar(self, valor):
-        """
-        Convierte distintos formatos de hora a objeto time.
-        """
         if hasattr(valor, "hour") and hasattr(valor, "minute"):
             return valor
 
@@ -291,11 +373,7 @@ class MainWindow(QWidget):
         except ValueError:
             return datetime.strptime(valor_str, "%H:%M").time()
 
-
     def subida_vigente_sidebar(self):
-        """
-        Determina si existe una subida temporal activa en este momento.
-        """
         subida = obtener_subida_activa()
         if not subida:
             return False, None
@@ -321,9 +399,6 @@ class MainWindow(QWidget):
             return False, subida
 
     def actualizar_panel_operativo(self):
-        """
-        Refresca indicadores rápidos del sidebar.
-        """
         try:
             self.label_estado_turno.setText("Turno en operación")
             self.label_estado_turno.setObjectName("EstadoOperativoOk")
@@ -371,9 +446,6 @@ class MainWindow(QWidget):
     # SESIÓN
     # =========================================================
     def cerrar_sesion(self):
-        """
-        Registra la salida del usuario y cierra la ventana principal mostrando un resumen.
-        """
         resumen = registrar_asistencia_salida(self.usuario)
 
         QMessageBox.information(

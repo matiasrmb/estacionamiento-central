@@ -1,9 +1,8 @@
-"""
-Hoja de estilos global para Estacionamiento Central (Qt StyleSheet / QSS).
-"""
 
 GLOBAL_STYLESHEET = """
-/* ================== BASE ================== */
+/* =========================================================
+   BASE
+   ========================================================= */
 
 * {
     font-family: "Segoe UI", Arial, sans-serif;
@@ -15,22 +14,60 @@ QWidget {
     color: #111827;
 }
 
-/* ================== TÍTULOS ================== */
+/* =========================================================
+   TIPOGRAFÍA
+   ========================================================= */
 
 QLabel#TituloVentana {
     font-size: 22px;
     font-weight: 700;
-    padding: 8px 0;
+    padding: 4px 0 6px 0;
     color: #111827;
 }
 
 QLabel#SubtituloSeccion {
     font-size: 14px;
     color: #6b7280;
-    padding-bottom: 4px;
+    padding-bottom: 2px;
 }
 
-/* ================== SIDEBAR ================== */
+QLabel#EtiquetaFormulario {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+QLabel#TituloPanelOperativo {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+}
+
+QLabel#TituloResumenModulo {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+QLabel#ValorResumenModulo {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+}
+
+QLabel#TituloAcceso {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+}
+
+QLabel#SubtituloAcceso {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
 
 QFrame#Sidebar {
     background-color: #111827;
@@ -49,6 +86,11 @@ QFrame#Sidebar QLabel#TituloVentana {
     padding: 4px 6px;
 }
 
+QFrame#Sidebar QLabel#SubtituloSeccion {
+    color: #cbd5e1;
+    font-size: 13px;
+}
+
 QFrame#Sidebar QPushButton {
     background-color: #1f2937;
     color: #f9fafb;
@@ -56,6 +98,8 @@ QFrame#Sidebar QPushButton {
     border-radius: 8px;
     padding: 10px 12px;
     text-align: left;
+    font-weight: 600;
+    min-height: 20px;
 }
 
 QFrame#Sidebar QPushButton:hover {
@@ -77,7 +121,9 @@ QFrame#Sidebar QPushButton#BotonPeligro:hover {
     background-color: #b91c1c;
 }
 
-/* ================== BOTONES ================== */
+/* =========================================================
+   BOTONES
+   ========================================================= */
 
 QPushButton {
     background-color: #2563eb;
@@ -86,6 +132,7 @@ QPushButton {
     padding: 8px 12px;
     border: 1px solid #1d4ed8;
     font-weight: 600;
+    min-height: 22px;
 }
 
 QPushButton:hover {
@@ -128,14 +175,38 @@ QPushButton#BotonPeligro:pressed {
     background-color: #991b1b;
 }
 
-/* ================== INPUTS ================== */
+/* Botones compactos dentro de tablas */
+QPushButton#BotonTabla {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 28px;
+    border-radius: 6px;
+}
+
+QPushButton#BotonTablaPeligro {
+    background-color: #dc2626;
+    border-color: #b91c1c;
+    color: #f9fafb;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 28px;
+    border-radius: 6px;
+}
+
+QPushButton#BotonTablaPeligro:hover {
+    background-color: #b91c1c;
+}
+
+/* =========================================================
+   INPUTS
+   ========================================================= */
 
 QLineEdit, QPlainTextEdit, QSpinBox, QComboBox, QDateEdit, QTimeEdit {
     background-color: white;
     border-radius: 8px;
     border: 1px solid #d1d5db;
     padding: 8px 10px;
-    min-height: 20px;
+    min-height: 22px;
 }
 
 QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus,
@@ -148,11 +219,13 @@ QLineEdit#InputPatente {
     letter-spacing: 1px;
 }
 
-/* ================== GROUPBOX ================== */
+/* =========================================================
+   GROUPBOX / PANELES
+   ========================================================= */
 
 QGroupBox {
     border: 1px solid #d1d5db;
-    border-radius: 10px;
+    border-radius: 12px;
     margin-top: 14px;
     padding-top: 14px;
     background-color: #ffffff;
@@ -166,13 +239,48 @@ QGroupBox::title {
     font-weight: 700;
 }
 
-/* ================== TABLAS ================== */
+/* Tarjetas resumen principales */
+QFrame#TarjetaResumen {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+}
+
+/* Tarjetas resumen modulares */
+QFrame#ResumenModulo {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+}
+
+QFrame#ResumenModulo QLabel {
+    background-color: transparent;
+    color: #111827;
+}
+
+/* Paneles tipo tarjeta */
+QFrame#PanelFormulario {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+}
+
+/* Panel de acceso/login/setup */
+QFrame#CardAcceso {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 14px;
+}
+
+/* =========================================================
+   TABLAS
+   ========================================================= */
 
 QTableWidget, QTableView {
     background-color: #ffffff;
     alternate-background-color: #f9fafb;
     gridline-color: #e5e7eb;
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid #d1d5db;
     selection-background-color: #dbeafe;
     selection-color: #111827;
@@ -190,7 +298,30 @@ QTableWidget::item {
     padding: 6px 8px;
 }
 
-/* ================== SCROLLBARS ================== */
+/* Tabla especial de activos */
+QTableWidget#TablaActivos {
+    background-color: #ffffff;
+    alternate-background-color: #f8fafc;
+    gridline-color: #e5e7eb;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    selection-background-color: #dbeafe;
+    selection-color: #111827;
+}
+
+QTableWidget#TablaActivos::item {
+    padding: 8px 10px;
+}
+
+QLabel#LeyendaTabla {
+    color: #6b7280;
+    font-size: 12px;
+    padding-top: 4px;
+}
+
+/* =========================================================
+   SCROLLBARS
+   ========================================================= */
 
 QScrollBar:vertical {
     background: #f3f4f6;
@@ -209,21 +340,13 @@ QScrollBar::sub-line:vertical {
     height: 0px;
 }
 
-/* ================== MENSAJES ================== */
+/* =========================================================
+   ESTADOS / MENSAJES
+   ========================================================= */
 
 QMessageBox {
     background-color: #ffffff;
 }
-
-/* ================== TARJETAS ================== */
-
-QFrame#TarjetaResumen {
-    background-color: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 12px;
-}
-
-/* ================== LABELS DE ESTADO ================== */
 
 QLabel#EstadoInfo {
     background-color: #eff6ff;
@@ -233,7 +356,6 @@ QLabel#EstadoInfo {
     color: #1e3a8a;
     font-size: 13px;
 }
-/* ================== ESTADOS OPERATIVOS ================== */
 
 QLabel#EstadoInfoNeutro {
     background-color: #eff6ff;
@@ -289,28 +411,10 @@ QLabel#EstadoSubidaInactiva {
     color: #4b5563;
     font-size: 13px;
 }
-/* ================== TABLA DE ACTIVOS ================== */
 
-QTableWidget#TablaActivos {
-    background-color: #ffffff;
-    alternate-background-color: #f8fafc;
-    gridline-color: #e5e7eb;
-    border-radius: 10px;
-    border: 1px solid #d1d5db;
-    selection-background-color: #dbeafe;
-    selection-color: #111827;
-}
-
-QTableWidget#TablaActivos::item {
-    padding: 8px 10px;
-}
-
-QLabel#LeyendaTabla {
-    color: #6b7280;
-    font-size: 12px;
-    padding-top: 4px;
-}
-/* ================== PANEL OPERATIVO ================== */
+/* =========================================================
+   PANEL OPERATIVO
+   ========================================================= */
 
 QFrame#PanelOperativo {
     background-color: #ffffff;
@@ -357,82 +461,5 @@ QFrame#PanelOperativo QLabel#EstadoOperativoNeutro {
     color: #4b5563;
     font-size: 12px;
     font-weight: 600;
-}
-/* ================== RESÚMENES DE MÓDULO ================== */
-
-QFrame#ResumenModulo {
-    background-color: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 12px;
-}
-
-QFrame#ResumenModulo QLabel {
-    background-color: transparent;
-    color: #111827;
-}
-
-QLabel#TituloResumenModulo {
-    font-size: 13px;
-    color: #6b7280;
-}
-
-QLabel#ValorResumenModulo {
-    font-size: 22px;
-    font-weight: 700;
-    color: #111827;
-}
-/* ================== FORMULARIOS DE ADMINISTRACIÓN ================== */
-
-QFrame#PanelFormulario {
-    background-color: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 12px;
-}
-
-QLabel#EtiquetaFormulario {
-    font-size: 13px;
-    font-weight: 600;
-    color: #374151;
-}
-
-/* ================== BOTONES DE TABLA ================== */
-
-QPushButton#BotonTabla {
-    padding: 6px 10px;
-    font-size: 12px;
-    min-height: 16px;
-    border-radius: 6px;
-}
-
-QPushButton#BotonTablaPeligro {
-    background-color: #dc2626;
-    border-color: #b91c1c;
-    color: #f9fafb;
-    padding: 6px 10px;
-    font-size: 12px;
-    min-height: 16px;
-    border-radius: 6px;
-}
-
-QPushButton#BotonTablaPeligro:hover {
-    background-color: #b91c1c;
-}
-/* ================== ACCESO / SETUP ================== */
-
-QFrame#CardAcceso {
-    background-color: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 14px;
-}
-
-QLabel#TituloAcceso {
-    font-size: 24px;
-    font-weight: 700;
-    color: #111827;
-}
-
-QLabel#SubtituloAcceso {
-    font-size: 13px;
-    color: #6b7280;
 }
 """
