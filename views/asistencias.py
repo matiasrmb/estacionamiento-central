@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QTableWidget,
     QTableWidgetItem, QDateEdit, QMessageBox,
-    QFrame, QGridLayout, QHeaderView
+    QFrame, QGridLayout, QHeaderView, QSizePolicy
 )
 from PySide6.QtCore import QDate, Qt
 
@@ -25,14 +25,12 @@ class AsistenciasWindow(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
-        # =========================================================
-        # ENCABEZADO
-        # =========================================================
-        titulo = QLabel("Registro de asistencias")
+        titulo = QLabel("Asistencias")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        titulo.setWordWrap(True)
         layout.addWidget(titulo)
 
         subtitulo = QLabel("Consulta asistencias por usuario y rango de fechas, y exporta los resultados.")
@@ -43,22 +41,31 @@ class AsistenciasWindow(QWidget):
         # =========================================================
         # FILTROS
         # =========================================================
+        filtros_group = QFrame()
+        filtros_group.setObjectName("PanelFormulario")
+        filtros_layout_wrapper = QVBoxLayout(filtros_group)
+        filtros_layout_wrapper.setContentsMargins(14, 14, 14, 14)
+        filtros_layout_wrapper.setSpacing(10)
+
         filtros_layout = QGridLayout()
         filtros_layout.setHorizontalSpacing(12)
         filtros_layout.setVerticalSpacing(10)
 
-        label_usuario = QLabel("Usuario:")
+        label_usuario = QLabel("Usuario")
+        label_usuario.setObjectName("EtiquetaFormulario")
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Opcional")
         self.input_usuario.setMinimumHeight(38)
 
-        label_desde = QLabel("Desde:")
+        label_desde = QLabel("Desde")
+        label_desde.setObjectName("EtiquetaFormulario")
         self.fecha_inicio = QDateEdit()
         self.fecha_inicio.setCalendarPopup(True)
         self.fecha_inicio.setDate(QDate.currentDate())
         self.fecha_inicio.setMinimumHeight(38)
 
-        label_hasta = QLabel("Hasta:")
+        label_hasta = QLabel("Hasta")
+        label_hasta.setObjectName("EtiquetaFormulario")
         self.fecha_fin = QDateEdit()
         self.fecha_fin.setCalendarPopup(True)
         self.fecha_fin.setDate(QDate.currentDate())
@@ -90,14 +97,17 @@ class AsistenciasWindow(QWidget):
         filtros_layout.addWidget(self.btn_exportar, 1, 6)
 
         filtros_layout.setColumnStretch(1, 1)
+        filtros_layout.setColumnStretch(3, 1)
+        filtros_layout.setColumnStretch(5, 1)
 
-        layout.addLayout(filtros_layout)
+        filtros_layout_wrapper.addLayout(filtros_layout)
+        layout.addWidget(filtros_group)
 
         # =========================================================
         # RESUMEN
         # =========================================================
         resumen_layout = QHBoxLayout()
-        resumen_layout.setSpacing(14)
+        resumen_layout.setSpacing(12)
 
         self.card_registros = self.crear_tarjeta_resumen("Asistencias encontradas", "0")
         self.card_total = self.crear_tarjeta_resumen("Total recaudado", "$0")
@@ -119,7 +129,8 @@ class AsistenciasWindow(QWidget):
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabla.verticalHeader().setDefaultSectionSize(36)
+        self.tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tabla.verticalHeader().setDefaultSectionSize(38)
 
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
@@ -127,24 +138,27 @@ class AsistenciasWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
 
-        layout.addWidget(self.tabla)
+        layout.addWidget(self.tabla, 1)
 
         self.setLayout(layout)
 
     def crear_tarjeta_resumen(self, titulo, valor):
         frame = QFrame()
         frame.setObjectName("ResumenModulo")
-        frame.setMinimumHeight(90)
+        frame.setMinimumHeight(86)
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(14, 14, 14, 14)
-        frame_layout.setSpacing(6)
+        frame_layout.setContentsMargins(14, 12, 14, 12)
+        frame_layout.setSpacing(4)
 
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("TituloResumenModulo")
+        label_titulo.setWordWrap(True)
 
         label_valor = QLabel(valor)
         label_valor.setObjectName("ValorResumenModulo")
+        label_valor.setWordWrap(True)
 
         frame_layout.addWidget(label_titulo)
         frame_layout.addWidget(label_valor)
@@ -211,7 +225,7 @@ class AsistenciasWindow(QWidget):
 
     def exportar_pdf(self):
         try:
-            if hasattr(self, "resultados") and self.resultados:
+            if self.resultados:
                 exportar_asistencias_pdf(self.resultados)
             else:
                 QMessageBox.warning(self, "Sin datos", "Primero realiza una búsqueda con resultados.")

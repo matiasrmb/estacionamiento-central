@@ -1,10 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHBoxLayout,
-    QMessageBox, QGroupBox, QHeaderView
+    QMessageBox, QGroupBox, QHeaderView, QSizePolicy
 )
 from PySide6.QtCore import Qt
-
 
 from controllers.registro_controller import (
     obtener_ingresos_editables,
@@ -35,12 +34,13 @@ class EdicionIngresosWindow(QWidget):
     def setup_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
         # =========================================================
         # ENCABEZADO
         # =========================================================
         header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
 
         self.btn_volver = QPushButton("Volver al panel principal")
         self.btn_volver.setObjectName("BotonSecundario")
@@ -50,6 +50,7 @@ class EdicionIngresosWindow(QWidget):
         titulo = QLabel("Edición manual de ingresos")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignCenter)
+        titulo.setWordWrap(True)
 
         header_layout.addWidget(self.btn_volver, alignment=Qt.AlignLeft)
         header_layout.addStretch()
@@ -59,8 +60,7 @@ class EdicionIngresosWindow(QWidget):
         layout.addLayout(header_layout)
 
         descripcion = QLabel(
-            "Aquí puedes gestionar ingresos marcados como 'EN ESPERA' o "
-            "'CERRADO' reciente para corregir situaciones operativas."
+            "Gestiona ingresos marcados como en espera o cerrados recientemente para corregir situaciones operativas."
         )
         descripcion.setObjectName("SubtituloSeccion")
         descripcion.setWordWrap(True)
@@ -70,6 +70,8 @@ class EdicionIngresosWindow(QWidget):
         # TABLA
         # =========================================================
         grupo_tabla = QGroupBox("Ingresos disponibles para edición")
+        grupo_tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         layout_tabla = QVBoxLayout()
         layout_tabla.setContentsMargins(12, 18, 12, 18)
         layout_tabla.setSpacing(10)
@@ -80,15 +82,17 @@ class EdicionIngresosWindow(QWidget):
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
         self.tabla.setAlternatingRowColors(True)
-        self.tabla.verticalHeader().setDefaultSectionSize(36)
+        self.tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tabla.verticalHeader().setDefaultSectionSize(38)
+
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
-        layout_tabla.addWidget(self.tabla)
+        layout_tabla.addWidget(self.tabla, 1)
         grupo_tabla.setLayout(layout_tabla)
-        layout.addWidget(grupo_tabla)
+        layout.addWidget(grupo_tabla, 1)
 
         # =========================================================
         # ACCIONES
@@ -164,11 +168,7 @@ class EdicionIngresosWindow(QWidget):
 
         estado = self.tabla.item(fila, 3).text()
         if estado != "EN ESPERA":
-            QMessageBox.warning(
-                self,
-                "No válido",
-                "Solo puedes revertir ingresos marcados como 'EN ESPERA'."
-            )
+            QMessageBox.warning(self, "No válido", "Solo puedes revertir ingresos marcados como 'EN ESPERA'.")
             return
 
         id_ingreso = int(self.tabla.item(fila, 0).text())
@@ -186,11 +186,7 @@ class EdicionIngresosWindow(QWidget):
 
         estado = self.tabla.item(fila, 3).text()
         if estado != "CERRADO":
-            QMessageBox.warning(
-                self,
-                "No válido",
-                "Solo puedes reingresar vehículos cerrados."
-            )
+            QMessageBox.warning(self, "No válido", "Solo puedes reingresar vehículos cerrados.")
             return
 
         id_ingreso = int(self.tabla.item(fila, 0).text())
@@ -208,11 +204,7 @@ class EdicionIngresosWindow(QWidget):
 
         estado = self.tabla.item(fila, 3).text()
         if estado != "EN ESPERA":
-            QMessageBox.warning(
-                self,
-                "No válido",
-                "Solo puedes eliminar ingresos 'en espera'."
-            )
+            QMessageBox.warning(self, "No válido", "Solo puedes eliminar ingresos 'en espera'.")
             return
 
         id_ingreso = int(self.tabla.item(fila, 0).text())
