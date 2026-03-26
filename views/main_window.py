@@ -165,8 +165,8 @@ class MainWindow(QWidget):
         self.panel_operativo.setObjectName("PanelOperativo")
 
         panel_layout = QVBoxLayout(self.panel_operativo)
-        panel_layout.setContentsMargins(12, 12, 12, 12)
-        panel_layout.setSpacing(8)
+        panel_layout.setContentsMargins(8, 6, 8, 6)
+        panel_layout.setSpacing(6)
 
         self.titulo_panel_operativo = QLabel("Estado del sistema")
         self.titulo_panel_operativo.setObjectName("TituloPanelOperativo")

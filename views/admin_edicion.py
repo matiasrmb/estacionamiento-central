@@ -73,7 +73,7 @@ class EdicionIngresosWindow(QWidget):
         grupo_tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout_tabla = QVBoxLayout()
-        layout_tabla.setContentsMargins(12, 18, 12, 18)
+        layout_tabla.setContentsMargins(12, 0, 12, 18)
         layout_tabla.setSpacing(10)
 
         self.tabla = QTableWidget()

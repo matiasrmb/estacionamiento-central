@@ -132,7 +132,7 @@ QPushButton {
     padding: 8px 12px;
     border: 1px solid #1d4ed8;
     font-weight: 600;
-    min-height: 22px;
+    min-height: 20px;
 }
 
 QPushButton:hover {
@@ -179,7 +179,7 @@ QPushButton#BotonPeligro:pressed {
 QPushButton#BotonTabla {
     padding: 6px 10px;
     font-size: 12px;
-    min-height: 28px;
+    min-height: 20px;
     border-radius: 6px;
 }
 
@@ -189,7 +189,7 @@ QPushButton#BotonTablaPeligro {
     color: #f9fafb;
     padding: 6px 10px;
     font-size: 12px;
-    min-height: 28px;
+    min-height: 20px;
     border-radius: 6px;
 }
 

@@ -71,7 +71,7 @@ class RegistroWindow(QWidget):
         grupo_busqueda = QGroupBox("Consulta de patente")
         grupo_busqueda.setSizePolicy(grupo_busqueda.sizePolicy().horizontalPolicy(), QSizePolicy.Preferred)
         layout_busqueda = QVBoxLayout()
-        layout_busqueda.setContentsMargins(14, 18, 14, 18)
+        layout_busqueda.setContentsMargins(14, 0, 14, 18)
         layout_busqueda.setSpacing(10)
 
         self.label_patente = QLabel("Patente del vehículo")
@@ -116,26 +116,26 @@ class RegistroWindow(QWidget):
         # -------- Acciones --------
         grupo_acciones = QGroupBox("Acciones principales")
         layout_acciones = QVBoxLayout()
-        layout_acciones.setContentsMargins(14, 18, 14, 18)
+        layout_acciones.setContentsMargins(14, 0, 14, 18)
         layout_acciones.setSpacing(8)
 
         self.boton_ingreso = QPushButton("Registrar ingreso")
         self.boton_ingreso.setEnabled(False)
-        self.boton_ingreso.setMinimumHeight(40)
+        self.boton_ingreso.setMinimumHeight(32)
         self.boton_ingreso.clicked.connect(self.registrar_ingreso)
 
         self.boton_salida = QPushButton("Registrar salida")
         self.boton_salida.setEnabled(False)
-        self.boton_salida.setMinimumHeight(40)
+        self.boton_salida.setMinimumHeight(32)
         self.boton_salida.clicked.connect(self.registrar_salida)
 
         self.boton_espera = QPushButton("Marcar como en espera")
         self.boton_espera.setEnabled(False)
-        self.boton_espera.setMinimumHeight(40)
+        self.boton_espera.setMinimumHeight(32)
         self.boton_espera.clicked.connect(self.marcar_en_espera)
 
         self.boton_bano = QPushButton("Registrar uso de baño")
-        self.boton_bano.setMinimumHeight(40)
+        self.boton_bano.setMinimumHeight(32)
         self.boton_bano.clicked.connect(self.mostrar_opciones_bano)
 
         layout_acciones.addWidget(self.boton_ingreso)
@@ -144,15 +144,10 @@ class RegistroWindow(QWidget):
         layout_acciones.addWidget(self.boton_bano)
 
         if self.rol == "administrador":
-            self.btn_edicion = QPushButton("Edición manual de ingresos")
-            self.btn_edicion.setMinimumHeight(42)
-            self.btn_edicion.clicked.connect(self.abrir_edicion)
-
             self.boton_subida = QPushButton("Subida temporal de precios")
             self.boton_subida.setMinimumHeight(42)
             self.boton_subida.clicked.connect(self.abrir_dialogo_subida)
 
-            layout_acciones.addWidget(self.btn_edicion)
             layout_acciones.addWidget(self.boton_subida)
 
         layout_acciones.addStretch()
@@ -161,7 +156,7 @@ class RegistroWindow(QWidget):
         # -------- Panel secundario --------
         self.grupo_estado = QGroupBox("Información adicional")
         layout_estado_principal = QVBoxLayout()
-        layout_estado_principal.setContentsMargins(14, 18, 14, 18)
+        layout_estado_principal.setContentsMargins(14, 0, 14, 18)
         layout_estado_principal.setSpacing(10)
 
         header_estado = QHBoxLayout()
@@ -249,7 +244,7 @@ class RegistroWindow(QWidget):
         self.grupo_tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout_tabla = QVBoxLayout()
-        layout_tabla.setContentsMargins(10, 18, 10, 16)
+        layout_tabla.setContentsMargins(10, 0, 10, 16)
         layout_tabla.setSpacing(8)
 
         self.tabla_activos = QTableWidget()
@@ -583,10 +578,6 @@ class RegistroWindow(QWidget):
         self.label_subida.style().unpolish(self.label_subida)
         self.label_subida.style().polish(self.label_subida)
         self.label_subida.update()
-
-    def abrir_edicion(self):
-        if callable(self.on_ir_edicion):
-            self.on_ir_edicion()
 
     def marcar_en_espera(self):
         patente = self.input_patente.text().strip().upper()
