@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QComboBox, QMessageBox, QGroupBox,
-    QGridLayout, QHBoxLayout, QFrame
+    QVBoxLayout, QComboBox, QMessageBox,
+    QGridLayout, QSizePolicy, QFrame
 )
 from PySide6.QtCore import Qt
 
@@ -23,11 +23,12 @@ class ConfiguracionWindow(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
-        titulo = QLabel("Configuración del sistema")
+        titulo = QLabel("Configuración")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        titulo.setWordWrap(True)
         layout.addWidget(titulo)
 
         subtitulo = QLabel("Define el modo de cobro y las tarifas base del estacionamiento.")
@@ -40,25 +41,33 @@ class ConfiguracionWindow(QWidget):
         # =========================================================
         # CONFIGURACIÓN GENERAL
         # =========================================================
-        grupo_general = QGroupBox("Configuración general")
+        panel_general = QFrame()
+        panel_general.setObjectName("PanelFormulario")
+        layout_general_wrapper = QVBoxLayout(panel_general)
+        layout_general_wrapper.setContentsMargins(14, 14, 14, 14)
+        layout_general_wrapper.setSpacing(10)
+
+        titulo_general = QLabel("Configuración general")
+        titulo_general.setObjectName("EtiquetaFormulario")
+        layout_general_wrapper.addWidget(titulo_general)
+
         layout_general = QGridLayout()
-        layout_general.setContentsMargins(14, 20, 14, 20)
         layout_general.setHorizontalSpacing(14)
         layout_general.setVerticalSpacing(12)
 
-        label_modo = QLabel("Modo de cobro:")
+        label_modo = QLabel("Modo de cobro")
         label_modo.setObjectName("EtiquetaFormulario")
         self.modo_combo = QComboBox()
         self.modo_combo.addItems(["minuto", "personalizado"])
         self.modo_combo.setCurrentText(self.config.get("modo_cobro", "minuto"))
         self.modo_combo.setMinimumHeight(38)
 
-        label_minima = QLabel("Tarifa mínima (CLP):")
+        label_minima = QLabel("Tarifa mínima (CLP)")
         label_minima.setObjectName("EtiquetaFormulario")
         self.minima_input = QLineEdit(self.config.get("tarifa_minima", "300"))
         self.minima_input.setMinimumHeight(38)
 
-        label_hora = QLabel("Tarifa por hora (CLP):")
+        label_hora = QLabel("Tarifa por hora (CLP)")
         label_hora.setObjectName("EtiquetaFormulario")
         self.hora_input = QLineEdit(self.config.get("tarifa_hora", "1300"))
         self.hora_input.setMinimumHeight(38)
@@ -71,16 +80,22 @@ class ConfiguracionWindow(QWidget):
         layout_general.addWidget(self.hora_input, 2, 1)
 
         layout_general.setColumnStretch(1, 1)
-        grupo_general.setLayout(layout_general)
-        layout.addWidget(grupo_general)
+
+        layout_general_wrapper.addLayout(layout_general)
+        layout.addWidget(panel_general)
 
         # =========================================================
         # ACCIONES
         # =========================================================
-        grupo_acciones = QGroupBox("Acciones disponibles")
-        layout_acciones = QVBoxLayout()
-        layout_acciones.setContentsMargins(14, 20, 14, 20)
-        layout_acciones.setSpacing(12)
+        panel_acciones = QFrame()
+        panel_acciones.setObjectName("PanelFormulario")
+        layout_acciones_wrapper = QVBoxLayout(panel_acciones)
+        layout_acciones_wrapper.setContentsMargins(14, 14, 14, 14)
+        layout_acciones_wrapper.setSpacing(10)
+
+        titulo_acciones = QLabel("Acciones disponibles")
+        titulo_acciones.setObjectName("EtiquetaFormulario")
+        layout_acciones_wrapper.addWidget(titulo_acciones)
 
         self.btn_generar_tramos = QPushButton("Generar tramos automáticamente")
         self.btn_generar_tramos.setMinimumHeight(40)
@@ -90,13 +105,12 @@ class ConfiguracionWindow(QWidget):
         self.btn_guardar.setMinimumHeight(40)
         self.btn_guardar.clicked.connect(self.guardar)
 
-        layout_acciones.addWidget(self.btn_generar_tramos)
-        layout_acciones.addWidget(self.btn_guardar)
+        layout_acciones_wrapper.addWidget(self.btn_generar_tramos)
+        layout_acciones_wrapper.addWidget(self.btn_guardar)
 
-        grupo_acciones.setLayout(layout_acciones)
-        layout.addWidget(grupo_acciones)
-
+        layout.addWidget(panel_acciones)
         layout.addStretch()
+
         self.setLayout(layout)
 
     def guardar(self):

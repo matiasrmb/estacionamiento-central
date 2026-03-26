@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHBoxLayout,
     QLineEdit, QComboBox, QMessageBox,
-    QInputDialog, QGroupBox, QHeaderView
+    QInputDialog, QGroupBox, QHeaderView, QSizePolicy, QFrame
 )
 from PySide6.QtCore import Qt
 from controllers.usuarios_controller import (
@@ -26,11 +26,12 @@ class UsuariosWindow(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
         titulo = QLabel("Gestión de usuarios")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        titulo.setWordWrap(True)
         layout.addWidget(titulo)
 
         subtitulo = QLabel("Administra cuentas de operadores y administradores del sistema.")
@@ -47,20 +48,29 @@ class UsuariosWindow(QWidget):
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.tabla.verticalHeader().setDefaultSectionSize(58)
 
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
 
-        layout.addWidget(self.tabla)
+        layout.addWidget(self.tabla, 1)
 
         # =========================================================
         # FORMULARIO
         # =========================================================
-        grupo_formulario = QGroupBox("Crear nuevo usuario")
+        formulario = QFrame()
+        formulario.setObjectName("PanelFormulario")
+        form_wrapper = QVBoxLayout(formulario)
+        form_wrapper.setContentsMargins(14, 14, 14, 14)
+        form_wrapper.setSpacing(10)
+
+        label_form = QLabel("Crear nuevo usuario")
+        label_form.setObjectName("EtiquetaFormulario")
+        form_wrapper.addWidget(label_form)
+
         form_layout = QHBoxLayout()
-        form_layout.setContentsMargins(12, 20, 12, 20)
         form_layout.setSpacing(10)
 
         self.input_usuario = QLineEdit()
@@ -80,13 +90,13 @@ class UsuariosWindow(QWidget):
         self.btn_crear.setMinimumHeight(38)
         self.btn_crear.clicked.connect(self.crear_usuario)
 
-        form_layout.addWidget(self.input_usuario)
-        form_layout.addWidget(self.input_clave)
-        form_layout.addWidget(self.select_rol)
-        form_layout.addWidget(self.btn_crear)
+        form_layout.addWidget(self.input_usuario, 2)
+        form_layout.addWidget(self.input_clave, 2)
+        form_layout.addWidget(self.select_rol, 1)
+        form_layout.addWidget(self.btn_crear, 1)
 
-        grupo_formulario.setLayout(form_layout)
-        layout.addWidget(grupo_formulario)
+        form_wrapper.addLayout(form_layout)
+        layout.addWidget(formulario)
 
         self.setLayout(layout)
         self.cargar_usuarios()

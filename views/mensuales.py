@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QHBoxLayout,
-    QInputDialog, QGroupBox
+    QInputDialog, QSizePolicy, QFrame
 )
 from PySide6.QtCore import Qt
 from functools import partial
@@ -27,11 +27,12 @@ class MensualesWindow(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
-        titulo = QLabel("Gestión de clientes mensuales")
+        titulo = QLabel("Clientes mensuales")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        titulo.setWordWrap(True)
         layout.addWidget(titulo)
 
         subtitulo = QLabel("Administra patentes con plan mensual y sus tarifas asociadas.")
@@ -42,9 +43,17 @@ class MensualesWindow(QWidget):
         # =========================================================
         # FORMULARIO
         # =========================================================
-        form_group = QGroupBox("Agregar nuevo cliente mensual")
+        formulario = QFrame()
+        formulario.setObjectName("PanelFormulario")
+        form_wrapper = QVBoxLayout(formulario)
+        form_wrapper.setContentsMargins(14, 14, 14, 14)
+        form_wrapper.setSpacing(10)
+
+        label_form = QLabel("Agregar nuevo cliente mensual")
+        label_form.setObjectName("EtiquetaFormulario")
+        form_wrapper.addWidget(label_form)
+
         form_layout = QHBoxLayout()
-        form_layout.setContentsMargins(12, 20, 12, 20)
         form_layout.setSpacing(10)
 
         self.patente_input = QLineEdit()
@@ -55,10 +64,11 @@ class MensualesWindow(QWidget):
         self.btn_agregar.setMinimumHeight(38)
         self.btn_agregar.clicked.connect(self.agregar_mensual)
 
-        form_layout.addWidget(self.patente_input)
-        form_layout.addWidget(self.btn_agregar)
-        form_group.setLayout(form_layout)
-        layout.addWidget(form_group)
+        form_layout.addWidget(self.patente_input, 3)
+        form_layout.addWidget(self.btn_agregar, 1)
+
+        form_wrapper.addLayout(form_layout)
+        layout.addWidget(formulario)
 
         # =========================================================
         # TABLA
@@ -69,6 +79,7 @@ class MensualesWindow(QWidget):
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.tabla.verticalHeader().setDefaultSectionSize(48)
 
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -76,7 +87,7 @@ class MensualesWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
 
-        layout.addWidget(self.tabla)
+        layout.addWidget(self.tabla, 1)
 
         self.setLayout(layout)
         self.cargar_mensuales()
@@ -149,7 +160,7 @@ class MensualesWindow(QWidget):
     def editar_tarifa(self, id_vehiculo):
         nueva_tarifa, ok = QInputDialog.getDouble(
             self,
-            "Editar Tarifa",
+            "Editar tarifa",
             "Ingresa nueva tarifa mensual:",
             decimals=0
         )

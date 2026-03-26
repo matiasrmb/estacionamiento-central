@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QInputDialog,
-    QMessageBox, QLabel, QGroupBox, QHeaderView
+    QMessageBox, QLabel, QHeaderView, QSizePolicy, QFrame
 )
 from PySide6.QtCore import Qt
 from controllers.tarifas_controller import (
@@ -24,14 +24,12 @@ class TarifasPersonalizadasWindow(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
-        # =========================================================
-        # ENCABEZADO
-        # =========================================================
-        titulo = QLabel("Configuración de tramos de tarifas")
+        titulo = QLabel("Tarifas personalizadas")
         titulo.setObjectName("TituloVentana")
         titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        titulo.setWordWrap(True)
         layout.addWidget(titulo)
 
         subtitulo = QLabel(
@@ -44,9 +42,17 @@ class TarifasPersonalizadasWindow(QWidget):
         # =========================================================
         # ACCIONES
         # =========================================================
-        grupo_botones = QGroupBox("Acciones disponibles")
+        panel_acciones = QFrame()
+        panel_acciones.setObjectName("PanelFormulario")
+        layout_acciones_wrapper = QVBoxLayout(panel_acciones)
+        layout_acciones_wrapper.setContentsMargins(14, 14, 14, 14)
+        layout_acciones_wrapper.setSpacing(10)
+
+        titulo_acciones = QLabel("Acciones disponibles")
+        titulo_acciones.setObjectName("EtiquetaFormulario")
+        layout_acciones_wrapper.addWidget(titulo_acciones)
+
         botones_layout = QHBoxLayout()
-        botones_layout.setContentsMargins(12, 20, 12, 20)
         botones_layout.setSpacing(10)
 
         self.btn_agregar = QPushButton("Agregar intervalo")
@@ -65,8 +71,9 @@ class TarifasPersonalizadasWindow(QWidget):
         botones_layout.addWidget(self.btn_agregar)
         botones_layout.addWidget(self.btn_actualizar)
         botones_layout.addWidget(self.btn_eliminar)
-        grupo_botones.setLayout(botones_layout)
-        layout.addWidget(grupo_botones)
+
+        layout_acciones_wrapper.addLayout(botones_layout)
+        layout.addWidget(panel_acciones)
 
         # =========================================================
         # TABLA
@@ -77,6 +84,7 @@ class TarifasPersonalizadasWindow(QWidget):
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.tabla.verticalHeader().setDefaultSectionSize(38)
 
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -84,13 +92,12 @@ class TarifasPersonalizadasWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
 
-        layout.addWidget(self.tabla)
+        layout.addWidget(self.tabla, 1)
 
         self.setLayout(layout)
         self.cargar_datos()
 
     def cargar_datos(self):
-        """Carga los tramos personalizados desde la base de datos a la tabla."""
         self.tabla.setRowCount(0)
         datos = obtener_tarifas_personalizadas()
 
@@ -113,7 +120,6 @@ class TarifasPersonalizadasWindow(QWidget):
             self.tabla.setItem(i, 3, item_valor)
 
     def agregar(self):
-        """Agrega un nuevo tramo de tarifa personalizada."""
         min_inicio, ok1 = QInputDialog.getInt(self, "Nuevo intervalo", "Desde (minutos):", 0)
         if not ok1:
             return
@@ -130,7 +136,6 @@ class TarifasPersonalizadasWindow(QWidget):
         self.cargar_datos()
 
     def eliminar(self):
-        """Elimina el tramo de tarifa personalizada seleccionado."""
         fila = self.tabla.currentRow()
         if fila < 0:
             QMessageBox.warning(self, "Atención", "Selecciona una fila primero.")
@@ -141,7 +146,6 @@ class TarifasPersonalizadasWindow(QWidget):
         self.cargar_datos()
 
     def actualizar(self):
-        """Actualiza el tramo de tarifa personalizada seleccionado."""
         fila = self.tabla.currentRow()
         if fila < 0:
             QMessageBox.warning(self, "Atención", "Selecciona una fila primero.")
