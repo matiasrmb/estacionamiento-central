@@ -13,26 +13,20 @@ import subprocess
 def generar_ticket_ingreso(patente, fecha_hora):
     """
     Genera e imprime automáticamente un ticket de ingreso para un vehículo.
-
-    Args:
-        patente (str): Patente del vehículo.
-        fecha_hora (datetime): Fecha y hora del ingreso.
-
-    Returns:
-        str: Ruta del archivo PDF generado.
     """
-    pdf = FPDF(format=(58, 100), unit="mm")
+    pdf = FPDF(format=(58, 90), unit="mm")
     pdf.add_page()
-    pdf.set_font("Courier", size=10)
+    pdf.set_auto_page_break(auto=True, margin=4)
+    pdf.set_font("Courier", size=9)
 
-    pdf.cell(0, 5, "ESTACIONAMIENTO CENTRAL", ln=True, align='C')
-    pdf.cell(0, 5, "Ticket de Ingreso", ln=True, align='C')
-    pdf.cell(0, 5, "-" * 28, ln=True, align='C')
+    pdf.cell(0, 5, "ESTACIONAMIENTO CENTRAL", ln=True, align="C")
+    pdf.cell(0, 5, "Ticket de Ingreso", ln=True, align="C")
+    pdf.cell(0, 4, "-" * 28, ln=True, align="C")
     pdf.cell(0, 5, f"Patente: {patente}", ln=True)
     pdf.cell(0, 5, "Ingreso:", ln=True)
-    pdf.cell(0, 5, fecha_hora.strftime('%d-%m-%Y %H:%M:%S'), ln=True)
-    pdf.cell(0, 5, "-" * 28, ln=True, align='C')
-    pdf.cell(0, 5, "Gracias por su visita", ln=True, align='C')
+    pdf.cell(0, 5, fecha_hora.strftime("%d-%m-%Y %H:%M:%S"), ln=True)
+    pdf.cell(0, 4, "-" * 28, ln=True, align="C")
+    pdf.cell(0, 5, "Gracias por su visita", ln=True, align="C")
 
     carpeta = "tickets"
     os.makedirs(carpeta, exist_ok=True)
@@ -50,7 +44,8 @@ def generar_ticket_salida(
     tarifa,
     subida_aplicada=False,
     monto_extra=0,
-    minutos=None
+    minutos=None,
+    modo_cobro="minuto"
 ):
     """
     Genera e imprime automáticamente un ticket de salida para un vehículo.
@@ -63,34 +58,49 @@ def generar_ticket_salida(
         subida_aplicada (bool): Indica si hubo subida temporal aplicada.
         monto_extra (int or float): Monto extra aplicado por subida temporal.
         minutos (int, optional): Minutos totales de permanencia.
+        modo_cobro (str): Modo de cobro aplicado ("minuto", "personalizado", "auto").
 
     Returns:
         str: Ruta del archivo PDF generado.
     """
-    pdf = FPDF(format=(58, 120), unit="mm")
+    pdf = FPDF(format=(58, 130), unit="mm")
     pdf.add_page()
-    pdf.set_font("Courier", size=10)
+    pdf.set_auto_page_break(auto=True, margin=4)
+    pdf.set_font("Courier", size=9)
 
-    pdf.cell(0, 5, "ESTACIONAMIENTO CENTRAL", ln=True, align='C')
-    pdf.cell(0, 5, "Ticket de Salida", ln=True, align='C')
-    pdf.cell(0, 5, "-" * 28, ln=True, align='C')
+    pdf.cell(0, 5, "ESTACIONAMIENTO CENTRAL", ln=True, align="C")
+    pdf.cell(0, 5, "Ticket de Salida", ln=True, align="C")
+    pdf.cell(0, 4, "-" * 28, ln=True, align="C")
+
     pdf.cell(0, 5, f"Patente: {patente}", ln=True)
     pdf.cell(0, 5, "Ingreso:", ln=True)
-    pdf.cell(0, 5, fecha_hora_ingreso.strftime('%d-%m-%Y %H:%M'), ln=True)
+    pdf.cell(0, 5, fecha_hora_ingreso.strftime("%d-%m-%Y %H:%M"), ln=True)
     pdf.cell(0, 5, "Salida:", ln=True)
-    pdf.cell(0, 5, fecha_hora_salida.strftime('%d-%m-%Y %H:%M'), ln=True)
+    pdf.cell(0, 5, fecha_hora_salida.strftime("%d-%m-%Y %H:%M"), ln=True)
 
     if minutos is not None:
         pdf.cell(0, 5, f"Tiempo: {minutos} min", ln=True)
 
-    pdf.cell(0, 5, "-" * 28, ln=True, align='C')
-    pdf.cell(0, 5, f"Total a pagar: ${tarifa:.0f}", ln=True, align='C')
+    pdf.cell(0, 4, "-" * 28, ln=True, align="C")
+
+    # Mostrar modo de cobro
+    modo_legible = {
+        "minuto": "Por minuto",
+        "personalizado": "Tramos",
+        "auto": "Automatico"
+    }.get(modo_cobro, modo_cobro)
+
+    pdf.cell(0, 5, f"Modo cobro: {modo_legible}", ln=True)
 
     if subida_aplicada:
-        pdf.cell(0, 5, f"(Incluye subida +${monto_extra:.0f})", ln=True, align='C')
+        pdf.cell(0, 5, f"Subida aplicada: +${monto_extra:.0f}", ln=True)
 
-    pdf.cell(0, 5, "-" * 28, ln=True, align='C')
-    pdf.cell(0, 5, "Gracias por su visita", ln=True, align='C')
+    pdf.cell(0, 4, "-" * 28, ln=True, align="C")
+    pdf.set_font("Courier", size=10)
+    pdf.cell(0, 6, f"TOTAL A PAGAR: ${tarifa:.0f}", ln=True, align="C")
+    pdf.set_font("Courier", size=9)
+    pdf.cell(0, 4, "-" * 28, ln=True, align="C")
+    pdf.cell(0, 5, "Gracias por su visita", ln=True, align="C")
 
     carpeta = "tickets"
     os.makedirs(carpeta, exist_ok=True)

@@ -58,7 +58,7 @@ class ConfiguracionWindow(QWidget):
         label_modo = QLabel("Modo de cobro")
         label_modo.setObjectName("EtiquetaFormulario")
         self.modo_combo = QComboBox()
-        self.modo_combo.addItems(["minuto", "personalizado"])
+        self.modo_combo.addItems(["minuto", "personalizado", "auto"])
         self.modo_combo.setCurrentText(self.config.get("modo_cobro", "minuto"))
         self.modo_combo.setMinimumHeight(38)
 
@@ -66,6 +66,11 @@ class ConfiguracionWindow(QWidget):
         label_minima.setObjectName("EtiquetaFormulario")
         self.minima_input = QLineEdit(self.config.get("tarifa_minima", "300"))
         self.minima_input.setMinimumHeight(38)
+
+        label_minuto = QLabel("Tarifa por minuto (CLP)")
+        label_minuto.setObjectName("EtiquetaFormulario")
+        self.minuto_input = QLineEdit(self.config.get("valor_minuto", "25"))
+        self.minuto_input.setMinimumHeight(38)
 
         label_hora = QLabel("Tarifa por hora (CLP)")
         label_hora.setObjectName("EtiquetaFormulario")
@@ -76,8 +81,10 @@ class ConfiguracionWindow(QWidget):
         layout_general.addWidget(self.modo_combo, 0, 1)
         layout_general.addWidget(label_minima, 1, 0)
         layout_general.addWidget(self.minima_input, 1, 1)
-        layout_general.addWidget(label_hora, 2, 0)
-        layout_general.addWidget(self.hora_input, 2, 1)
+        layout_general.addWidget(label_minuto, 2, 0)
+        layout_general.addWidget(self.minuto_input, 2, 1)
+        layout_general.addWidget(label_hora, 3, 0)
+        layout_general.addWidget(self.hora_input, 3, 1)
 
         layout_general.setColumnStretch(1, 1)
 
@@ -116,15 +123,17 @@ class ConfiguracionWindow(QWidget):
     def guardar(self):
         modo = self.modo_combo.currentText()
         tarifa_minima = self.minima_input.text().strip()
+        valor_minuto = self.minuto_input.text().strip()
         tarifa_hora = self.hora_input.text().strip()
 
-        if not tarifa_minima.isdigit() or not tarifa_hora.isdigit():
+        if not tarifa_minima.isdigit() or not valor_minuto.isdigit() or not tarifa_hora.isdigit():
             QMessageBox.warning(self, "Error", "Tarifas deben ser números enteros.")
             return
 
         actualizar_configuracion("modo_cobro", modo)
         actualizar_configuracion("tarifa_minima", tarifa_minima)
         actualizar_configuracion("tarifa_hora", tarifa_hora)
+        actualizar_configuracion("valor_minuto", valor_minuto)
 
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 

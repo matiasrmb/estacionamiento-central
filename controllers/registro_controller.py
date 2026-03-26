@@ -7,6 +7,7 @@ from datetime import datetime
 from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
 from controllers.tarifas_controller import calcular_tarifa
 from controllers.subida_controller import obtener_subida_activa
+from controllers.config_controller import obtener_configuracion
 
 def buscar_estado_vehiculo(patente):
     """
@@ -124,23 +125,29 @@ def registrar_salida(patente, usuario):
     minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
     tarifa, subida_aplicada, monto_extra = calcular_tarifa(minutos, fecha_ingreso, ahora, devolver_flag=True)
 
-    monto_extra = 0
-    if subida_aplicada:
-        subida = obtener_subida_activa()
-        if subida:
-            monto_extra = int(subida["monto_adicional"])
-
     cursor.execute("""
         UPDATE ingresos
         SET fecha_hora_salida = %s, tarifa_aplicada = %s, usuario = %s
         WHERE id_ingreso = %s
     """, (ahora, tarifa, usuario, ingreso["id_ingreso"]))
 
+    config = obtener_configuracion()
+    modo_cobro = config.get("modo_cobro", "minuto")
+
     conn.commit()
     cursor.close()
     conn.close()
 
-    generar_ticket_salida(patente, fecha_ingreso, ahora, tarifa, subida_aplicada, monto_extra, minutos)
+    generar_ticket_salida(
+        patente = patente,
+        fecha_hora_ingreso = fecha_ingreso,
+        fecha_hora_salida = ahora,
+        tarifa = tarifa,
+        subida_aplicada = subida_aplicada,
+        monto_extra = monto_extra,
+        minutos = minutos,
+        modo_cobro = modo_cobro
+    )
     return tarifa
     
 def obtener_vehiculos_activos():
