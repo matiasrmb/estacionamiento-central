@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QMessageBox, QTableWidget,
     QTableWidgetItem, QGroupBox, QHeaderView, QCompleter,
-    QHBoxLayout, QGridLayout, QFrame, QSizePolicy
+    QHBoxLayout, QGridLayout, QFrame, QSizePolicy, QScrollArea
 )
 from PySide6.QtCore import QTimer, Qt
 from datetime import datetime, timedelta
@@ -199,12 +199,28 @@ class RegistroWindow(QWidget):
             "F10: consultar tarifa"
         )
         self.label_atajos.setWordWrap(True)
+        self.label_atajos.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.label_atajos.setStyleSheet("font-size: 12px;")
+
+        self.scroll_atajos = QScrollArea()
+        self.scroll_atajos.setWidgetResizable(True)
+        self.scroll_atajos.setFrameShape(QFrame.NoFrame)
+        self.scroll_atajos.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_atajos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_atajos.setMinimumHeight(120)
+
+        contenedor_atajos = QWidget()
+        layout_atajos = QVBoxLayout(contenedor_atajos)
+        layout_atajos.setContentsMargins(0, 8, 0, 50)
+        layout_atajos.setSpacing(0)
+        layout_atajos.addWidget(self.label_atajos)
+        layout_atajos.addStretch()
+
+        self.scroll_atajos.setWidget(contenedor_atajos)
 
         panel_secundario_layout.addWidget(self.label_usuario_activo)
         panel_secundario_layout.addWidget(self.label_subida)
-        panel_secundario_layout.addWidget(self.label_atajos)
-        panel_secundario_layout.addStretch()
+        panel_secundario_layout.addWidget(self.scroll_atajos, 1)
 
         layout_estado_principal.addLayout(header_estado)
         layout_estado_principal.addWidget(self.panel_secundario)
