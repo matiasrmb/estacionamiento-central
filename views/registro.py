@@ -10,9 +10,12 @@ from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso,
     registrar_salida, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera,
-    obtener_patentes_existentes, eliminar_ingreso_activo_por_patente
+    obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
+    registrar_uso_bano
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
+from controllers.config_controller import obtener_configuracion
+from controllers.dashboard_controller import obtener_resumen_banos
 from views.subida_dialog import SubidaDialog
 
 
@@ -127,7 +130,7 @@ class RegistroWindow(QWidget):
         self.boton_espera.setMinimumHeight(32)
         self.boton_espera.clicked.connect(self.marcar_en_espera)
 
-        self.boton_bano = QPushButton("Registrar uso de baño")
+        self.boton_bano = QPushButton("Registrar baño")
         self.boton_bano.setMinimumHeight(32)
         self.boton_bano.clicked.connect(self.mostrar_opciones_bano)
 
@@ -236,9 +239,11 @@ class RegistroWindow(QWidget):
         resumen_layout.setSpacing(12)
 
         self.card_estacionados = self.crear_tarjeta_resumen("Vehículos activos", "0")
+        self.card_banos = self.crear_tarjeta_resumen("Usos de baño hoy", "0")
         self.card_total = self.crear_tarjeta_resumen("Total acumulado", "$0")
 
         resumen_layout.addWidget(self.card_estacionados)
+        resumen_layout.addWidget(self.card_banos)
         resumen_layout.addWidget(self.card_total)
         resumen_layout.addStretch()
 
@@ -512,8 +517,13 @@ class RegistroWindow(QWidget):
         self.grupo_tabla.setVisible(len(datos) > 0)
         self.label_leyenda_tabla.setVisible(len(datos) > 0 and hay_subida_activa)
 
+        resumen_banos = obtener_resumen_banos()
+
         self.card_estacionados.label_valor.setText(str(len(datos)))
         self.card_total.label_valor.setText(f"${total:.0f}")
+        self.card_banos.label_valor.setText(
+            f"{resumen_banos['cantidad']} | ${resumen_banos['total']:.0f}"
+        )
 
         self.tabla_activos.setUpdatesEnabled(True)
         self.tabla_activos.viewport().update()
@@ -610,21 +620,47 @@ class RegistroWindow(QWidget):
                 self.enfocar_patente()
 
     def mostrar_opciones_bano(self):
-        from PySide6.QtWidgets import QInputDialog
-        from controllers.registro_controller import registrar_uso_bano
+        """
+        Registra un uso de baño usando el valor configurado en el sistema,
+        previa confirmación del usuario.
+        """
 
-        opciones = ["$300", "$400", "$500"]
-        monto_str, ok = QInputDialog.getItem(
-            self, "Registrar baño", "Seleccione el monto:", opciones, 0, False
+        try:
+            config = obtener_configuracion()
+            monto = int(config.get("valor_bano", "300"))
+        except Exception:
+            QMessageBox.critical(
+                self,
+                "Error",
+                "No se pudo obtener el valor configurado para el uso de baño."
+            )
+            return
+
+        confirmacion = QMessageBox.question(
+            self,
+            "Confirmar registro de baño",
+            f"¿Deseas registrar un uso de baño por ${monto}?",
+            QMessageBox.Yes | QMessageBox.No
         )
-        if ok and monto_str:
-            monto = int(monto_str.replace("$", ""))
-            exito = registrar_uso_bano(monto, self.usuario)
-            if exito:
-                QMessageBox.information(self, "Éxito", f"Uso de baño registrado por ${monto}")
-                self.enfocar_patente()
-            else:
-                QMessageBox.critical(self, "Error", "No se pudo registrar el uso del baño.")
+
+        if confirmacion != QMessageBox.Yes:
+            return
+
+        exito = registrar_uso_bano(monto, self.usuario)
+        if exito:
+            QMessageBox.information(
+                self,
+                "Éxito",
+                f"Uso de baño registrado por ${monto}."
+            )
+            self.actualizar_tabla_activos()
+            self.enfocar_patente()
+        else:
+            QMessageBox.critical(
+                self,
+                "Error",
+                "No se pudo registrar el uso del baño."
+            )
 
     def reingresar_vehiculo(self):
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado

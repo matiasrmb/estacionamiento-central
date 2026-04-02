@@ -72,6 +72,11 @@ class ConfiguracionWindow(QWidget):
         self.hora_input = QLineEdit(self.config.get("tarifa_hora", "1300"))
         self.hora_input.setMinimumHeight(38)
 
+        label_bano = QLabel("Valor uso de baño (CLP)")
+        label_bano.setObjectName("EtiquetaFormulario")
+        self.bano_input = QLineEdit(self.config.get("valor_bano", "300"))
+        self.bano_input.setMinimumHeight(38)
+
         layout_general.addWidget(label_modo, 0, 0)
         layout_general.addWidget(self.modo_combo, 0, 1)
         layout_general.addWidget(label_minima, 1, 0)
@@ -80,6 +85,8 @@ class ConfiguracionWindow(QWidget):
         layout_general.addWidget(self.minuto_input, 2, 1)
         layout_general.addWidget(label_hora, 3, 0)
         layout_general.addWidget(self.hora_input, 3, 1)
+        layout_general.addWidget(label_bano, 4, 0)
+        layout_general.addWidget(self.bano_input, 4, 1)
 
         layout_general.setColumnStretch(1, 1)
 
@@ -120,8 +127,14 @@ class ConfiguracionWindow(QWidget):
         tarifa_minima = self.minima_input.text().strip()
         valor_minuto = self.minuto_input.text().strip()
         tarifa_hora = self.hora_input.text().strip()
+        valor_bano = self.bano_input.text().strip()
 
-        if not tarifa_minima.isdigit() or not valor_minuto.isdigit() or not tarifa_hora.isdigit():
+        if (
+            not tarifa_minima.isdigit() 
+            or not valor_minuto.isdigit() 
+            or not tarifa_hora.isdigit() 
+            or not valor_bano.isdigit()
+        ):
             QMessageBox.warning(self, "Error", "Tarifas deben ser números enteros.")
             return
 
@@ -129,6 +142,7 @@ class ConfiguracionWindow(QWidget):
         actualizar_configuracion("tarifa_minima", tarifa_minima)
         actualizar_configuracion("tarifa_hora", tarifa_hora)
         actualizar_configuracion("valor_minuto", valor_minuto)
+        actualizar_configuracion("valor_bano", valor_bano)
 
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 
