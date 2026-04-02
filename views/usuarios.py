@@ -28,12 +28,6 @@ class UsuariosWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        titulo = QLabel("Gestión de usuarios")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        titulo.setWordWrap(True)
-        layout.addWidget(titulo)
-
         subtitulo = QLabel("Administra cuentas de operadores y administradores del sistema.")
         subtitulo.setObjectName("SubtituloSeccion")
         subtitulo.setWordWrap(True)

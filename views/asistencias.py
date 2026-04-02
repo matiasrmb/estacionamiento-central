@@ -27,12 +27,6 @@ class AsistenciasWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        titulo = QLabel("Asistencias")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        titulo.setWordWrap(True)
-        layout.addWidget(titulo)
-
         subtitulo = QLabel("Consulta asistencias por usuario y rango de fechas, y exporta los resultados.")
         subtitulo.setObjectName("SubtituloSeccion")
         subtitulo.setWordWrap(True)

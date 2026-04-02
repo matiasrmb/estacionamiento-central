@@ -25,12 +25,6 @@ class ConfiguracionWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        titulo = QLabel("Configuración")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        titulo.setWordWrap(True)
-        layout.addWidget(titulo)
-
         subtitulo = QLabel("Define el modo de cobro y las tarifas base del estacionamiento.")
         subtitulo.setObjectName("SubtituloSeccion")
         subtitulo.setWordWrap(True)

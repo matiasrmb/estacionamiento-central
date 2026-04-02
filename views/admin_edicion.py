@@ -47,14 +47,7 @@ class EdicionIngresosWindow(QWidget):
         self.btn_volver.setMinimumHeight(38)
         self.btn_volver.clicked.connect(self.volver_al_panel)
 
-        titulo = QLabel("Edición manual de ingresos")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignCenter)
-        titulo.setWordWrap(True)
-
         header_layout.addWidget(self.btn_volver, alignment=Qt.AlignLeft)
-        header_layout.addStretch()
-        header_layout.addWidget(titulo)
         header_layout.addStretch()
 
         layout.addLayout(header_layout)

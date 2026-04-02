@@ -48,14 +48,7 @@ class RegistroWindow(QWidget):
         self.boton_volver.setMinimumHeight(38)
         self.boton_volver.clicked.connect(self.volver_al_panel)
 
-        titulo = QLabel("Registro de vehículos")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignCenter)
-        titulo.setWordWrap(True)
-
         header_layout.addWidget(self.boton_volver, 0, alignment=Qt.AlignLeft)
-        header_layout.addStretch(1)
-        header_layout.addWidget(titulo, 0)
         header_layout.addStretch(1)
 
         layout.addLayout(header_layout)

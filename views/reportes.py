@@ -26,12 +26,6 @@ class ReportesWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        titulo = QLabel("Reportes")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        titulo.setWordWrap(True)
-        layout.addWidget(titulo)
-
         subtitulo = QLabel("Consulta movimientos por fecha y patente, y exporta los resultados a PDF.")
         subtitulo.setObjectName("SubtituloSeccion")
         subtitulo.setWordWrap(True)

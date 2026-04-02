@@ -26,12 +26,6 @@ class TarifasPersonalizadasWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        titulo = QLabel("Tarifas personalizadas")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        titulo.setWordWrap(True)
-        layout.addWidget(titulo)
-
         subtitulo = QLabel(
             "Administra intervalos personalizados de cobro según los minutos de permanencia."
         )

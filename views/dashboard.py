@@ -35,11 +35,6 @@ class DashboardWindow(QWidget):
         # =========================================================
         # ENCABEZADO
         # =========================================================
-        titulo = QLabel("Resumen diario")
-        titulo.setObjectName("TituloVentana")
-        titulo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        titulo.setWordWrap(True)
-        layout.addWidget(titulo)
 
         self.label_periodo = QLabel(self.obtener_periodo_resumen())
         self.label_periodo.setObjectName("SubtituloSeccion")
