@@ -4,7 +4,7 @@ from datetime import datetime
 from PySide6.QtWidgets import (
     QWidget, QPushButton, QLabel, QVBoxLayout,
     QHBoxLayout, QMessageBox, QStackedWidget,
-    QSizePolicy, QFrame
+    QSizePolicy, QFrame, QScrollArea
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
@@ -78,6 +78,20 @@ class MainWindow(QWidget):
                 font-size: 14px;
             }
         """)
+
+    def crear_pagina_scrollable(self, widget: QWidget) -> QScrollArea:
+        """
+        Envuelve un widget en un QScrollArea para hacerlo scrollable 
+        cuando la ventana sea demasiado pequeña.
+        """
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        scroll.setWidget(widget)
+        return scroll
 
     def init_ui(self):
         layout_principal = QHBoxLayout(self)
@@ -209,15 +223,25 @@ class MainWindow(QWidget):
         self.usuarios_view = UsuariosWindow()
         self.asistencias_view = AsistenciasWindow()
 
-        self.stack.addWidget(self.dashboard_view)
-        self.stack.addWidget(self.registro_view)
-        self.stack.addWidget(self.reportes_view)
-        self.stack.addWidget(self.mensuales_view)
-        self.stack.addWidget(self.config_view)
-        self.stack.addWidget(self.tarifas_view)
-        self.stack.addWidget(self.edicion_view)
-        self.stack.addWidget(self.usuarios_view)
-        self.stack.addWidget(self.asistencias_view)
+        self.dashboard_page = self.crear_pagina_scrollable(self.dashboard_view)
+        self.registro_page = self.crear_pagina_scrollable(self.registro_view)
+        self.reportes_page = self.crear_pagina_scrollable(self.reportes_view)
+        self.mensuales_page = self.crear_pagina_scrollable(self.mensuales_view)
+        self.config_page = self.crear_pagina_scrollable(self.config_view)
+        self.tarifas_page = self.crear_pagina_scrollable(self.tarifas_view)
+        self.edicion_page = self.crear_pagina_scrollable(self.edicion_view)
+        self.usuarios_page = self.crear_pagina_scrollable(self.usuarios_view)
+        self.asistencias_page = self.crear_pagina_scrollable(self.asistencias_view)
+
+        self.stack.addWidget(self.dashboard_page)
+        self.stack.addWidget(self.registro_page)
+        self.stack.addWidget(self.reportes_page)
+        self.stack.addWidget(self.mensuales_page)
+        self.stack.addWidget(self.config_page)
+        self.stack.addWidget(self.tarifas_page)
+        self.stack.addWidget(self.edicion_page)
+        self.stack.addWidget(self.usuarios_page)
+        self.stack.addWidget(self.asistencias_page)
 
         # =========================================================
         # CONEXIONES
@@ -307,40 +331,40 @@ class MainWindow(QWidget):
     # =========================================================
     def mostrar_dashboard(self):
         self.label_modulo.setText("Panel principal")
-        self.stack.setCurrentWidget(self.dashboard_view)
+        self.stack.setCurrentWidget(self.dashboard_page)
 
     def mostrar_registro(self):
         self.label_modulo.setText("Registro de vehículos")
-        self.stack.setCurrentWidget(self.registro_view)
+        self.stack.setCurrentWidget(self.registro_page)
 
     def mostrar_reportes(self):
         self.label_modulo.setText("Reportes")
-        self.stack.setCurrentWidget(self.reportes_view)
+        self.stack.setCurrentWidget(self.reportes_page)
 
     def mostrar_mensuales(self):
         self.label_modulo.setText("Clientes mensuales")
-        self.stack.setCurrentWidget(self.mensuales_view)
+        self.stack.setCurrentWidget(self.mensuales_page)
 
     def mostrar_configuracion(self):
         self.label_modulo.setText("Configuración")
-        self.stack.setCurrentWidget(self.config_view)
+        self.stack.setCurrentWidget(self.config_page)
 
     def mostrar_tarifas(self):
         self.label_modulo.setText("Tarifas personalizadas")
-        self.stack.setCurrentWidget(self.tarifas_view)
+        self.stack.setCurrentWidget(self.tarifas_page)
 
     def mostrar_edicion(self):
         self.label_modulo.setText("Edición de ingresos")
         self.edicion_view.cargar_datos()
-        self.stack.setCurrentWidget(self.edicion_view)
+        self.stack.setCurrentWidget(self.edicion_page)
 
     def mostrar_usuarios(self):
         self.label_modulo.setText("Gestión de usuarios")
-        self.stack.setCurrentWidget(self.usuarios_view)
+        self.stack.setCurrentWidget(self.usuarios_page)
 
     def mostrar_asistencias(self):
         self.label_modulo.setText("Asistencias")
-        self.stack.setCurrentWidget(self.asistencias_view)
+        self.stack.setCurrentWidget(self.asistencias_page)
 
     # =========================================================
     # SESIÓN
