@@ -61,21 +61,25 @@ class ConfiguracionWindow(QWidget):
         label_minima.setObjectName("EtiquetaFormulario")
         self.minima_input = QLineEdit(self.config.get("tarifa_minima", "300"))
         self.minima_input.setMinimumHeight(38)
+        self.minima_input.returnPressed.connect(self.guardar)
 
         label_minuto = QLabel("Tarifa por minuto (CLP)")
         label_minuto.setObjectName("EtiquetaFormulario")
         self.minuto_input = QLineEdit(self.config.get("valor_minuto", "25"))
         self.minuto_input.setMinimumHeight(38)
+        self.minuto_input.returnPressed.connect(self.guardar)
 
         label_hora = QLabel("Tarifa por hora (CLP)")
         label_hora.setObjectName("EtiquetaFormulario")
         self.hora_input = QLineEdit(self.config.get("tarifa_hora", "1300"))
         self.hora_input.setMinimumHeight(38)
+        self.hora_input.returnPressed.connect(self.guardar)
 
         label_bano = QLabel("Valor uso de baño (CLP)")
         label_bano.setObjectName("EtiquetaFormulario")
         self.bano_input = QLineEdit(self.config.get("valor_bano", "300"))
         self.bano_input.setMinimumHeight(38)
+        self.bano_input.returnPressed.connect(self.guardar)
 
         layout_general.addWidget(label_modo, 0, 0)
         layout_general.addWidget(self.modo_combo, 0, 1)

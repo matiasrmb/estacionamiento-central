@@ -63,6 +63,7 @@ class ReportesWindow(QWidget):
         self.input_patente = QLineEdit()
         self.input_patente.setPlaceholderText("Opcional")
         self.input_patente.setMinimumHeight(38)
+        self.input_patente.returnPressed.connect(self.filtrar)
 
         self.boton_filtrar = QPushButton("Buscar")
         self.boton_filtrar.setMinimumHeight(40)

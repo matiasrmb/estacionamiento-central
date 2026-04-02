@@ -75,6 +75,9 @@ class UsuariosWindow(QWidget):
         self.input_clave.setPlaceholderText("Contraseña")
         self.input_clave.setEchoMode(QLineEdit.Password)
         self.input_clave.setMinimumHeight(38)
+        
+        self.input_usuario.returnPressed.connect(self.input_clave.setFocus)
+        self.input_clave.returnPressed.connect(self.crear_usuario)
 
         self.select_rol = QComboBox()
         self.select_rol.addItems(["Operador", "Administrador"])

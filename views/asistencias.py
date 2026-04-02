@@ -50,6 +50,7 @@ class AsistenciasWindow(QWidget):
         self.input_usuario = QLineEdit()
         self.input_usuario.setPlaceholderText("Opcional")
         self.input_usuario.setMinimumHeight(38)
+        self.input_usuario.returnPressed.connect(self.filtrar)
 
         label_desde = QLabel("Desde")
         label_desde.setObjectName("EtiquetaFormulario")

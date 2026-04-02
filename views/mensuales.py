@@ -53,6 +53,7 @@ class MensualesWindow(QWidget):
         self.patente_input = QLineEdit()
         self.patente_input.setPlaceholderText("Ej: ABCD12")
         self.patente_input.setMinimumHeight(38)
+        self.patente_input.returnPressed.connect(self.agregar_mensual)
 
         self.btn_agregar = QPushButton("Agregar")
         self.btn_agregar.setMinimumHeight(38)
