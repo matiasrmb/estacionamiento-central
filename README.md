@@ -73,8 +73,8 @@ Verificar que el equipo cumpla con los requisitos indicados anteriormente.
 
 ### 2. Descarga del instalador
 
-- Instalador:  
-https://www.mediafire.com/file/ree1fdfj0uh81qr/Instalador_EstacionamientoCentral.exe/file  
+- Instalador:
+https://www.mediafire.com/file/h0k271jf5w6qgkm/Instalador_EstacionamientoCentral_1.1.1.exe/file
 
 - Repositorio del proyecto:  
 https://github.com/matiasrmb/estacionamiento-central  
