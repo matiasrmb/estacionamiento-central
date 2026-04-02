@@ -214,7 +214,9 @@ class MainWindow(QWidget):
 
         self.reportes_view = ReportesWindow()
         self.mensuales_view = MensualesWindow()
-        self.config_view = ConfiguracionWindow()
+        self.config_view = ConfiguracionWindow(
+            on_tramos_actualizados=self.refrescar_tarifas_personalizadas
+        )
         self.tarifas_view = TarifasPersonalizadasWindow()
         self.edicion_view = EdicionIngresosWindow(
             self.usuario,
@@ -265,6 +267,13 @@ class MainWindow(QWidget):
 
         self.mostrar_dashboard()
         self.aplicar_estado_sidebar()
+
+    def refrescar_tarifas_personalizadas(self):
+        """
+        Método para refrescar la vista de tarifas personalizadas 
+        después de generar tramos automáticamente.
+        """
+        self.tarifas_view.cargar_datos()
 
     # =========================================================
     # SIDEBAR
@@ -351,6 +360,7 @@ class MainWindow(QWidget):
 
     def mostrar_tarifas(self):
         self.label_modulo.setText("Tarifas personalizadas")
+        self.tarifas_view.cargar_datos()
         self.stack.setCurrentWidget(self.tarifas_page)
 
     def mostrar_edicion(self):

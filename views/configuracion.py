@@ -15,8 +15,9 @@ class ConfiguracionWindow(QWidget):
     Permite definir modo de cobro, tarifas base y generar tramos automáticos.
     """
 
-    def __init__(self):
+    def __init__(self, on_tramos_actualizados=None):
         super().__init__()
+        self.on_tramos_actualizados = on_tramos_actualizados
         self.setMinimumSize(900, 600)
         self.init_ui()
 
@@ -142,4 +143,8 @@ class ConfiguracionWindow(QWidget):
         if confirmar == QMessageBox.Yes:
             generar_tramos_automaticos()
             actualizar_configuracion("modo_auto_simplificado", 1)
+
+            if callable(self.on_tramos_actualizados):
+                self.on_tramos_actualizados()
+
             QMessageBox.information(self, "Éxito", "Tramos generados correctamente.")
