@@ -240,7 +240,7 @@ class RegistroWindow(QWidget):
 
         self.card_estacionados = self.crear_tarjeta_resumen("Vehículos activos", "0")
         self.card_banos = self.crear_tarjeta_resumen("Usos de baño hoy", "0")
-        self.card_total = self.crear_tarjeta_resumen("Total acumulado", "$0")
+        self.card_total = self.crear_tarjeta_resumen("Total general", "$0")
 
         resumen_layout.addWidget(self.card_estacionados)
         resumen_layout.addWidget(self.card_banos)
@@ -518,11 +518,13 @@ class RegistroWindow(QWidget):
         self.label_leyenda_tabla.setVisible(len(datos) > 0 and hay_subida_activa)
 
         resumen_banos = obtener_resumen_banos()
+        total_banos = float(resumen_banos["total"])
+        total_general = total + total_banos
 
         self.card_estacionados.label_valor.setText(str(len(datos)))
-        self.card_total.label_valor.setText(f"${total:.0f}")
+        self.card_total.label_valor.setText(f"${total_general:.0f}")
         self.card_banos.label_valor.setText(
-            f"{resumen_banos['cantidad']} | ${resumen_banos['total']:.0f}"
+            f"{resumen_banos['cantidad']} | ${total_banos:.0f}"
         )
 
         self.tabla_activos.setUpdatesEnabled(True)
