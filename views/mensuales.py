@@ -74,7 +74,7 @@ class MensualesWindow(QWidget):
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
         self.tabla.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.tabla.verticalHeader().setDefaultSectionSize(48)
+        self.tabla.verticalHeader().setDefaultSectionSize(58)
 
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
