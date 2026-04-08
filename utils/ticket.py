@@ -4,10 +4,12 @@ en formato PDF optimizado para impresoras térmicas de 58mm.
 """
 
 from fpdf import FPDF
-from datetime import datetime
 import os
 import platform
 import subprocess
+from pathlib import Path
+
+from utils.printer_manager import resolver_impresora_tickets
 
 
 def generar_ticket_ingreso(patente, fecha_hora):
@@ -111,30 +113,58 @@ def generar_ticket_salida(
     imprimir_pdf_directamente(ruta)
     return ruta
 
+def obtener_ruta_sumatra() -> str | None:
+    """
+    Busca SumatraPDF en rutas comunes de Windows.
 
-def imprimir_pdf_directamente(ruta, nombre_impresora="POS58 Printer"):
+    Returns:
+        str | None: Ruta del ejecutable si existe, o None.
+    """
+    rutas_posibles = [
+        Path(r"C:\Program Files\SumatraPDF\SumatraPDF.exe"),
+        Path(r"C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe"),
+        Path.home() / r"AppData\Local\SumatraPDF\SumatraPDF.exe",
+    ]
+
+    for ruta in rutas_posibles:
+        if ruta.is_file():
+            return str(ruta)
+
+    return None
+
+def imprimir_pdf_directamente(ruta, nombre_impresora=None):
     """
     Envía un archivo PDF a imprimir directamente usando SumatraPDF.
 
+    Si no se especifica impresora, el sistema intenta resolverla
+    automáticamente desde config.ini o desde Windows.
+
     Args:
         ruta (str): Ruta del archivo PDF.
-        nombre_impresora (str): Nombre de la impresora de destino.
+        nombre_impresora (str | None): Nombre opcional de la impresora.
 
     Returns:
         bool: True si el comando fue lanzado correctamente, False en caso contrario.
     """
-    ruta_sumatra = r"C:\Users\matia\AppData\Local\SumatraPDF\SumatraPDF.exe"
-
     try:
         if not os.path.isfile(ruta):
             raise FileNotFoundError(f"No existe el PDF: {ruta}")
 
-        if not os.path.isfile(ruta_sumatra):
-            raise FileNotFoundError(f"No existe SumatraPDF: {ruta_sumatra}")
+        ruta_sumatra = obtener_ruta_sumatra()
+        if not ruta_sumatra:
+            raise FileNotFoundError(
+                "No se encontró SumatraPDF en rutas conocidas."
+            )
+
+        impresora = nombre_impresora or resolver_impresora_tickets()
+        if not impresora:
+            raise RuntimeError(
+                "No hay impresoras disponibles o configuradas en el sistema."
+            )
 
         comando = [
             ruta_sumatra,
-            "-print-to", nombre_impresora,
+            "-print-to", impresora,
             "-silent",
             "-exit-on-print",
             ruta
