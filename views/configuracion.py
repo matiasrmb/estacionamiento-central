@@ -331,11 +331,27 @@ class ConfiguracionWindow(QWidget):
             QMessageBox.Yes | QMessageBox.No
         )
 
-        if confirmar == QMessageBox.Yes:
-            generar_tramos_automaticos()
+        if confirmar != QMessageBox.Yes:
+            return
+
+        try:
+            resultado = generar_tramos_automaticos()
             actualizar_configuracion("modo_auto_simplificado", 1)
 
             if callable(self.on_tramos_actualizados):
                 self.on_tramos_actualizados()
 
-            QMessageBox.information(self, "Éxito", "Tramos generados correctamente.")
+            QMessageBox.information(
+                self,
+                "Éxito",
+                resultado["mensaje"]
+            )
+
+        except ValueError as e:
+            QMessageBox.warning(self, "Configuración inválida", str(e))
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"No se pudieron generar los tramos automáticos:\n{e}"
+            )

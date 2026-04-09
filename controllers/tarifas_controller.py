@@ -228,43 +228,128 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, de
         return total, subida_aplicada, monto_extra_aplicado
     return total
 
+def construir_valores_automaticos(tarifa_min, tarifa_hora):
+    """
+    Construye la lista de valores en saltos de $100 entre la tarifa mínima
+    y la tarifa por hora, incluyendo ambos extremos.
+
+    Args:
+        tarifa_min (int): Tarifa mínima.
+        tarifa_hora (int): Tarifa por hora.
+
+    Returns:
+        list[int]: Lista de valores para los tramos.
+    """
+    if tarifa_min <= 0 or tarifa_hora <= 0:
+        raise ValueError("Las tarifas deben ser mayores que cero.")
+
+    if tarifa_hora < tarifa_min:
+        raise ValueError("La tarifa por hora no puede ser menor que la tarifa mínima.")
+
+    diferencia = tarifa_hora - tarifa_min
+
+    if diferencia % 100 != 0:
+        raise ValueError(
+            "La diferencia entre la tarifa mínima y la tarifa por hora "
+            "debe ser múltiplo de 100 para generar tramos automáticos."
+        )
+
+    valores = []
+    valor = tarifa_min
+
+    while valor <= tarifa_hora:
+        valores.append(valor)
+        valor += 100
+
+    return valores
+
+def construir_intervalos_equitativos(cantidad_tramos, minutos_totales=60):
+    """
+    Divide un total de minutos en una cantidad de tramos de forma lo más
+    equitativa posible.
+
+    Args:
+        cantidad_tramos (int): Número de tramos a generar.
+        minutos_totales (int): Minutos totales a repartir.
+
+    Returns:
+        list[tuple[int, int]]: Lista de intervalos (inicio, fin).
+    """
+    if cantidad_tramos <= 0:
+        raise ValueError("La cantidad de tramos debe ser mayor que cero.")
+
+    if cantidad_tramos > minutos_totales:
+        raise ValueError(
+            "No es posible generar más tramos que minutos disponibles dentro de una hora."
+        )
+
+    base = minutos_totales // cantidad_tramos
+    sobrantes = minutos_totales % cantidad_tramos
+
+    intervalos = []
+    minuto_actual = 0
+
+    for i in range(cantidad_tramos):
+        longitud = base + (1 if i < sobrantes else 0)
+        inicio = minuto_actual
+        fin = minuto_actual + longitud - 1
+        intervalos.append((inicio, fin))
+        minuto_actual += longitud
+
+    return intervalos
+
 def generar_tramos_automaticos():
     """
-    Genera tramos de cobro automáticos en bloques de 5 minutos, aumentando $100 por tramo.
-    Basado en las tarifas mínimas y por hora desde la configuración.
+    Genera tramos automáticos dentro de una hora, distribuyendo
+    equitativamente los minutos según la cantidad de saltos de $100
+    necesarios entre la tarifa mínima y la tarifa por hora.
+
+    Ejemplo:
+    - tarifa mínima = 300
+    - tarifa hora = 1600
+    - valores generados: 300, 400, 500, ..., 1600
+    - esos valores se reparten equitativamente entre 0 y 59 minutos
+
+    Returns:
+        dict: Resultado de la operación.
     """
     config = obtener_configuracion()
     tarifa_min = int(config.get("tarifa_minima", 300))
     tarifa_hora = int(config.get("tarifa_hora", 1300))
 
-    if tarifa_min <= 0 or tarifa_hora <= 0:
-        return
+    valores = construir_valores_automaticos(tarifa_min, tarifa_hora)
+    intervalos = construir_intervalos_equitativos(len(valores), 60)
+
+    tramos = []
+    for (inicio, fin), valor in zip(intervalos, valores):
+        tramos.append((inicio, fin, valor))
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Limpiar tramos actuales
-    cursor.execute("DELETE FROM tarifas_personalizadas")
+    try:
+        cursor.execute("DELETE FROM tarifas_personalizadas")
 
-    tramos = []
-    valor_actual = tarifa_min
-    minutos = 0
+        for inicio, fin, valor in tramos:
+            cursor.execute("""
+                INSERT INTO tarifas_personalizadas (minuto_inicio, minuto_fin, valor)
+                VALUES (%s, %s, %s)
+            """, (inicio, fin, valor))
 
-    while valor_actual <= tarifa_hora:
-        tramo = (minutos, minutos + 4, valor_actual)
-        tramos.append(tramo)
-        minutos += 5
-        valor_actual += 100
+        conn.commit()
 
-    for inicio, fin, valor in tramos:
-        cursor.execute("""
-            INSERT INTO tarifas_personalizadas (minuto_inicio, minuto_fin, valor)
-            VALUES (%s, %s, %s)
-        """, (inicio, fin, valor))
+    finally:
+        cursor.close()
+        conn.close()
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+    return {
+        "ok": True,
+        "tramos_generados": len(tramos),
+        "mensaje": (
+            f"Se generaron {len(tramos)} tramos automáticos "
+            "distribuidos equitativamente entre 0 y 59 minutos."
+        )
+    }
 
 def validar_intervalo(min_inicio, min_fin, id_excluir=None):
     """
