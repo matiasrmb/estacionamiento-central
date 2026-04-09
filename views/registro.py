@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QGridLayout, QFrame, QSizePolicy, QScrollArea
 )
 from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QShortcut, QKeySequence
 from datetime import datetime, timedelta
 from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso,
@@ -79,12 +80,14 @@ class RegistroWindow(QWidget):
         self.input_patente.setMaxLength(8)
         self.input_patente.setMinimumHeight(42)
         self.input_patente.textChanged.connect(self.normalizar_patente)
+        self.input_patente.returnPressed.connect(self.buscar_vehiculo)
 
         patentes = obtener_patentes_existentes()
         self.completer_patentes = QCompleter(patentes, self)
         self.completer_patentes.setCaseSensitivity(Qt.CaseInsensitive)
         self.completer_patentes.setFilterMode(Qt.MatchContains)
         self.input_patente.setCompleter(self.completer_patentes)
+        self.completer_patentes.activated.connect(self.seleccionar_patente_autocompletada)
 
         self.boton_buscar = QPushButton("Buscar estado del vehículo")
         self.boton_buscar.setMinimumHeight(40)
@@ -183,11 +186,10 @@ class RegistroWindow(QWidget):
 
         self.label_atajos = QLabel(
             "Atajos rápidos:\n"
-            "F1: ingresar o salir\n"
-            "F2: limpiar formulario\n"
-            "F3: enfocar patente\n"
             "Enter: buscar patente\n"
-            "Esc: limpiar formulario\n"
+            "F1: ingresar o salir\n"
+            "F2 o ESC: limpiar formulario\n"
+            "F3: enfocar patente\n"
             "F6: registrar baño\n"
             "F7: reingresar vehículo\n"
             "F8: alternar espera\n"
@@ -313,6 +315,8 @@ class RegistroWindow(QWidget):
         self.actualizar_visibilidad_header_tabla()
 
         self.setLayout(layout)
+
+        self.configurar_atajos()
 
         QTimer.singleShot(0, self.input_patente.setFocus)
 
@@ -905,43 +909,65 @@ class RegistroWindow(QWidget):
         else:
             header.show()
 
-    def keyPressEvent(self, event):
-        tecla = event.key()
+    def seleccionar_patente_autocompletada(self, patente):
+        """
+        Completa automáticamente la patente seleccionada desde el autocompletado
+        y ejecuta la búsqueda de inmediato.
 
-        if tecla == Qt.Key_F1:
-            if self.boton_ingreso.isEnabled():
-                self.registrar_ingreso()
-            elif self.boton_salida.isEnabled():
-                self.registrar_salida()
-            else:
-                QMessageBox.information(self, "Sin acción", "No hay acción disponible para F1.")
+        Args:
+            patente (str): Patente seleccionada desde el QCompleter.
+        """
+        if not patente:
+            return
 
-        elif tecla == Qt.Key_F2:
-            self.reset()
+        self.input_patente.setText(str(patente).strip().upper())
+        self.buscar_vehiculo()
 
-        elif tecla == Qt.Key_F3:
-            self.enfocar_patente()
-
-        elif tecla == Qt.Key_F6:
-            self.mostrar_opciones_bano()
-
-        elif tecla == Qt.Key_F7:
-            self.reingresar_vehiculo()
-
-        elif tecla == Qt.Key_F8:
-            self.alternar_espera_desde_tecla()
-
-        elif tecla == Qt.Key_F9:
-            self.eliminar_ingreso_desde_tecla()
-
-        elif tecla == Qt.Key_F10:
-            self.consultar_tarifa_actual()
-
-        elif tecla == Qt.Key_Escape:
-            self.reset()
-
-        elif tecla == Qt.Key_Return or tecla == Qt.Key_Enter:
-            self.buscar_vehiculo()
-
+    def accion_f1(self):
+        """
+        Ejecuta la acción principal disponible para la patente actual:
+        registrar ingreso o registrar salida.
+        """
+        if self.boton_ingreso.isEnabled():
+            self.registrar_ingreso()
+        elif self.boton_salida.isEnabled():
+            self.registrar_salida()
         else:
-            super().keyPressEvent(event)
+            QMessageBox.information(
+                self,
+                "Sin acción",
+                "No hay acción disponible para F1."
+            )
+
+    def configurar_atajos(self):
+        """
+        Configura los atajos globales de teclado para la ventana de registro.
+        Funcionan mientras la ventana esté activa, sin depender del foco
+        exacto en el campo de patente.
+        """
+        self.shortcut_f1 = QShortcut(QKeySequence("F1"), self)
+        self.shortcut_f1.activated.connect(self.accion_f1)
+
+        self.shortcut_f2 = QShortcut(QKeySequence("F2"), self)
+        self.shortcut_f2.activated.connect(self.reset)
+
+        self.shortcut_f3 = QShortcut(QKeySequence("F3"), self)
+        self.shortcut_f3.activated.connect(self.enfocar_patente)
+
+        self.shortcut_f6 = QShortcut(QKeySequence("F6"), self)
+        self.shortcut_f6.activated.connect(self.mostrar_opciones_bano)
+
+        self.shortcut_f7 = QShortcut(QKeySequence("F7"), self)
+        self.shortcut_f7.activated.connect(self.reingresar_vehiculo)
+
+        self.shortcut_f8 = QShortcut(QKeySequence("F8"), self)
+        self.shortcut_f8.activated.connect(self.alternar_espera_desde_tecla)
+
+        self.shortcut_f9 = QShortcut(QKeySequence("F9"), self)
+        self.shortcut_f9.activated.connect(self.eliminar_ingreso_desde_tecla)
+
+        self.shortcut_f10 = QShortcut(QKeySequence("F10"), self)
+        self.shortcut_f10.activated.connect(self.consultar_tarifa_actual)
+
+        self.shortcut_escape = QShortcut(QKeySequence(Qt.Key_Escape), self)
+        self.shortcut_escape.activated.connect(self.reset)

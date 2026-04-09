@@ -23,8 +23,10 @@ def buscar_estado_vehiculo(patente):
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # 1. Ver si existe el vehículo
-        cursor.execute("SELECT id_vehiculo FROM vehiculos WHERE patente = %s", (patente,))
+        cursor.execute(
+            "SELECT id_vehiculo FROM vehiculos WHERE patente = %s LIMIT 1",
+            (patente,)
+        )
         vehiculo = cursor.fetchone()
 
         if not vehiculo:
@@ -32,20 +34,20 @@ def buscar_estado_vehiculo(patente):
 
         id_vehiculo = vehiculo["id_vehiculo"]
 
-        # 👇 Evitar problema: limpiar resultados anteriores
-        cursor.fetchall()
-
-        # 2. Verificar si tiene un ingreso activo
         cursor.execute("""
-            SELECT id_ingreso FROM ingresos
+            SELECT id_ingreso
+            FROM ingresos
             WHERE id_vehiculo = %s AND fecha_hora_salida IS NULL
+            ORDER BY fecha_hora_ingreso DESC
+            LIMIT 1
         """, (id_vehiculo,))
         ingreso_abierto = cursor.fetchone()
 
-        if ingreso_abierto:
-            return "dentro"
-        else:
-            return "fuera"
+        return "dentro" if ingreso_abierto else "fuera"
+
+    except Exception as e:
+        print(f"Error en buscar_estado_vehiculo: {e}")
+        return None
 
     finally:
         cursor.close()
