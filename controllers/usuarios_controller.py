@@ -48,8 +48,10 @@ def crear_usuario(usuario, clave, rol):
     except Exception as e:
         print("Error al crear usuario:", e)
         exito = False
-    cursor.close()
-    conn.close()
+    finally:    
+        cursor.close()
+        conn.close()
+
     return exito
 
 def cambiar_contrasena(usuario, nueva_clave):
@@ -63,21 +65,27 @@ def cambiar_contrasena(usuario, nueva_clave):
     Returns:
         bool: True si el cambio fue exitoso, False si hubo error.
     """
+    if not usuario or not nueva_clave:
+        return False
+
     conn = get_connection()
     cursor = conn.cursor()
-    nuevo_hash = bcrypt.hashpw(nueva_clave.encode('utf-8'), bcrypt.gensalt())
+    nuevo_hash = bcrypt.hashpw(nueva_clave.encode("utf-8"), bcrypt.gensalt())
+
     try:
         cursor.execute(
             "UPDATE usuarios SET clave_hash = %s WHERE usuario = %s",
             (nuevo_hash, usuario)
         )
         conn.commit()
-        exito = True
+        exito = cursor.rowcount > 0
     except Exception as e:
         print("Error al cambiar contraseña:", e)
         exito = False
-    cursor.close()
-    conn.close()
+    finally:
+        cursor.close()
+        conn.close()
+
     return exito
 
 def cambiar_estado_usuario(usuario, nuevo_estado):
@@ -100,6 +108,8 @@ def cambiar_estado_usuario(usuario, nuevo_estado):
     except Exception as e:
         print("Error al cambiar estado del usuario:", e)
         exito = False
-    cursor.close()
-    conn.close()
+    finally:
+        cursor.close()
+        conn.close()
+        
     return exito

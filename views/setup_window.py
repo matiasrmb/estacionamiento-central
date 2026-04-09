@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QMessageBox, QFrame, QGridLayout
+    QPushButton, QComboBox, QMessageBox, QFrame, 
+    QGridLayout, QHBoxLayout
 )
 from PySide6.QtCore import Qt
 
@@ -62,6 +63,16 @@ class SetupWindow(QWidget):
         self.input_clave.setPlaceholderText("Ingresa una contraseña")
         self.input_clave.setMinimumHeight(38)
 
+        self.btn_toggle_clave = QPushButton("Mostrar")
+        self.btn_toggle_clave.setCheckable(True)
+        self.btn_toggle_clave.setMinimumHeight(38)
+        self.btn_toggle_clave.clicked.connect(self.toggle_password_visibility)
+
+        clave_layout = QHBoxLayout()
+        clave_layout.setSpacing(8)
+        clave_layout.addWidget(self.input_clave, 1)
+        clave_layout.addWidget(self.btn_toggle_clave)
+
         label_rol = QLabel("Rol")
         self.combo_rol = QComboBox()
         self.combo_rol.addItems(["administrador", "operador"])
@@ -70,7 +81,7 @@ class SetupWindow(QWidget):
         form_layout.addWidget(label_usuario, 0, 0)
         form_layout.addWidget(self.input_usuario, 0, 1)
         form_layout.addWidget(label_clave, 1, 0)
-        form_layout.addWidget(self.input_clave, 1, 1)
+        form_layout.addLayout(clave_layout, 1, 1)
         form_layout.addWidget(label_rol, 2, 0)
         form_layout.addWidget(self.combo_rol, 2, 1)
 
@@ -117,3 +128,11 @@ class SetupWindow(QWidget):
                 "Error",
                 "No se pudo crear el usuario. Verifica la conexión a la base de datos y la existencia de la tabla usuarios."
             )
+
+    def toggle_password_visibility(self):
+        """
+        Alterna entre mostrar y ocultar la contraseña ingresada.
+        """
+        visible = self.btn_toggle_clave.isChecked()
+        self.input_clave.setEchoMode(QLineEdit.Normal if visible else QLineEdit.Password)
+        self.btn_toggle_clave.setText("Ocultar" if visible else "Mostrar")

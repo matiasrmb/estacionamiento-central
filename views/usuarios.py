@@ -1,14 +1,15 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHBoxLayout,
-    QLineEdit, QComboBox, QMessageBox,
-    QInputDialog, QGroupBox, QHeaderView, QSizePolicy, QFrame
+    QLineEdit, QComboBox, QMessageBox, 
+    QHeaderView, QSizePolicy, QFrame
 )
 from PySide6.QtCore import Qt
 from controllers.usuarios_controller import (
     obtener_usuarios, crear_usuario,
     cambiar_contrasena, cambiar_estado_usuario
 )
+from views.dialog_cambiar_clave import CambiarClaveDialog
 from functools import partial
 
 
@@ -75,6 +76,16 @@ class UsuariosWindow(QWidget):
         self.input_clave.setPlaceholderText("Contraseña")
         self.input_clave.setEchoMode(QLineEdit.Password)
         self.input_clave.setMinimumHeight(38)
+
+        self.btn_toggle_clave = QPushButton("Mostrar")
+        self.btn_toggle_clave.setCheckable(True)
+        self.btn_toggle_clave.setMinimumHeight(38)
+        self.btn_toggle_clave.clicked.connect(self.toggle_password_visibility)
+
+        clave_layout = QHBoxLayout()
+        clave_layout.setSpacing(8)
+        clave_layout.addWidget(self.input_clave, 1)
+        clave_layout.addWidget(self.btn_toggle_clave)
         
         self.input_usuario.returnPressed.connect(self.input_clave.setFocus)
         self.input_clave.returnPressed.connect(self.crear_usuario)
@@ -88,7 +99,7 @@ class UsuariosWindow(QWidget):
         self.btn_crear.clicked.connect(self.crear_usuario)
 
         form_layout.addWidget(self.input_usuario, 2)
-        form_layout.addWidget(self.input_clave, 2)
+        form_layout.addLayout(clave_layout, 3)
         form_layout.addWidget(self.select_rol, 1)
         form_layout.addWidget(self.btn_crear, 1)
 
@@ -157,22 +168,37 @@ class UsuariosWindow(QWidget):
             QMessageBox.information(self, "Éxito", "Usuario creado correctamente.")
             self.input_usuario.clear()
             self.input_clave.clear()
+
+            if self.btn_toggle_clave.isChecked():
+                self.btn_toggle_clave.setChecked(False)
+                self.input_clave.setEchoMode(QLineEdit.Password)
+                self.btn_toggle_clave.setText("Mostrar")
+
             self.cargar_usuarios()
         else:
             QMessageBox.critical(self, "Error", "No se pudo crear el usuario.")
 
     def preguntar_nueva_clave(self, usuario):
-        clave, ok = QInputDialog.getText(
-            self,
-            "Cambiar contraseña",
-            f"Ingresar nueva clave para '{usuario}':",
-            QLineEdit.Password
-        )
-        if ok and clave:
-            if cambiar_contrasena(usuario, clave):
-                QMessageBox.information(self, "Éxito", "Contraseña actualizada.")
+        """
+        Abre un diálogo para restablecer la contraseña del usuario seleccionado.
+        """
+        dialogo = CambiarClaveDialog(usuario, self)
+
+        if dialogo.exec():
+            nueva_clave = dialogo.obtener_clave()
+
+            if cambiar_contrasena(usuario, nueva_clave):
+                QMessageBox.information(
+                    self,
+                    "Éxito",
+                    f"La contraseña del usuario '{usuario}' fue actualizada correctamente."
+                )
             else:
-                QMessageBox.critical(self, "Error", "No se pudo cambiar la contraseña.")
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    "No se pudo cambiar la contraseña."
+                )
 
     def toggle_estado_usuario(self, usuario, nuevo_estado):
         texto = "activar" if nuevo_estado else "desactivar"
@@ -188,3 +214,11 @@ class UsuariosWindow(QWidget):
                 self.cargar_usuarios()
             else:
                 QMessageBox.critical(self, "Error", "No se pudo actualizar el estado.")
+
+    def toggle_password_visibility(self):
+        """
+        Alterna entre mostrar y ocultar la contraseña del formulario de creación.
+        """
+        visible = self.btn_toggle_clave.isChecked()
+        self.input_clave.setEchoMode(QLineEdit.Normal if visible else QLineEdit.Password)
+        self.btn_toggle_clave.setText("Ocultar" if visible else "Mostrar")
