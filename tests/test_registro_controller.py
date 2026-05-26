@@ -101,6 +101,25 @@ class RegistrarIngresoTests(unittest.TestCase):
     @patch.object(registro_controller, "generar_ticket_ingreso")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
+    def test_registrar_ingreso_detallado_retorna_fecha_de_ingreso(
+        self,
+        db_cursor,
+        obtener_activos,
+        generar_ticket,
+    ):
+        cursor = FakeCursor(fetchone_results=[(77,)])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_activos.return_value = []
+
+        resultado = registro_controller.registrar_ingreso_detallado("ABC123")
+
+        self.assertEqual(resultado["patente"], "ABC123")
+        self.assertIsInstance(resultado["fecha_hora_ingreso"], datetime)
+        generar_ticket.assert_called_once()
+
+    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
     def test_registra_ingreso_usando_vehiculo_existente(
         self,
         db_cursor,
@@ -240,6 +259,41 @@ class RegistrarSalidaTests(unittest.TestCase):
         generar_ticket.assert_called_once()
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("UPDATE ingresos", consultas)
+
+    @patch.object(registro_controller, "generar_ticket_salida")
+    @patch.object(registro_controller, "obtener_configuracion")
+    @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_registrar_salida_detallada_retorna_horas_minutos_y_tarifa(
+        self,
+        db_cursor,
+        obtener_activos,
+        calcular_tarifa,
+        obtener_configuracion,
+        generar_ticket,
+    ):
+        cursor = FakeCursor()
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
+        obtener_activos.return_value = [
+            {
+                "id_ingreso": 10,
+                "fecha_hora_ingreso": fecha_ingreso,
+                "patente": "ABC123",
+            }
+        ]
+        calcular_tarifa.return_value = (1500, False, 0)
+        obtener_configuracion.return_value = {"modo_cobro": "minuto"}
+
+        resultado = registro_controller.registrar_salida_detallada("ABC123", "admin")
+
+        self.assertEqual(resultado["patente"], "ABC123")
+        self.assertEqual(resultado["fecha_hora_ingreso"], fecha_ingreso)
+        self.assertIsInstance(resultado["fecha_hora_salida"], datetime)
+        self.assertIsInstance(resultado["minutos"], int)
+        self.assertEqual(resultado["tarifa"], 1500)
+        generar_ticket.assert_called_once()
 
     @patch.object(registro_controller, "generar_ticket_salida")
     @patch.object(registro_controller, "obtener_configuracion")

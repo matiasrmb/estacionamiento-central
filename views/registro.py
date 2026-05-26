@@ -8,8 +8,8 @@ from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QShortcut, QKeySequence
 from datetime import datetime, timedelta
 from controllers.registro_controller import (
-    buscar_estado_vehiculo, registrar_ingreso,
-    registrar_salida, obtener_vehiculos_activos,
+    buscar_estado_vehiculo, registrar_ingreso_detallado,
+    registrar_salida_detallada, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
     registrar_uso_bano
@@ -18,6 +18,10 @@ from controllers.subida_controller import crear_subida_temporal, obtener_subida_
 from controllers.config_controller import obtener_configuracion
 from controllers.dashboard_controller import obtener_resumen_banos
 from views.subida_dialog import SubidaDialog
+
+
+def formatear_fecha_hora(valor):
+    return valor.strftime("%d/%m/%Y %H:%M")
 
 
 class RegistroWindow(QWidget):
@@ -409,9 +413,15 @@ class RegistroWindow(QWidget):
             self.enfocar_patente()
             return
 
-        exito = registrar_ingreso(patente)
-        if exito:
-            QMessageBox.information(self, "Éxito", f"Ingreso registrado para {patente}")
+        ingreso = registrar_ingreso_detallado(patente)
+        if ingreso:
+            QMessageBox.information(
+                self,
+                "Ingreso registrado",
+                "Vehículo ingresado correctamente\n\n"
+                f"Patente: {ingreso['patente']}\n"
+                f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}"
+            )
             self.actualizar_lista_patentes()
             self.reset()
         else:
@@ -433,9 +443,18 @@ class RegistroWindow(QWidget):
             self.enfocar_patente()
             return
 
-        tarifa = registrar_salida(patente, self.usuario)
-        if tarifa is not None:
-            QMessageBox.information(self, "Salida registrada", f"Tarifa: ${tarifa:.0f}")
+        salida = registrar_salida_detallada(patente, self.usuario)
+        if salida is not None:
+            QMessageBox.information(
+                self,
+                "Salida registrada",
+                "Salida registrada correctamente\n\n"
+                f"Patente: {salida['patente']}\n"
+                f"Ingreso: {formatear_fecha_hora(salida['fecha_hora_ingreso'])}\n"
+                f"Salida: {formatear_fecha_hora(salida['fecha_hora_salida'])}\n"
+                f"Tiempo cobrado: {salida['minutos']} min\n"
+                f"Total: ${salida['tarifa']:.0f}"
+            )
             self.actualizar_lista_patentes()
             self.reset()
         else:

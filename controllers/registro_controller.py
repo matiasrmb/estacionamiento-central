@@ -126,11 +126,22 @@ def registrar_ingreso(patente):
     Returns:
         bool: True si se registró correctamente, False en caso contrario.
     """
+    resultado = registrar_ingreso_detallado(patente)
+    return bool(resultado)
+
+
+def registrar_ingreso_detallado(patente):
+    """
+    Registra la entrada de un vehículo y retorna datos para feedback de UI.
+
+    Returns:
+        dict | None: Datos del ingreso registrado o None si falló.
+    """
     try:
         activos = obtener_ingresos_activos_por_patente(patente)
         if activos:
             print(f"[WARN] No se registró ingreso para {patente}: ya existe un ingreso activo.")
-            return False
+            return None
 
         with db_cursor(commit=True) as cursor:
             cursor.execute(
@@ -157,10 +168,13 @@ def registrar_ingreso(patente):
 
     except Exception as e:
         print(f"Error al registrar ingreso: {e}")
-        return False
+        return None
 
     generar_ticket_ingreso(patente, fecha_hora)
-    return True
+    return {
+        "patente": patente,
+        "fecha_hora_ingreso": fecha_hora,
+    }
 
 
 def registrar_salida(patente, usuario):
@@ -177,6 +191,17 @@ def registrar_salida(patente, usuario):
 
     Returns:
         int | None: Tarifa calculada o None si hubo error.
+    """
+    resultado = registrar_salida_detallada(patente, usuario)
+    return resultado["tarifa"] if resultado else None
+
+
+def registrar_salida_detallada(patente, usuario):
+    """
+    Registra la salida de un vehículo y retorna datos para feedback de UI.
+
+    Returns:
+        dict | None: Datos de la salida registrada o None si falló.
     """
     try:
         ingreso = obtener_ingreso_activo_priorizado(patente, "registrar salida")
@@ -221,7 +246,13 @@ def registrar_salida(patente, usuario):
         minutos=minutos,
         modo_cobro=modo_cobro
     )
-    return tarifa
+    return {
+        "patente": patente,
+        "fecha_hora_ingreso": fecha_ingreso,
+        "fecha_hora_salida": ahora,
+        "minutos": minutos,
+        "tarifa": tarifa,
+    }
 
 
 def obtener_vehiculos_activos():
