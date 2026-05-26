@@ -13,12 +13,19 @@ from controllers.config_controller import LAVADO_CATEGORIAS, obtener_valores_lav
 from utils.db import db_cursor
 
 
+_SCHEMA_LAVADOS_ASEGURADO = False
+
+
 def asegurar_schema_lavados():
     """
     Crea la tabla de lavados y agrega el flag en ingresos si no existe.
 
     Es idempotente para instalaciones existentes que ya tengan datos.
     """
+    global _SCHEMA_LAVADOS_ASEGURADO
+    if _SCHEMA_LAVADOS_ASEGURADO:
+        return
+
     with db_cursor(commit=True) as cursor:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS lavados (
@@ -43,6 +50,8 @@ def asegurar_schema_lavados():
         except mysql.connector.Error as exc:
             if getattr(exc, "errno", None) != 1060:  # duplicate column
                 raise
+
+    _SCHEMA_LAVADOS_ASEGURADO = True
 
 
 def obtener_categorias_lavado(configuracion=None):
@@ -197,3 +206,32 @@ def calcular_minutos_lavado(id_ingreso, fecha_hora_salida=None):
             total += int((fin - inicio).total_seconds() / 60)
 
     return total
+
+
+def obtener_minutos_lavado_por_ingresos(id_ingresos, fecha_hora_salida=None):
+    """
+    Calcula minutos de lavado por ingreso en una sola consulta.
+    """
+    if not id_ingresos:
+        return {}
+
+    asegurar_schema_lavados()
+    fin_calculo = fecha_hora_salida or datetime.now()
+    placeholders = ", ".join(["%s"] * len(id_ingresos))
+
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute(f"""
+            SELECT id_ingreso, fecha_hora_inicio, fecha_hora_fin
+            FROM lavados
+            WHERE id_ingreso IN ({placeholders})
+        """, tuple(id_ingresos))
+        lavados = cursor.fetchall()
+
+    minutos_por_ingreso = {id_ingreso: 0 for id_ingreso in id_ingresos}
+    for lavado in lavados:
+        inicio = lavado["fecha_hora_inicio"]
+        fin = lavado["fecha_hora_fin"] or fin_calculo
+        if fin > inicio:
+            minutos_por_ingreso[lavado["id_ingreso"]] += int((fin - inicio).total_seconds() / 60)
+
+    return minutos_por_ingreso

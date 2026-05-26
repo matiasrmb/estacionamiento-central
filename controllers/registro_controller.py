@@ -8,6 +8,11 @@ from utils.db import db_cursor
 from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
 from controllers.tarifas_controller import calcular_tarifa, calcular_tarifa_con_contexto, obtener_contexto_tarifa
 from controllers.config_controller import obtener_configuracion
+from controllers.lavados_controller import (
+    asegurar_schema_lavados,
+    calcular_minutos_lavado,
+    obtener_minutos_lavado_por_ingresos,
+)
 
 
 def calcular_minutos_estadia(fecha_hora_ingreso, fecha_hora_salida=None):
@@ -59,6 +64,7 @@ def obtener_ingresos_activos_por_patente(patente):
     Returns:
         list[dict]: Lista de ingresos activos de la patente.
     """
+    asegurar_schema_lavados()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT
@@ -67,6 +73,7 @@ def obtener_ingresos_activos_por_patente(patente):
                 i.fecha_hora_ingreso,
                 i.fecha_hora_salida,
                 i.en_espera,
+                i.en_lavado,
                 i.tarifa_aplicada,
                 i.reingresado,
                 v.patente
@@ -209,9 +216,15 @@ def registrar_salida_detallada(patente, usuario):
         if not ingreso:
             return None
 
+        if ingreso.get("en_lavado"):
+            print(f"[WARN] No se registró salida para {patente}: el vehículo está en lavado.")
+            return None
+
         fecha_ingreso = ingreso["fecha_hora_ingreso"]
         ahora = datetime.now()
-        minutos = calcular_minutos_estadia(fecha_ingreso, ahora)
+        minutos_totales = calcular_minutos_estadia(fecha_ingreso, ahora)
+        minutos_lavado = calcular_minutos_lavado(ingreso["id_ingreso"], ahora)
+        minutos = max(minutos_totales - minutos_lavado, 0)
 
         tarifa, subida_aplicada, monto_extra = calcular_tarifa(
             minutos,
@@ -262,13 +275,15 @@ def obtener_vehiculos_activos():
     Returns:
         list[dict]: Lista con patente, hora de ingreso y monto acumulado.
     """
+    asegurar_schema_lavados()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT
                 i.id_ingreso,
                 v.patente,
                 i.fecha_hora_ingreso,
-                i.en_espera
+                i.en_espera,
+                i.en_lavado
             FROM ingresos i
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE i.fecha_hora_salida IS NULL
@@ -278,11 +293,17 @@ def obtener_vehiculos_activos():
 
     ahora = datetime.now()
     contexto_tarifa = obtener_contexto_tarifa()
+    minutos_lavado_por_ingreso = obtener_minutos_lavado_por_ingresos(
+        [r["id_ingreso"] for r in resultados],
+        ahora,
+    )
     lista = []
 
     for r in resultados:
         fecha_ingreso = r["fecha_hora_ingreso"]
-        minutos = calcular_minutos_estadia(fecha_ingreso, ahora)
+        minutos_totales = calcular_minutos_estadia(fecha_ingreso, ahora)
+        minutos_lavado = minutos_lavado_por_ingreso.get(r["id_ingreso"], 0)
+        minutos = max(minutos_totales - minutos_lavado, 0)
 
         tarifa = (
             calcular_tarifa_con_contexto(minutos, fecha_ingreso, ahora, contexto_tarifa)
@@ -292,10 +313,14 @@ def obtener_vehiculos_activos():
 
         lista.append({
             "id_ingreso": r["id_ingreso"],
-            "patente": r["patente"] + (" [EN ESPERA]" if r["en_espera"] else ""),
+            "patente_base": r["patente"],
+            "patente": r["patente"]
+                + (" [EN ESPERA]" if r["en_espera"] else "")
+                + (" [EN LAVADO]" if r["en_lavado"] else ""),
             "hora": fecha_ingreso.strftime("%Y-%m-%d %H:%M:%S"),
             "monto": tarifa,
             "en_espera": bool(r["en_espera"]),
+            "en_lavado": bool(r["en_lavado"]),
             "minutos": minutos,
         })
 

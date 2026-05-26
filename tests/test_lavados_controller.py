@@ -125,6 +125,31 @@ class LavadosControllerTests(unittest.TestCase):
 
         self.assertEqual(minutos, 35)
 
+    @patch.object(lavados_controller, "asegurar_schema_lavados")
+    @patch.object(lavados_controller, "db_cursor")
+    def test_obtener_minutos_lavado_por_ingresos_calcula_en_lote(self, db_cursor, asegurar_schema):
+        cursor = FakeCursor(fetchall_results=[[
+            {
+                "id_ingreso": 10,
+                "fecha_hora_inicio": datetime(2026, 1, 1, 10, 0),
+                "fecha_hora_fin": datetime(2026, 1, 1, 10, 30),
+            },
+            {
+                "id_ingreso": 11,
+                "fecha_hora_inicio": datetime(2026, 1, 1, 11, 0),
+                "fecha_hora_fin": datetime(2026, 1, 1, 11, 15),
+            },
+        ]])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        resultado = lavados_controller.obtener_minutos_lavado_por_ingresos(
+            [10, 11],
+            datetime(2026, 1, 1, 12, 0),
+        )
+
+        self.assertEqual(resultado, {10: 30, 11: 15})
+        self.assertIn("WHERE id_ingreso IN (%s, %s)", cursor.executed[0][0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QMessageBox, QTableWidget,
     QTableWidgetItem, QGroupBox, QHeaderView, QCompleter,
-    QHBoxLayout, QGridLayout, QFrame, QSizePolicy, QScrollArea
+    QHBoxLayout, QGridLayout, QFrame, QSizePolicy, QScrollArea,
+    QInputDialog
 )
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QShortcut, QKeySequence
@@ -17,6 +18,11 @@ from controllers.registro_controller import (
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from controllers.config_controller import obtener_configuracion
 from controllers.dashboard_controller import obtener_resumen_banos
+from controllers.lavados_controller import (
+    finalizar_lavado,
+    iniciar_lavado,
+    obtener_categorias_lavado,
+)
 from views.subida_dialog import SubidaDialog
 
 
@@ -141,10 +147,15 @@ class RegistroWindow(QWidget):
         self.boton_bano.setMinimumHeight(32)
         self.boton_bano.clicked.connect(self.mostrar_opciones_bano)
 
+        self.boton_lavado = QPushButton("Iniciar/finalizar lavado")
+        self.boton_lavado.setMinimumHeight(32)
+        self.boton_lavado.clicked.connect(self.alternar_lavado_seleccionado)
+
         layout_acciones.addWidget(self.boton_ingreso)
         layout_acciones.addWidget(self.boton_salida)
         layout_acciones.addWidget(self.boton_espera)
         layout_acciones.addWidget(self.boton_bano)
+        layout_acciones.addWidget(self.boton_lavado)
 
         if self.rol == "administrador":
             self.boton_subida = QPushButton("Subida temporal de precios")
@@ -198,7 +209,8 @@ class RegistroWindow(QWidget):
             "F7: reingresar vehículo\n"
             "F8: alternar espera\n"
             "F9: eliminar ingreso\n"
-            "F10: consultar tarifa"
+            "F10: consultar tarifa\n"
+            "Ctrl+L: iniciar/finalizar lavado seleccionado"
         )
         self.label_atajos.setWordWrap(True)
         self.label_atajos.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -494,6 +506,9 @@ class RegistroWindow(QWidget):
             patente_mostrar = f"▲ {patente}" if hay_subida_activa else patente
 
             item_patente = QTableWidgetItem(patente_mostrar)
+            item_patente.setData(Qt.UserRole, vehiculo["id_ingreso"])
+            item_patente.setData(Qt.UserRole + 1, vehiculo.get("patente_base", patente))
+            item_patente.setData(Qt.UserRole + 2, vehiculo.get("en_lavado", False))
             item_patente.setFlags(item_patente.flags() ^ Qt.ItemIsEditable)
             item_patente.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 0, item_patente)
@@ -686,6 +701,85 @@ class RegistroWindow(QWidget):
                 "Error",
                 "No se pudo registrar el uso del baño."
             )
+
+    def obtener_vehiculo_seleccionado(self):
+        fila = self.tabla_activos.currentRow()
+        if fila < 0:
+            return None
+
+        item_patente = self.tabla_activos.item(fila, 0)
+        if not item_patente:
+            return None
+
+        id_ingreso = item_patente.data(Qt.UserRole)
+        if not id_ingreso:
+            return None
+
+        return {
+            "id_ingreso": id_ingreso,
+            "patente": item_patente.data(Qt.UserRole + 1),
+            "en_lavado": bool(item_patente.data(Qt.UserRole + 2)),
+        }
+
+    def alternar_lavado_seleccionado(self):
+        vehiculo = self.obtener_vehiculo_seleccionado()
+        if not vehiculo:
+            QMessageBox.warning(
+                self,
+                "Selecciona un vehículo",
+                "Selecciona un vehículo activo en la tabla para iniciar o finalizar lavado."
+            )
+            return
+
+        if vehiculo["en_lavado"]:
+            resultado = finalizar_lavado(vehiculo["id_ingreso"], self.usuario)
+            if resultado:
+                QMessageBox.information(
+                    self,
+                    "Lavado finalizado",
+                    "El vehículo volvió a estado estacionado.\n\n"
+                    f"Patente: {vehiculo['patente']}\n"
+                    f"Valor lavado: ${resultado['valor_lavado']:.0f}"
+                )
+                self.actualizar_tabla_activos()
+                return
+
+            QMessageBox.critical(self, "Error", "No se pudo finalizar el lavado.")
+            return
+
+        categorias = obtener_categorias_lavado()
+        claves = list(categorias.keys())
+        opciones = [
+            f"{categorias[clave]['label']} - ${categorias[clave]['valor']:.0f}"
+            for clave in claves
+        ]
+
+        seleccion, confirmado = QInputDialog.getItem(
+            self,
+            "Seleccionar lavado",
+            f"Selecciona el tipo de lavado para {vehiculo['patente']}:",
+            opciones,
+            0,
+            False,
+        )
+
+        if not confirmado or not seleccion:
+            return
+
+        categoria = claves[opciones.index(seleccion)]
+        resultado = iniciar_lavado(vehiculo["id_ingreso"], categoria, self.usuario)
+        if resultado:
+            QMessageBox.information(
+                self,
+                "Lavado iniciado",
+                "El cobro de estacionamiento quedó pausado mientras dure el lavado.\n\n"
+                f"Patente: {vehiculo['patente']}\n"
+                f"Valor lavado: ${resultado['valor_lavado']:.0f}"
+            )
+            self.actualizar_tabla_activos()
+            return
+
+        QMessageBox.critical(self, "Error", "No se pudo iniciar el lavado.")
 
     def reingresar_vehiculo(self):
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado
@@ -906,7 +1000,7 @@ class RegistroWindow(QWidget):
         if not item_patente:
             return
 
-        patente = item_patente.text().replace("▲ ", "").strip()
+        patente = item_patente.data(Qt.UserRole + 1) or item_patente.text().replace("▲ ", "").strip()
         if not patente:
             return
 
@@ -987,6 +1081,9 @@ class RegistroWindow(QWidget):
 
         self.shortcut_f10 = QShortcut(QKeySequence("F10"), self)
         self.shortcut_f10.activated.connect(self.consultar_tarifa_actual)
+
+        self.shortcut_lavado = QShortcut(QKeySequence("Ctrl+L"), self)
+        self.shortcut_lavado.activated.connect(self.alternar_lavado_seleccionado)
 
         self.shortcut_escape = QShortcut(QKeySequence(Qt.Key_Escape), self)
         self.shortcut_escape.activated.connect(self.reset)

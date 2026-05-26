@@ -228,12 +228,14 @@ class RegistrarSalidaTests(unittest.TestCase):
     @patch.object(registro_controller, "generar_ticket_salida")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "calcular_minutos_lavado")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registra_salida_calcula_tarifa_y_genera_ticket(
         self,
         db_cursor,
         obtener_activos,
+        calcular_minutos_lavado,
         calcular_tarifa,
         obtener_configuracion,
         generar_ticket,
@@ -246,8 +248,10 @@ class RegistrarSalidaTests(unittest.TestCase):
                 "id_ingreso": 10,
                 "fecha_hora_ingreso": fecha_ingreso,
                 "patente": "ABC123",
+                "en_lavado": 0,
             }
         ]
+        calcular_minutos_lavado.return_value = 0
         calcular_tarifa.return_value = (1500, False, 0)
         obtener_configuracion.return_value = {"modo_cobro": "minuto"}
 
@@ -263,12 +267,14 @@ class RegistrarSalidaTests(unittest.TestCase):
     @patch.object(registro_controller, "generar_ticket_salida")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "calcular_minutos_lavado")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registrar_salida_detallada_retorna_horas_minutos_y_tarifa(
         self,
         db_cursor,
         obtener_activos,
+        calcular_minutos_lavado,
         calcular_tarifa,
         obtener_configuracion,
         generar_ticket,
@@ -281,8 +287,10 @@ class RegistrarSalidaTests(unittest.TestCase):
                 "id_ingreso": 10,
                 "fecha_hora_ingreso": fecha_ingreso,
                 "patente": "ABC123",
+                "en_lavado": 0,
             }
         ]
+        calcular_minutos_lavado.return_value = 0
         calcular_tarifa.return_value = (1500, False, 0)
         obtener_configuracion.return_value = {"modo_cobro": "minuto"}
 
@@ -298,12 +306,14 @@ class RegistrarSalidaTests(unittest.TestCase):
     @patch.object(registro_controller, "generar_ticket_salida")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "calcular_minutos_lavado")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_actualiza_salida_si_falla_obtener_configuracion(
         self,
         db_cursor,
         obtener_activos,
+        calcular_minutos_lavado,
         calcular_tarifa,
         obtener_configuracion,
         generar_ticket,
@@ -314,8 +324,10 @@ class RegistrarSalidaTests(unittest.TestCase):
                 "id_ingreso": 10,
                 "fecha_hora_ingreso": fecha_ingreso,
                 "patente": "ABC123",
+                "en_lavado": 0,
             }
         ]
+        calcular_minutos_lavado.return_value = 0
         calcular_tarifa.return_value = (1500, False, 0)
         obtener_configuracion.side_effect = RuntimeError("config no disponible")
 
@@ -431,6 +443,8 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertIn("'EN ESPERA' AS estado", consultas)
         self.assertIn("'CERRADO' AS estado", consultas)
 
+    @patch.object(registro_controller, "asegurar_schema_lavados")
+    @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos")
     @patch.object(registro_controller, "obtener_contexto_tarifa")
     @patch.object(registro_controller, "calcular_tarifa_con_contexto")
     @patch.object(registro_controller, "db_cursor")
@@ -439,6 +453,8 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         db_cursor,
         calcular_tarifa_con_contexto,
         obtener_contexto_tarifa,
+        obtener_minutos_lavado_por_ingresos,
+        asegurar_schema,
     ):
         fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
         filas = [
@@ -447,24 +463,28 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
                 "patente": "ABC123",
                 "fecha_hora_ingreso": fecha_ingreso,
                 "en_espera": 0,
+                "en_lavado": 0,
             },
             {
                 "id_ingreso": 2,
                 "patente": "XYZ789",
                 "fecha_hora_ingreso": fecha_ingreso,
                 "en_espera": 1,
+                "en_lavado": 0,
             },
         ]
         cursor = FakeCursor(fetchall_results=[filas])
         db_cursor.return_value = FakeDbCursorContext(cursor)
         contexto = {"config": {"modo_cobro": "minuto"}, "subida": None, "tramos": []}
         obtener_contexto_tarifa.return_value = contexto
+        obtener_minutos_lavado_por_ingresos.return_value = {1: 0, 2: 0}
         calcular_tarifa_con_contexto.return_value = 1200
 
         resultado = registro_controller.obtener_vehiculos_activos()
 
         db_cursor.assert_called_once_with(dictionary=True)
         obtener_contexto_tarifa.assert_called_once()
+        obtener_minutos_lavado_por_ingresos.assert_called_once()
         calcular_tarifa_con_contexto.assert_called_once()
         self.assertIs(calcular_tarifa_con_contexto.call_args.args[3], contexto)
         self.assertEqual(resultado[0]["patente"], "ABC123")
@@ -473,6 +493,8 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertEqual(resultado[1]["monto"], 0)
         self.assertTrue(resultado[1]["en_espera"])
 
+    @patch.object(registro_controller, "asegurar_schema_lavados")
+    @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos")
     @patch.object(registro_controller, "obtener_contexto_tarifa")
     @patch.object(registro_controller, "calcular_tarifa_con_contexto")
     @patch.object(registro_controller, "db_cursor")
@@ -481,6 +503,8 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         db_cursor,
         calcular_tarifa_con_contexto,
         obtener_contexto_tarifa,
+        obtener_minutos_lavado_por_ingresos,
+        asegurar_schema,
     ):
         fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
         filas = [
@@ -489,6 +513,7 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
                 "patente": f"ABC{index}",
                 "fecha_hora_ingreso": fecha_ingreso,
                 "en_espera": 0,
+                "en_lavado": 0,
             }
             for index in range(1, 6)
         ]
@@ -496,6 +521,7 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         db_cursor.return_value = FakeDbCursorContext(cursor)
         contexto = {"config": {"modo_cobro": "minuto"}, "subida": None, "tramos": []}
         obtener_contexto_tarifa.return_value = contexto
+        obtener_minutos_lavado_por_ingresos.return_value = {index: 0 for index in range(1, 6)}
         calcular_tarifa_con_contexto.return_value = 1200
 
         resultado = registro_controller.obtener_vehiculos_activos()
@@ -505,6 +531,40 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertEqual(calcular_tarifa_con_contexto.call_count, 5)
         for call in calcular_tarifa_con_contexto.call_args_list:
             self.assertIs(call.args[3], contexto)
+
+    @patch.object(registro_controller, "asegurar_schema_lavados")
+    @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos")
+    @patch.object(registro_controller, "obtener_contexto_tarifa")
+    @patch.object(registro_controller, "calcular_tarifa_con_contexto")
+    @patch.object(registro_controller, "db_cursor")
+    def test_obtener_vehiculos_activos_descuenta_minutos_de_lavado_y_muestra_estado(
+        self,
+        db_cursor,
+        calcular_tarifa_con_contexto,
+        obtener_contexto_tarifa,
+        obtener_minutos_lavado_por_ingresos,
+        asegurar_schema,
+    ):
+        fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
+        filas = [{
+            "id_ingreso": 1,
+            "patente": "ABC123",
+            "fecha_hora_ingreso": fecha_ingreso,
+            "en_espera": 0,
+            "en_lavado": 1,
+        }]
+        cursor = FakeCursor(fetchall_results=[filas])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        contexto = {"config": {"modo_cobro": "minuto"}, "subida": None, "tramos": []}
+        obtener_contexto_tarifa.return_value = contexto
+        obtener_minutos_lavado_por_ingresos.return_value = {1: 15}
+        calcular_tarifa_con_contexto.return_value = 1200
+
+        resultado = registro_controller.obtener_vehiculos_activos()
+
+        self.assertIn("[EN LAVADO]", resultado[0]["patente"])
+        self.assertTrue(resultado[0]["en_lavado"])
+        self.assertGreaterEqual(resultado[0]["minutos"], 0)
 
     @patch.object(registro_controller, "db_cursor")
     def test_obtener_ingresos_activos_por_patente_retorna_filas(self, db_cursor):
