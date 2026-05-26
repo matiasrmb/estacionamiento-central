@@ -377,12 +377,14 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertIn("'EN ESPERA' AS estado", consultas)
         self.assertIn("'CERRADO' AS estado", consultas)
 
-    @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "obtener_contexto_tarifa")
+    @patch.object(registro_controller, "calcular_tarifa_con_contexto")
     @patch.object(registro_controller, "db_cursor")
     def test_obtener_vehiculos_activos_formatea_activos_y_calcula_montos(
         self,
         db_cursor,
-        calcular_tarifa,
+        calcular_tarifa_con_contexto,
+        obtener_contexto_tarifa,
     ):
         fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
         filas = [
@@ -401,17 +403,54 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         ]
         cursor = FakeCursor(fetchall_results=[filas])
         db_cursor.return_value = FakeDbCursorContext(cursor)
-        calcular_tarifa.return_value = 1200
+        contexto = {"config": {"modo_cobro": "minuto"}, "subida": None, "tramos": []}
+        obtener_contexto_tarifa.return_value = contexto
+        calcular_tarifa_con_contexto.return_value = 1200
 
         resultado = registro_controller.obtener_vehiculos_activos()
 
         db_cursor.assert_called_once_with(dictionary=True)
-        calcular_tarifa.assert_called_once()
+        obtener_contexto_tarifa.assert_called_once()
+        calcular_tarifa_con_contexto.assert_called_once()
+        self.assertIs(calcular_tarifa_con_contexto.call_args.args[3], contexto)
         self.assertEqual(resultado[0]["patente"], "ABC123")
         self.assertEqual(resultado[0]["monto"], 1200)
         self.assertEqual(resultado[1]["patente"], "XYZ789 [EN ESPERA]")
         self.assertEqual(resultado[1]["monto"], 0)
         self.assertTrue(resultado[1]["en_espera"])
+
+    @patch.object(registro_controller, "obtener_contexto_tarifa")
+    @patch.object(registro_controller, "calcular_tarifa_con_contexto")
+    @patch.object(registro_controller, "db_cursor")
+    def test_obtener_vehiculos_activos_reutiliza_contexto_tarifa_para_multiples_vehiculos(
+        self,
+        db_cursor,
+        calcular_tarifa_con_contexto,
+        obtener_contexto_tarifa,
+    ):
+        fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
+        filas = [
+            {
+                "id_ingreso": index,
+                "patente": f"ABC{index}",
+                "fecha_hora_ingreso": fecha_ingreso,
+                "en_espera": 0,
+            }
+            for index in range(1, 6)
+        ]
+        cursor = FakeCursor(fetchall_results=[filas])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        contexto = {"config": {"modo_cobro": "minuto"}, "subida": None, "tramos": []}
+        obtener_contexto_tarifa.return_value = contexto
+        calcular_tarifa_con_contexto.return_value = 1200
+
+        resultado = registro_controller.obtener_vehiculos_activos()
+
+        self.assertEqual(len(resultado), 5)
+        obtener_contexto_tarifa.assert_called_once()
+        self.assertEqual(calcular_tarifa_con_contexto.call_count, 5)
+        for call in calcular_tarifa_con_contexto.call_args_list:
+            self.assertIs(call.args[3], contexto)
 
     @patch.object(registro_controller, "db_cursor")
     def test_obtener_ingresos_activos_por_patente_retorna_filas(self, db_cursor):

@@ -27,6 +27,22 @@ def obtener_tarifas_personalizadas():
         resultado = cursor.fetchall()
     return resultado
 
+def obtener_contexto_tarifa():
+    """
+    Obtiene en una sola vez los datos necesarios para calcular tarifas.
+
+    Útil para pantallas que calculan muchas tarifas en el mismo refresh, como
+    el listado de vehículos activos. Evita repetir consultas por cada vehículo.
+    """
+    config = obtener_configuracion()
+    modo = config.get("modo_cobro", "minuto")
+
+    return {
+        "config": config,
+        "subida": obtener_subida_activa(),
+        "tramos": obtener_tarifas_personalizadas() if modo == "personalizado" else [],
+    }
+
 def agregar_intervalo(min_inicio, min_fin, valor):
     """
     Agrega un nuevo tramo de tarifa personalizada si no se superpone con otros.
@@ -99,7 +115,32 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, de
     Si devolver_flag=True, retorna:
         (total, subida_aplicada, monto_extra_aplicado)
     """
-    config = obtener_configuracion()
+    return calcular_tarifa_con_contexto(
+        minutos,
+        fecha_hora_ingreso=fecha_hora_ingreso,
+        fecha_hora_salida=fecha_hora_salida,
+        contexto=obtener_contexto_tarifa(),
+        devolver_flag=devolver_flag,
+    )
+
+
+def calcular_tarifa_con_contexto(
+    minutos,
+    fecha_hora_ingreso=None,
+    fecha_hora_salida=None,
+    contexto=None,
+    devolver_flag=False,
+):
+    """
+    Calcula la tarifa usando configuración/subida/tramos precargados.
+
+    Mantiene la misma lógica de calcular_tarifa(), pero permite reutilizar el
+    contexto cuando se calculan muchas tarifas en lote.
+    """
+    contexto = contexto or obtener_contexto_tarifa()
+    config = contexto["config"]
+    subida = contexto.get("subida")
+    tramos_precargados = contexto.get("tramos") or []
 
     modo = config.get("modo_cobro", "minuto")
     tarifa_minima = int(config.get("tarifa_minima", 300))
@@ -120,7 +161,6 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, de
             total = tarifa_minima + (max(minutos - 1, 0) * valor_minuto)
 
         # Aplicar subida temporal proporcional por minutos si corresponde
-        subida = obtener_subida_activa()
         if subida and fecha_hora_ingreso and fecha_hora_salida:
             minutos_extra = calcular_minutos_en_subida(
                 fecha_hora_ingreso,
@@ -137,9 +177,8 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, de
     # MODO PERSONALIZADO
     # =========================================================
     elif modo == "personalizado":
-        tramos = obtener_tarifas_personalizadas()
+        tramos = list(tramos_precargados)
 
-        subida = obtener_subida_activa()
         subida_vigente = False
         monto_subida = 0
 
@@ -191,7 +230,6 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, de
         bloques = (minutos // 60) + (1 if minutos % 60 > 0 else 0)
         total = tarifa_minima + ((max(bloques - 1, 0)) * tarifa_minima)
 
-        subida = obtener_subida_activa()
         if subida and fecha_hora_ingreso and fecha_hora_salida:
             minutos_extra = calcular_minutos_en_subida(
                 fecha_hora_ingreso,

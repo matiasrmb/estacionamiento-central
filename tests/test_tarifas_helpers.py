@@ -1,8 +1,14 @@
 import unittest
+from datetime import datetime
+from unittest.mock import patch
 
+from controllers import tarifas_controller
 from controllers.tarifas_controller import (
+    calcular_tarifa,
+    calcular_tarifa_con_contexto,
     construir_intervalos_equitativos,
     construir_valores_automaticos,
+    obtener_contexto_tarifa,
 )
 
 
@@ -52,6 +58,82 @@ class ConstruirIntervalosEquitativosTests(unittest.TestCase):
     def test_rechaza_mas_tramos_que_minutos(self):
         with self.assertRaises(ValueError):
             construir_intervalos_equitativos(61, 60)
+
+
+class TarifaContextoTests(unittest.TestCase):
+    @patch.object(tarifas_controller, "obtener_tarifas_personalizadas")
+    @patch.object(tarifas_controller, "obtener_subida_activa")
+    @patch.object(tarifas_controller, "obtener_configuracion")
+    def test_obtener_contexto_tarifa_carga_tramos_solo_en_modo_personalizado(
+        self,
+        obtener_configuracion,
+        obtener_subida_activa,
+        obtener_tarifas_personalizadas,
+    ):
+        tramos = [{"minuto_inicio": 0, "minuto_fin": 59, "valor": 800}]
+        obtener_configuracion.return_value = {"modo_cobro": "personalizado"}
+        obtener_subida_activa.return_value = None
+        obtener_tarifas_personalizadas.return_value = tramos
+
+        contexto = obtener_contexto_tarifa()
+
+        self.assertEqual(contexto["tramos"], tramos)
+        obtener_configuracion.assert_called_once()
+        obtener_subida_activa.assert_called_once()
+        obtener_tarifas_personalizadas.assert_called_once()
+
+    def test_calcular_tarifa_con_contexto_mantiene_modo_minuto(self):
+        contexto = {
+            "config": {
+                "modo_cobro": "minuto",
+                "tarifa_minima": "300",
+                "valor_minuto": "25",
+            },
+            "subida": None,
+            "tramos": [],
+        }
+
+        tarifa = calcular_tarifa_con_contexto(10, contexto=contexto)
+
+        self.assertEqual(tarifa, 525)
+
+    def test_calcular_tarifa_con_contexto_usa_tramos_precargados(self):
+        contexto = {
+            "config": {"modo_cobro": "personalizado", "tarifa_minima": "300"},
+            "subida": None,
+            "tramos": [
+                {"minuto_inicio": 0, "minuto_fin": 29, "valor": 500},
+                {"minuto_inicio": 30, "minuto_fin": 59, "valor": 900},
+            ],
+        }
+
+        tarifa = calcular_tarifa_con_contexto(45, contexto=contexto)
+
+        self.assertEqual(tarifa, 900)
+
+    @patch.object(tarifas_controller, "obtener_contexto_tarifa")
+    @patch.object(tarifas_controller, "calcular_tarifa_con_contexto")
+    def test_calcular_tarifa_sigue_usando_api_publica_existente(
+        self,
+        calcular_tarifa_con_contexto_mock,
+        obtener_contexto_tarifa_mock,
+    ):
+        contexto = {"config": {"modo_cobro": "minuto"}, "subida": None, "tramos": []}
+        obtener_contexto_tarifa_mock.return_value = contexto
+        calcular_tarifa_con_contexto_mock.return_value = 1000
+        ingreso = datetime(2026, 1, 1, 10, 0)
+        salida = datetime(2026, 1, 1, 10, 30)
+
+        tarifa = calcular_tarifa(30, ingreso, salida, devolver_flag=True)
+
+        self.assertEqual(tarifa, 1000)
+        calcular_tarifa_con_contexto_mock.assert_called_once_with(
+            30,
+            fecha_hora_ingreso=ingreso,
+            fecha_hora_salida=salida,
+            contexto=contexto,
+            devolver_flag=True,
+        )
 
 
 if __name__ == "__main__":

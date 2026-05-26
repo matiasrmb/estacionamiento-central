@@ -6,7 +6,7 @@ from datetime import datetime
 
 from utils.db import db_cursor
 from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
-from controllers.tarifas_controller import calcular_tarifa
+from controllers.tarifas_controller import calcular_tarifa, calcular_tarifa_con_contexto, obtener_contexto_tarifa
 from controllers.config_controller import obtener_configuracion
 
 
@@ -246,13 +246,18 @@ def obtener_vehiculos_activos():
         resultados = cursor.fetchall()
 
     ahora = datetime.now()
+    contexto_tarifa = obtener_contexto_tarifa()
     lista = []
 
     for r in resultados:
         fecha_ingreso = r["fecha_hora_ingreso"]
         minutos = calcular_minutos_estadia(fecha_ingreso, ahora)
 
-        tarifa = calcular_tarifa(minutos, fecha_ingreso, ahora) if r["en_espera"] == 0 else 0
+        tarifa = (
+            calcular_tarifa_con_contexto(minutos, fecha_ingreso, ahora, contexto_tarifa)
+            if r["en_espera"] == 0
+            else 0
+        )
 
         lista.append({
             "id_ingreso": r["id_ingreso"],
