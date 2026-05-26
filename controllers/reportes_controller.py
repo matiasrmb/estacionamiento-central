@@ -7,7 +7,7 @@ Este módulo permite:
 - Exportar los resultados a un archivo PDF con resumen del total recaudado.
 """
 
-from utils.db import get_connection
+from utils.db import db_cursor
 from utils.pdf_utils import ReportePDF, abrir_pdf
 from datetime import datetime, time
 from fpdf import FPDF
@@ -25,9 +25,6 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
     Returns:
         list[dict]: Lista de movimientos con campos: patente, ingreso, salida, minutos y tarifa_aplicada.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
     query = """
         SELECT 
             v.patente,
@@ -46,28 +43,27 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
         query += " AND v.patente = %s"
         params.append(patente)
 
-    cursor.execute(query, tuple(params))
-    resultados = cursor.fetchall()
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute(query, tuple(params))
+        resultados = cursor.fetchall()
 
-    # Usos de baños (solo si no se filtró patente)
-    if not patente:
-        cursor.execute("""
-            SELECT fecha_hora, monto, usuario
-            FROM usos_bano
-            WHERE DATE(fecha_hora) BETWEEN %s AND %s
-        """, (fecha_inicio, fecha_fin))
-        banos = cursor.fetchall()
-        for b in banos:
-            resultados.append({
-                "patente": "[BAÑO]",
-                "fecha_hora_ingreso": b["fecha_hora"],
-                "fecha_hora_salida": b["fecha_hora"],
-                "minutos": 0,
-                "tarifa_aplicada": b["monto"]
-            })
+        # Usos de baños (solo si no se filtró patente)
+        if not patente:
+            cursor.execute("""
+                SELECT fecha_hora, monto, usuario
+                FROM usos_bano
+                WHERE DATE(fecha_hora) BETWEEN %s AND %s
+            """, (fecha_inicio, fecha_fin))
+            banos = cursor.fetchall()
+            for b in banos:
+                resultados.append({
+                    "patente": "[BAÑO]",
+                    "fecha_hora_ingreso": b["fecha_hora"],
+                    "fecha_hora_salida": b["fecha_hora"],
+                    "minutos": 0,
+                    "tarifa_aplicada": b["monto"]
+                })
 
-    cursor.close()
-    conn.close()
     return resultados
 
 def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
@@ -90,18 +86,15 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
     monto_banos = 0
 
     if incluir_banos and fecha_inicio and fecha_fin:
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT COUNT(*) AS cantidad, SUM(monto) AS total
-            FROM usos_bano
-            WHERE DATE(fecha_hora) BETWEEN %s AND %s
-        """, (fecha_inicio, fecha_fin))
-        resultado = cursor.fetchone()
-        total_banos = resultado["cantidad"] or 0
-        monto_banos = resultado["total"] or 0
-        cursor.close()
-        conn.close()
+        with db_cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT COUNT(*) AS cantidad, SUM(monto) AS total
+                FROM usos_bano
+                WHERE DATE(fecha_hora) BETWEEN %s AND %s
+            """, (fecha_inicio, fecha_fin))
+            resultado = cursor.fetchone()
+            total_banos = resultado["cantidad"] or 0
+            monto_banos = resultado["total"] or 0
 
     for row in datos:
         ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
