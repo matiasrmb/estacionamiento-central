@@ -1,4 +1,4 @@
-from utils.db import get_connection
+from utils.db import db_cursor
 from datetime import datetime, time, timedelta
 
 def crear_subida_temporal(hora_inicio, hora_fin, monto_adicional):
@@ -13,26 +13,21 @@ def crear_subida_temporal(hora_inicio, hora_fin, monto_adicional):
     Returns:
         bool: True si se creó correctamente.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
     try:
-        # Desactivar anterior
-        cursor.execute("UPDATE subida_precios SET activa = 0")
+        with db_cursor(commit=True) as cursor:
+            # Desactivar anterior
+            cursor.execute("UPDATE subida_precios SET activa = 0")
 
-        # Insertar nueva
-        cursor.execute("""
-            INSERT INTO subida_precios (hora_inicio, hora_fin, monto_adicional, activa)
-            VALUES (%s, %s, %s, 1)
-        """, (hora_inicio, hora_fin, monto_adicional))
+            # Insertar nueva
+            cursor.execute("""
+                INSERT INTO subida_precios (hora_inicio, hora_fin, monto_adicional, activa)
+                VALUES (%s, %s, %s, 1)
+            """, (hora_inicio, hora_fin, monto_adicional))
 
-        conn.commit()
         return True
     except Exception as e:
         print(f"[ERROR] al crear subida temporal: {e}")
         return False
-    finally:
-        cursor.close()
-        conn.close()
 
 def obtener_subida_activa():
     """
@@ -41,22 +36,18 @@ def obtener_subida_activa():
     Returns:
         dict or None: Subida activa con hora_inicio, hora_fin, monto_adicional.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("""
-            SELECT * FROM subida_precios
-            WHERE activa = 1
-            ORDER BY id_subida DESC LIMIT 1
-        """)
-        subida = cursor.fetchone()
+        with db_cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT * FROM subida_precios
+                WHERE activa = 1
+                ORDER BY id_subida DESC LIMIT 1
+            """)
+            subida = cursor.fetchone()
         return subida
     except Exception as e:
         print(f"[ERROR] al obtener subida activa: {e}")
         return None
-    finally:
-        cursor.close()
-        conn.close()
 
 def calcular_minutos_en_subida(fecha_hora_ingreso, fecha_hora_salida, hora_inicio_str, hora_fin_str):
     """

@@ -4,7 +4,7 @@ Controlador para la gestión de asistencias de usuarios.
 Incluye funciones para consultar asistencias registradas en el sistema.
 """
 
-from utils.db import get_connection
+from utils.db import db_cursor
 from datetime import datetime, time
 
 def obtener_asistencias(usuario=None, fecha_inicio=None, fecha_fin=None):
@@ -19,9 +19,6 @@ def obtener_asistencias(usuario=None, fecha_inicio=None, fecha_fin=None):
     Returns:
         list[dict]: Lista de asistencias, cada una como diccionario con campos como usuario, hora_inicio, hora_salida, etc.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
     query = """
         SELECT usuario, hora_inicio, hora_salida, cantidad_movimientos, total_recaudado
         FROM asistencias
@@ -41,8 +38,8 @@ def obtener_asistencias(usuario=None, fecha_inicio=None, fecha_fin=None):
 
     query += " ORDER BY hora_inicio DESC"
 
-    cursor.execute(query, params)
-    resultados = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute(query, params)
+        resultados = cursor.fetchall()
+
     return resultados

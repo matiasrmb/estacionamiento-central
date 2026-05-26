@@ -4,10 +4,44 @@ Controlador de operaciones de ingreso, salida y estado de vehículos en el estac
 
 from datetime import datetime
 
-from utils.db import get_connection
+from utils.db import db_cursor
 from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
 from controllers.tarifas_controller import calcular_tarifa
 from controllers.config_controller import obtener_configuracion
+
+
+def calcular_minutos_estadia(fecha_hora_ingreso, fecha_hora_salida=None):
+    """
+    Calcula los minutos de estadía entre ingreso y salida.
+
+    Si la salida es anterior al ingreso, retorna 0 para evitar tarifas
+    negativas por desfases de reloj o datos inconsistentes.
+    """
+    salida = fecha_hora_salida or datetime.now()
+    minutos = int((salida - fecha_hora_ingreso).total_seconds() / 60)
+    return max(minutos, 0)
+
+
+def obtener_ingreso_activo_priorizado(patente, contexto="operación"):
+    """
+    Obtiene el ingreso activo prioritario de una patente.
+
+    Reutiliza el orden definido por obtener_ingresos_activos_por_patente:
+    primero ingresos normales y luego los más recientes. Si existen varios
+    activos, deja una advertencia para facilitar la detección de inconsistencias.
+    """
+    activos = obtener_ingresos_activos_por_patente(patente)
+
+    if not activos:
+        return None
+
+    if len(activos) > 1:
+        print(
+            f"[WARN] La patente {patente} tiene {len(activos)} ingresos activos. "
+            f"Se usará el primero priorizado para {contexto}."
+        )
+
+    return activos[0]
 
 
 def obtener_ingresos_activos_por_patente(patente):
@@ -25,10 +59,7 @@ def obtener_ingresos_activos_por_patente(patente):
     Returns:
         list[dict]: Lista de ingresos activos de la patente.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
+    with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT
                 i.id_ingreso,
@@ -46,9 +77,6 @@ def obtener_ingresos_activos_por_patente(patente):
             ORDER BY i.en_espera ASC, i.fecha_hora_ingreso DESC
         """, (patente,))
         return cursor.fetchall()
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def buscar_estado_vehiculo(patente):
@@ -61,15 +89,13 @@ def buscar_estado_vehiculo(patente):
     Returns:
         str: "no_registrado", "dentro" o "fuera".
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
     try:
-        cursor.execute(
-            "SELECT id_vehiculo FROM vehiculos WHERE patente = %s LIMIT 1",
-            (patente,)
-        )
-        vehiculo = cursor.fetchone()
+        with db_cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "SELECT id_vehiculo FROM vehiculos WHERE patente = %s LIMIT 1",
+                (patente,)
+            )
+            vehiculo = cursor.fetchone()
 
         if not vehiculo:
             return "no_registrado"
@@ -87,10 +113,6 @@ def buscar_estado_vehiculo(patente):
         print(f"Error en buscar_estado_vehiculo: {e}")
         return None
 
-    finally:
-        cursor.close()
-        conn.close()
-
 
 def registrar_ingreso(patente):
     """
@@ -104,46 +126,38 @@ def registrar_ingreso(patente):
     Returns:
         bool: True si se registró correctamente, False en caso contrario.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
     try:
         activos = obtener_ingresos_activos_por_patente(patente)
         if activos:
             print(f"[WARN] No se registró ingreso para {patente}: ya existe un ingreso activo.")
             return False
 
-        cursor.execute(
-            "SELECT id_vehiculo FROM vehiculos WHERE patente = %s LIMIT 1",
-            (patente,)
-        )
-        row = cursor.fetchone()
-
-        if row:
-            id_vehiculo = row[0]
-        else:
+        with db_cursor(commit=True) as cursor:
             cursor.execute(
-                "INSERT INTO vehiculos (patente, tipo_cliente) VALUES (%s, 'ocasional')",
+                "SELECT id_vehiculo FROM vehiculos WHERE patente = %s LIMIT 1",
                 (patente,)
             )
-            id_vehiculo = cursor.lastrowid
+            row = cursor.fetchone()
 
-        fecha_hora = datetime.now()
+            if row:
+                id_vehiculo = row[0]
+            else:
+                cursor.execute(
+                    "INSERT INTO vehiculos (patente, tipo_cliente) VALUES (%s, 'ocasional')",
+                    (patente,)
+                )
+                id_vehiculo = cursor.lastrowid
 
-        cursor.execute("""
-            INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso, en_espera)
-            VALUES (%s, %s, 0)
-        """, (id_vehiculo, fecha_hora))
+            fecha_hora = datetime.now()
 
-        conn.commit()
+            cursor.execute("""
+                INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso, en_espera)
+                VALUES (%s, %s, 0)
+            """, (id_vehiculo, fecha_hora))
 
     except Exception as e:
         print(f"Error al registrar ingreso: {e}")
         return False
-
-    finally:
-        cursor.close()
-        conn.close()
 
     generar_ticket_ingreso(patente, fecha_hora)
     return True
@@ -164,28 +178,15 @@ def registrar_salida(patente, usuario):
     Returns:
         int | None: Tarifa calculada o None si hubo error.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
     try:
-        activos = obtener_ingresos_activos_por_patente(patente)
+        ingreso = obtener_ingreso_activo_priorizado(patente, "registrar salida")
 
-        if not activos:
+        if not ingreso:
             return None
-
-        if len(activos) > 1:
-            print(
-                f"[WARN] La patente {patente} tiene {len(activos)} ingresos activos. "
-                "Se usará el primero priorizado."
-            )
-
-        ingreso = activos[0]
 
         fecha_ingreso = ingreso["fecha_hora_ingreso"]
         ahora = datetime.now()
-        minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
-        if minutos < 0:
-            minutos = 0
+        minutos = calcular_minutos_estadia(fecha_ingreso, ahora)
 
         tarifa, subida_aplicada, monto_extra = calcular_tarifa(
             minutos,
@@ -194,26 +195,21 @@ def registrar_salida(patente, usuario):
             devolver_flag=True
         )
 
-        cursor.execute("""
-            UPDATE ingresos
-            SET fecha_hora_salida = %s,
-                tarifa_aplicada = %s,
-                usuario = %s
-            WHERE id_ingreso = %s
-        """, (ahora, tarifa, usuario, ingreso["id_ingreso"]))
-
         config = obtener_configuracion()
         modo_cobro = config.get("modo_cobro", "minuto")
 
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("""
+                UPDATE ingresos
+                SET fecha_hora_salida = %s,
+                    tarifa_aplicada = %s,
+                    usuario = %s
+                WHERE id_ingreso = %s
+            """, (ahora, tarifa, usuario, ingreso["id_ingreso"]))
 
     except Exception as e:
         print(f"Error al registrar salida: {e}")
         return None
-
-    finally:
-        cursor.close()
-        conn.close()
 
     generar_ticket_salida(
         patente=patente,
@@ -235,10 +231,7 @@ def obtener_vehiculos_activos():
     Returns:
         list[dict]: Lista con patente, hora de ingreso y monto acumulado.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
+    with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT
                 i.id_ingreso,
@@ -252,18 +245,12 @@ def obtener_vehiculos_activos():
         """)
         resultados = cursor.fetchall()
 
-    finally:
-        cursor.close()
-        conn.close()
-
     ahora = datetime.now()
     lista = []
 
     for r in resultados:
         fecha_ingreso = r["fecha_hora_ingreso"]
-        minutos = int((ahora - fecha_ingreso).total_seconds() / 60)
-        if minutos < 0:
-            minutos = 0
+        minutos = calcular_minutos_estadia(fecha_ingreso, ahora)
 
         tarifa = calcular_tarifa(minutos, fecha_ingreso, ahora) if r["en_espera"] == 0 else 0
 
@@ -286,10 +273,7 @@ def obtener_ingresos_editables():
     Returns:
         list[dict]: Lista con id_ingreso, patente, fecha_hora_ingreso y estado.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
+    with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso, 'EN ESPERA' AS estado
             FROM ingresos i
@@ -315,10 +299,6 @@ def obtener_ingresos_editables():
         """)
         cerrados = cursor.fetchall()
 
-    finally:
-        cursor.close()
-        conn.close()
-
     return en_espera + cerrados
 
 
@@ -330,10 +310,7 @@ def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
         id_ingreso (int): ID del ingreso a eliminar.
         usuario (str): Usuario que realiza la eliminación.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
+    with db_cursor(dictionary=True, commit=True) as cursor:
         cursor.execute("""
             SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso
             FROM ingresos i
@@ -359,11 +336,6 @@ def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
             ))
 
             cursor.execute("DELETE FROM ingresos WHERE id_ingreso = %s", (id_ingreso,))
-            conn.commit()
-
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def marcar_ingreso_en_espera(patente):
@@ -376,44 +348,34 @@ def marcar_ingreso_en_espera(patente):
     Returns:
         bool: True si se marcó correctamente, False en caso contrario.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
     try:
-        cursor.execute("""
-            SELECT i.id_ingreso
-            FROM ingresos i
-            JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
-            WHERE v.patente = %s
-              AND i.fecha_hora_salida IS NULL
-              AND i.en_espera = 0
-            ORDER BY i.fecha_hora_ingreso DESC
-            LIMIT 1
-        """, (patente,))
-        ingreso = cursor.fetchone()
+        with db_cursor(dictionary=True, commit=True) as cursor:
+            cursor.execute("""
+                SELECT i.id_ingreso
+                FROM ingresos i
+                JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+                WHERE v.patente = %s
+                  AND i.fecha_hora_salida IS NULL
+                  AND i.en_espera = 0
+                ORDER BY i.fecha_hora_ingreso DESC
+                LIMIT 1
+            """, (patente,))
+            ingreso = cursor.fetchone()
 
-        if not ingreso:
-            return False
+            if not ingreso:
+                return False
 
-        cursor.close()
-        cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE ingresos
+                SET en_espera = 1
+                WHERE id_ingreso = %s
+            """, (ingreso["id_ingreso"],))
 
-        cursor.execute("""
-            UPDATE ingresos
-            SET en_espera = 1
-            WHERE id_ingreso = %s
-        """, (ingreso["id_ingreso"],))
-
-        conn.commit()
-        return cursor.rowcount > 0
+            return cursor.rowcount > 0
 
     except Exception as e:
         print(f"Error al marcar en espera: {e}")
         return False
-
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def registrar_uso_bano(monto, usuario):
@@ -427,24 +389,17 @@ def registrar_uso_bano(monto, usuario):
     Returns:
         bool: True si el registro fue exitoso, False en caso contrario.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
     try:
-        cursor.execute("""
-            INSERT INTO usos_bano (fecha_hora, monto, usuario)
-            VALUES (%s, %s, %s)
-        """, (datetime.now(), monto, usuario))
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("""
+                INSERT INTO usos_bano (fecha_hora, monto, usuario)
+                VALUES (%s, %s, %s)
+            """, (datetime.now(), monto, usuario))
         return True
 
     except Exception as e:
         print(f"Error al registrar uso de baño: {e}")
         return False
-
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def revertir_en_espera(id_ingreso):
@@ -457,26 +412,19 @@ def revertir_en_espera(id_ingreso):
     Returns:
         bool: True si fue exitoso, False en caso contrario.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
     try:
-        cursor.execute("""
-            UPDATE ingresos
-            SET en_espera = 0
-            WHERE id_ingreso = %s
-              AND fecha_hora_salida IS NULL
-        """, (id_ingreso,))
-        conn.commit()
-        return cursor.rowcount > 0
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("""
+                UPDATE ingresos
+                SET en_espera = 0
+                WHERE id_ingreso = %s
+                  AND fecha_hora_salida IS NULL
+            """, (id_ingreso,))
+            return cursor.rowcount > 0
 
     except Exception as e:
         print(f"Error al revertir ingreso en espera: {e}")
         return False
-
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def reingresar_vehiculo_cerrado(id_ingreso_original):
@@ -490,66 +438,56 @@ def reingresar_vehiculo_cerrado(id_ingreso_original):
     Returns:
         bool: True si fue exitoso, False en caso contrario.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
     try:
-        cursor.execute("""
-            SELECT id_vehiculo, fecha_hora_ingreso, tarifa_aplicada
-            FROM ingresos
-            WHERE id_ingreso = %s
-              AND fecha_hora_salida IS NOT NULL
-              AND reingresado = 0
-        """, (id_ingreso_original,))
-        ingreso = cursor.fetchone()
+        with db_cursor(dictionary=True, commit=True) as cursor:
+            cursor.execute("""
+                SELECT id_vehiculo, fecha_hora_ingreso, tarifa_aplicada
+                FROM ingresos
+                WHERE id_ingreso = %s
+                  AND fecha_hora_salida IS NOT NULL
+                  AND reingresado = 0
+            """, (id_ingreso_original,))
+            ingreso = cursor.fetchone()
 
-        if not ingreso:
-            return False
+            if not ingreso:
+                return False
 
-        # Evitar duplicar un activo si ya existe uno abierto para esa patente
-        cursor.execute("""
-            SELECT COUNT(*) AS total
-            FROM ingresos
-            WHERE id_vehiculo = %s
-              AND fecha_hora_salida IS NULL
-        """, (ingreso["id_vehiculo"],))
-        activos = cursor.fetchone()
+            # Evitar duplicar un activo si ya existe uno abierto para esa patente
+            cursor.execute("""
+                SELECT COUNT(*) AS total
+                FROM ingresos
+                WHERE id_vehiculo = %s
+                  AND fecha_hora_salida IS NULL
+            """, (ingreso["id_vehiculo"],))
+            activos = cursor.fetchone()
 
-        if activos and activos["total"] > 0:
-            print(
-                "[WARN] No se pudo reingresar vehículo: ya existe un ingreso activo "
-                f"para id_vehiculo={ingreso['id_vehiculo']}."
-            )
-            return False
+            if activos and activos["total"] > 0:
+                print(
+                    "[WARN] No se pudo reingresar vehículo: ya existe un ingreso activo "
+                    f"para id_vehiculo={ingreso['id_vehiculo']}."
+                )
+                return False
 
-        cursor.close()
-        cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso, tarifa_aplicada, en_espera)
+                VALUES (%s, %s, %s, 0)
+            """, (
+                ingreso["id_vehiculo"],
+                ingreso["fecha_hora_ingreso"],
+                ingreso["tarifa_aplicada"]
+            ))
 
-        cursor.execute("""
-            INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso, tarifa_aplicada, en_espera)
-            VALUES (%s, %s, %s, 0)
-        """, (
-            ingreso["id_vehiculo"],
-            ingreso["fecha_hora_ingreso"],
-            ingreso["tarifa_aplicada"]
-        ))
+            cursor.execute("""
+                UPDATE ingresos
+                SET reingresado = 1
+                WHERE id_ingreso = %s
+            """, (id_ingreso_original,))
 
-        cursor.execute("""
-            UPDATE ingresos
-            SET reingresado = 1
-            WHERE id_ingreso = %s
-        """, (id_ingreso_original,))
-
-        conn.commit()
         return True
 
     except Exception as e:
         print(f"Error al reingresar vehículo cerrado: {e}")
         return False
-
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def alternar_estado_espera(patente):
@@ -566,21 +504,19 @@ def alternar_estado_espera(patente):
     Returns:
         tuple[bool, str]: Resultado y mensaje descriptivo.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
     try:
-        cursor.execute("""
-            SELECT i.id_ingreso
-            FROM ingresos i
-            JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
-            WHERE v.patente = %s
-              AND i.fecha_hora_salida IS NULL
-              AND i.en_espera = 1
-            ORDER BY i.fecha_hora_ingreso DESC
-            LIMIT 1
-        """, (patente,))
-        ingreso_espera = cursor.fetchone()
+        with db_cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT i.id_ingreso
+                FROM ingresos i
+                JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+                WHERE v.patente = %s
+                  AND i.fecha_hora_salida IS NULL
+                  AND i.en_espera = 1
+                ORDER BY i.fecha_hora_ingreso DESC
+                LIMIT 1
+            """, (patente,))
+            ingreso_espera = cursor.fetchone()
 
         if ingreso_espera:
             exito = revertir_en_espera(ingreso_espera["id_ingreso"])
@@ -593,10 +529,6 @@ def alternar_estado_espera(patente):
         print(f"Error en alternar_estado_espera: {e}")
         return False, str(e)
 
-    finally:
-        cursor.close()
-        conn.close()
-
 
 def obtener_patentes_existentes():
     """
@@ -606,10 +538,7 @@ def obtener_patentes_existentes():
     Returns:
         list[str]: Lista de patentes con ingreso abierto.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
+    with db_cursor() as cursor:
         cursor.execute("""
             SELECT DISTINCT v.patente
             FROM ingresos i
@@ -619,10 +548,6 @@ def obtener_patentes_existentes():
         """)
         filas = cursor.fetchall()
         return [f[0] for f in filas]
-
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def eliminar_ingreso_activo_por_patente(patente, usuario):
@@ -641,18 +566,12 @@ def eliminar_ingreso_activo_por_patente(patente, usuario):
         tuple[bool, str]: Resultado y mensaje.
     """
     try:
-        activos = obtener_ingresos_activos_por_patente(patente)
+        ingreso = obtener_ingreso_activo_priorizado(patente, "eliminar ingreso")
 
-        if not activos:
+        if not ingreso:
             return False, "No hay un ingreso activo para esta patente."
 
-        if len(activos) > 1:
-            print(
-                f"[WARN] La patente {patente} tiene {len(activos)} ingresos activos. "
-                "Se eliminará el primero priorizado."
-            )
-
-        id_ingreso = activos[0]["id_ingreso"]
+        id_ingreso = ingreso["id_ingreso"]
 
         eliminar_ingreso_con_respaldo(id_ingreso, usuario)
         return True, f"Ingreso activo de {patente} eliminado con respaldo."
