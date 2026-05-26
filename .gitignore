@@ -1,10 +1,10 @@
 __pycache__/ 
+.atl/
 views/setup_window.py
 tickets/ 
 reportes/
 cierres/
 pdfs/
-tests/
 asistencias/
 *.pyc 
 *.pyo 
@@ -16,8 +16,11 @@ venv/
 .venv/
 config.ini
 crear_usuario.py
-EstacionamientoCentral.spec
+
+# Manual/local diagnostic scripts. Keep automated tests under tests/test_*.py versionable.
 test_cierres_mensuales.py
 test_tarifas_con_subida.py
 test_tarifas_sin_subida.py
-schema.sql
+tests/test_muchos_datos.py
+tests/test_performance.py
+tests/test_recursos.py
