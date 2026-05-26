@@ -6,7 +6,7 @@ from PySide6.QtCore import QDateTime, QTimer, Qt
 
 from controllers.dashboard_controller import obtener_resumen_diario, obtener_resumen_banos
 from controllers.cierres_controller import realizar_cierre_diario
-from utils.db import get_connection
+from utils.db import db_cursor
 from datetime import datetime
 
 
@@ -164,12 +164,9 @@ class DashboardWindow(QWidget):
         self.label_hora.setText(f"Hora actual: {hora_actual}")
 
     def obtener_periodo_resumen(self):
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT MAX(fecha_cierre) AS ultima_cierre FROM cierres_diarios")
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        with db_cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT MAX(fecha_cierre) AS ultima_cierre FROM cierres_diarios")
+            row = cursor.fetchone()
 
         if row and row["ultima_cierre"]:
             fecha_inicio = row["ultima_cierre"].strftime("%d/%m/%Y %H:%M")

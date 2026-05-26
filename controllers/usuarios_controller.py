@@ -5,7 +5,7 @@ Incluye funciones para listar, crear, actualizar estado y cambiar la contraseña
 """
 
 import bcrypt
-from utils.db import get_connection
+from utils.db import db_cursor
 
 def obtener_usuarios():
     """
@@ -14,12 +14,9 @@ def obtener_usuarios():
     Returns:
         list[dict]: Lista de usuarios con sus campos (id_usuario, usuario, rol, activo).
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT id_usuario, usuario, rol, activo FROM usuarios ORDER BY id_usuario ASC")
-    resultados = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("SELECT id_usuario, usuario, rol, activo FROM usuarios ORDER BY id_usuario ASC")
+        resultados = cursor.fetchall()
     return resultados
 
 
@@ -35,22 +32,17 @@ def crear_usuario(usuario, clave, rol):
     Returns:
         bool: True si se creó exitosamente, False si hubo error.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
     clave_hash = bcrypt.hashpw(clave.encode('utf-8'), bcrypt.gensalt())
     try:
-        cursor.execute("""
-            INSERT INTO usuarios (usuario, clave_hash, rol)
-            VALUES (%s, %s, %s)
-        """, (usuario, clave_hash, rol))
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("""
+                INSERT INTO usuarios (usuario, clave_hash, rol)
+                VALUES (%s, %s, %s)
+            """, (usuario, clave_hash, rol))
         exito = True
     except Exception as e:
         print("Error al crear usuario:", e)
         exito = False
-    finally:    
-        cursor.close()
-        conn.close()
 
     return exito
 
@@ -68,23 +60,18 @@ def cambiar_contrasena(usuario, nueva_clave):
     if not usuario or not nueva_clave:
         return False
 
-    conn = get_connection()
-    cursor = conn.cursor()
     nuevo_hash = bcrypt.hashpw(nueva_clave.encode("utf-8"), bcrypt.gensalt())
 
     try:
-        cursor.execute(
-            "UPDATE usuarios SET clave_hash = %s WHERE usuario = %s",
-            (nuevo_hash, usuario)
-        )
-        conn.commit()
-        exito = cursor.rowcount > 0
+        with db_cursor(commit=True) as cursor:
+            cursor.execute(
+                "UPDATE usuarios SET clave_hash = %s WHERE usuario = %s",
+                (nuevo_hash, usuario)
+            )
+            exito = cursor.rowcount > 0
     except Exception as e:
         print("Error al cambiar contraseña:", e)
         exito = False
-    finally:
-        cursor.close()
-        conn.close()
 
     return exito
 
@@ -99,17 +86,12 @@ def cambiar_estado_usuario(usuario, nuevo_estado):
     Returns:
         bool: True si el cambio fue exitoso, False si hubo error.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("UPDATE usuarios SET activo = %s WHERE usuario = %s", (nuevo_estado, usuario))
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("UPDATE usuarios SET activo = %s WHERE usuario = %s", (nuevo_estado, usuario))
         exito = True
     except Exception as e:
         print("Error al cambiar estado del usuario:", e)
         exito = False
-    finally:
-        cursor.close()
-        conn.close()
         
     return exito

@@ -4,7 +4,7 @@ Controlador para la gestión de configuración general del sistema.
 Incluye funciones para obtener y actualizar parámetros como tarifas, modos de cobro, etc.
 """
 
-from utils.db import get_connection
+from utils.db import db_cursor
 
 def obtener_configuracion():
     """
@@ -13,12 +13,9 @@ def obtener_configuracion():
     Returns:
         dict: Configuración del sistema.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT clave, valor FROM configuracion")
-    datos = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("SELECT clave, valor FROM configuracion")
+        datos = cursor.fetchall()
 
     return {item["clave"]: item["valor"] for item in datos}
 
@@ -33,15 +30,11 @@ def actualizar_configuracion(clave, valor):
     Returns:
         bool: True si se actualizó correctamente.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE configuracion SET valor = %s WHERE clave = %s",
-        (str(valor), clave)
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
+    with db_cursor(commit=True) as cursor:
+        cursor.execute(
+            "UPDATE configuracion SET valor = %s WHERE clave = %s",
+            (str(valor), clave)
+        )
     return True
 
 def guardar_configuracion_masiva(diccionario_config):
@@ -51,13 +44,9 @@ def guardar_configuracion_masiva(diccionario_config):
     Args:
         diccionario_config (dict): Diccionario clave-valor con los cambios.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-    for clave, valor in diccionario_config.items():
-        cursor.execute(
-            "UPDATE configuracion SET valor = %s WHERE clave = %s",
-            (str(valor), clave)
-        )
-    conn.commit()
-    cursor.close()
-    conn.close()
+    with db_cursor(commit=True) as cursor:
+        for clave, valor in diccionario_config.items():
+            cursor.execute(
+                "UPDATE configuracion SET valor = %s WHERE clave = %s",
+                (str(valor), clave)
+            )

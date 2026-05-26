@@ -6,6 +6,14 @@ import os
 import sys
 import mysql.connector
 from configparser import ConfigParser
+from contextlib import contextmanager
+
+
+class DatabaseConnectionError(RuntimeError):
+    """
+    Error explícito para fallas de configuración o conexión a la base de datos.
+    """
+    pass
 
 
 def get_base_paths():
@@ -71,3 +79,38 @@ def get_connection():
     except mysql.connector.Error as err:
         print(f"Error al conectar a la base de datos: {err}")
         return None
+
+
+@contextmanager
+def db_cursor(dictionary=False, commit=False):
+    """
+    Crea un cursor de base de datos con cierre garantizado.
+
+    Args:
+        dictionary (bool): Si es True, retorna filas como diccionarios.
+        commit (bool): Si es True, confirma la transacción al finalizar.
+
+    Raises:
+        DatabaseConnectionError: Si no fue posible abrir la conexión.
+    """
+    conn = get_connection()
+    if conn is None:
+        raise DatabaseConnectionError(
+            "No fue posible conectar a la base de datos. "
+            "Verifica config.ini, MySQL y las credenciales configuradas."
+        )
+
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=dictionary)
+        yield cursor
+        if commit:
+            conn.commit()
+    except Exception:
+        if commit:
+            conn.rollback()
+        raise
+    finally:
+        if cursor is not None:
+            cursor.close()
+        conn.close()

@@ -6,7 +6,7 @@ y salida, y calcular estadísticas del turno.
 """
 
 import bcrypt
-from utils.db import get_connection
+from utils.db import db_cursor
 from datetime import datetime, timedelta
 
 def validar_usuario(usuario, clave_plana):
@@ -20,16 +20,14 @@ def validar_usuario(usuario, clave_plana):
     Returns:
         tuple: (resultado de validación: bool|str, rol del usuario: str|None)
     """
-    conn = get_connection()
-    if conn is None:
-        return False, None # No hay conexión
-    
-    cursor = conn.cursor(dictionary=True)
-    query = "SELECT * FROM usuarios WHERE usuario = %s"
-    cursor.execute(query, (usuario,))
-    resultado = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    try:
+        with db_cursor(dictionary=True) as cursor:
+            query = "SELECT * FROM usuarios WHERE usuario = %s"
+            cursor.execute(query, (usuario,))
+            resultado = cursor.fetchone()
+    except Exception as e:
+        print(f"Error al validar usuario: {e}")
+        return False, None
     
     if resultado:
         if not resultado.get("activo", 1):
@@ -49,15 +47,11 @@ def registrar_asistencia_inicio(usuario):
     Args:
         usuario (str): Nombre del usuario.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO asistencias (usuario, hora_inicio)
-        VALUES (%s, NOW())
-    """, (usuario,))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    with db_cursor(commit=True) as cursor:
+        cursor.execute("""
+            INSERT INTO asistencias (usuario, hora_inicio)
+            VALUES (%s, NOW())
+        """, (usuario,))
 
 def registrar_asistencia_salida(usuario):
     """
@@ -69,61 +63,53 @@ def registrar_asistencia_salida(usuario):
     Returns:
         dict: Contiene 'cantidad', 'total' y 'hora_inicio' del turno cerrado.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    # 1. Obtener la última asistencia activa
-    cursor.execute("""
-        SELECT id_asistencia, hora_inicio
-        FROM asistencias
-        WHERE usuario = %s AND hora_salida IS NULL
-        ORDER BY hora_inicio DESC
-        LIMIT 1
-    """, (usuario,))
-    asistencia = cursor.fetchone()
-
     resumen = {"cantidad": 0, "total": 0, "hora_inicio": None}
 
-    if asistencia:
-        id_asistencia = asistencia["id_asistencia"]
-        hora_inicio = asistencia["hora_inicio"]
-
-        # 2. Calcular totales
+    with db_cursor(dictionary=True, commit=True) as cursor:
+        # 1. Obtener la última asistencia activa
         cursor.execute("""
-            SELECT COUNT(*) AS cantidad, SUM(tarifa_aplicada) AS total
-            FROM ingresos
-            WHERE usuario = %s AND fecha_hora_salida BETWEEN %s AND NOW()
-        """, (usuario, hora_inicio))
-        resultado = cursor.fetchone()
-        cantidad = resultado["cantidad"] or 0
-        total = resultado["total"] or 0
+            SELECT id_asistencia, hora_inicio
+            FROM asistencias
+            WHERE usuario = %s AND hora_salida IS NULL
+            ORDER BY hora_inicio DESC
+            LIMIT 1
+        """, (usuario,))
+        asistencia = cursor.fetchone()
 
-        resumen["cantidad"] = cantidad
-        resumen["total"] = total
-        resumen["hora_inicio"] = hora_inicio
+        if asistencia:
+            id_asistencia = asistencia["id_asistencia"]
+            hora_inicio = asistencia["hora_inicio"]
 
-        # 3. Cerrar asistencia
-        cursor.execute("""
-            UPDATE asistencias
-            SET hora_salida = NOW(),
-                total_recaudado = %s,
-                cantidad_movimientos = %s
-            WHERE id_asistencia = %s
-        """, (total, cantidad, id_asistencia))
+            # 2. Calcular totales
+            cursor.execute("""
+                SELECT COUNT(*) AS cantidad, SUM(tarifa_aplicada) AS total
+                FROM ingresos
+                WHERE usuario = %s AND fecha_hora_salida BETWEEN %s AND NOW()
+            """, (usuario, hora_inicio))
+            resultado = cursor.fetchone()
+            cantidad = resultado["cantidad"] or 0
+            total = resultado["total"] or 0
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+            resumen["cantidad"] = cantidad
+            resumen["total"] = total
+            resumen["hora_inicio"] = hora_inicio
+
+            # 3. Cerrar asistencia
+            cursor.execute("""
+                UPDATE asistencias
+                SET hora_salida = NOW(),
+                    total_recaudado = %s,
+                    cantidad_movimientos = %s
+                WHERE id_asistencia = %s
+            """, (total, cantidad, id_asistencia))
 
     return resumen
 
 def hay_usuarios_registrados():
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM usuarios")
-        resultado = cursor.fetchone()
-        conn.close()
+        with db_cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM usuarios")
+            resultado = cursor.fetchone()
         return resultado[0] > 0
     except Exception as e:
         print(f"Error al verificar usuarios: {e}")
