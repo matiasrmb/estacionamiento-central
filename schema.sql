@@ -28,9 +28,27 @@ CREATE TABLE IF NOT EXISTS ingresos (
     fecha_hora_salida DATETIME DEFAULT NULL,
     tarifa_aplicada DECIMAL(10,2) DEFAULT NULL,
     en_espera TINYINT(1) DEFAULT 0,
+    en_lavado TINYINT(1) DEFAULT 0,
     cerrado TINYINT(1) DEFAULT 0,
     reingresado TINYINT(1) DEFAULT 0,
     usuario VARCHAR(50),
+    FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo)
+);
+
+-- Tabla de lavados de vehículos
+CREATE TABLE IF NOT EXISTS lavados (
+    id_lavado INT AUTO_INCREMENT PRIMARY KEY,
+    id_ingreso INT NOT NULL,
+    id_vehiculo INT NOT NULL,
+    patente VARCHAR(10) NOT NULL,
+    categoria_lavado VARCHAR(50) NOT NULL,
+    valor_lavado INT NOT NULL,
+    fecha_hora_inicio DATETIME NOT NULL,
+    fecha_hora_fin DATETIME DEFAULT NULL,
+    usuario_inicio VARCHAR(50) NOT NULL,
+    usuario_fin VARCHAR(50) DEFAULT NULL,
+    estado ENUM('activo', 'finalizado') NOT NULL DEFAULT 'activo',
+    FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso),
     FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo)
 );
 
