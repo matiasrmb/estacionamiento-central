@@ -9,7 +9,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from controllers.config_controller import obtener_configuracion, actualizar_configuracion
+from controllers.config_controller import (
+    LAVADO_CATEGORIAS,
+    obtener_configuracion,
+    actualizar_configuracion,
+)
 from controllers.tarifas_controller import generar_tramos_automaticos
 from utils.printer_manager import (obtener_impresoras_instaladas, 
                                    obtener_impresora_predeterminada,
@@ -105,6 +109,47 @@ class ConfiguracionWindow(QWidget):
 
         layout_general_wrapper.addLayout(layout_general)
         layout.addWidget(panel_general)
+
+        # =========================================================
+        # LAVADOS
+        # =========================================================
+        panel_lavados = QFrame()
+        panel_lavados.setObjectName("PanelFormulario")
+        layout_lavados_wrapper = QVBoxLayout(panel_lavados)
+        layout_lavados_wrapper.setContentsMargins(14, 14, 14, 14)
+        layout_lavados_wrapper.setSpacing(10)
+
+        titulo_lavados = QLabel("Valores de lavado")
+        titulo_lavados.setObjectName("EtiquetaFormulario")
+        layout_lavados_wrapper.addWidget(titulo_lavados)
+
+        descripcion_lavados = QLabel(
+            "Configura el valor fijo que se cobrará por lavado según el tamaño del vehículo."
+        )
+        descripcion_lavados.setObjectName("SubtituloSeccion")
+        descripcion_lavados.setWordWrap(True)
+        layout_lavados_wrapper.addWidget(descripcion_lavados)
+
+        layout_lavados = QGridLayout()
+        layout_lavados.setHorizontalSpacing(14)
+        layout_lavados.setVerticalSpacing(12)
+
+        self.lavado_inputs = {}
+        for fila, (clave, etiqueta, valor_default) in enumerate(LAVADO_CATEGORIAS):
+            label = QLabel(f"Lavado {etiqueta} (CLP)")
+            label.setObjectName("EtiquetaFormulario")
+
+            input_valor = QLineEdit(self.config.get(clave, valor_default))
+            input_valor.setMinimumHeight(38)
+            input_valor.returnPressed.connect(self.guardar)
+
+            self.lavado_inputs[clave] = input_valor
+            layout_lavados.addWidget(label, fila, 0)
+            layout_lavados.addWidget(input_valor, fila, 1)
+
+        layout_lavados.setColumnStretch(1, 1)
+        layout_lavados_wrapper.addLayout(layout_lavados)
+        layout.addWidget(panel_lavados)
 
         # =========================================================
         # IMPRESIÓN DE TICKETS
@@ -305,14 +350,19 @@ class ConfiguracionWindow(QWidget):
         valor_minuto = self.minuto_input.text().strip()
         tarifa_hora = self.hora_input.text().strip()
         valor_bano = self.bano_input.text().strip()
+        valores_lavado = {
+            clave: input_valor.text().strip()
+            for clave, input_valor in self.lavado_inputs.items()
+        }
 
         if (
             not tarifa_minima.isdigit() 
             or not valor_minuto.isdigit() 
             or not tarifa_hora.isdigit() 
             or not valor_bano.isdigit()
+            or any(not valor.isdigit() for valor in valores_lavado.values())
         ):
-            QMessageBox.warning(self, "Error", "Tarifas deben ser números enteros.")
+            QMessageBox.warning(self, "Error", "Tarifas y valores de lavado deben ser números enteros.")
             return
 
         actualizar_configuracion("modo_cobro", modo)
@@ -320,6 +370,8 @@ class ConfiguracionWindow(QWidget):
         actualizar_configuracion("tarifa_hora", tarifa_hora)
         actualizar_configuracion("valor_minuto", valor_minuto)
         actualizar_configuracion("valor_bano", valor_bano)
+        for clave, valor in valores_lavado.items():
+            actualizar_configuracion(clave, valor)
 
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 

@@ -103,5 +103,12 @@ INSERT INTO configuracion (clave, valor) VALUES
 ('modo_cobro', 'minuto'),
 ('tarifa_minima', '300'),
 ('tarifa_hora', '1300'),
-('modo_auto_simplificado', '0')
+('valor_minuto', '25'),
+('valor_bano', '300'),
+('modo_auto_simplificado', '0'),
+('lavado_citycar', '5000'),
+('lavado_suv', '8000'),
+('lavado_camioneta', '10000'),
+('lavado_furgon', '15000'),
+('lavado_minibus', '25000')
 ON DUPLICATE KEY UPDATE valor = VALUES(valor);

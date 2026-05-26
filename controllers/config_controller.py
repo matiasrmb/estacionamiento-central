@@ -6,6 +6,15 @@ Incluye funciones para obtener y actualizar parámetros como tarifas, modos de c
 
 from utils.db import db_cursor
 
+
+LAVADO_CATEGORIAS = [
+    ("lavado_citycar", "CityCar", "5000"),
+    ("lavado_suv", "SUV", "8000"),
+    ("lavado_camioneta", "Camioneta", "10000"),
+    ("lavado_furgon", "Furgón", "15000"),
+    ("lavado_minibus", "Mini bus o vehículos grandes", "25000"),
+]
+
 def obtener_configuracion():
     """
     Obtiene la configuración general del sistema como un diccionario clave-valor.
@@ -32,8 +41,12 @@ def actualizar_configuracion(clave, valor):
     """
     with db_cursor(commit=True) as cursor:
         cursor.execute(
-            "UPDATE configuracion SET valor = %s WHERE clave = %s",
-            (str(valor), clave)
+            """
+            INSERT INTO configuracion (clave, valor)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE valor = VALUES(valor)
+            """,
+            (clave, str(valor))
         )
     return True
 
@@ -47,6 +60,31 @@ def guardar_configuracion_masiva(diccionario_config):
     with db_cursor(commit=True) as cursor:
         for clave, valor in diccionario_config.items():
             cursor.execute(
-                "UPDATE configuracion SET valor = %s WHERE clave = %s",
-                (str(valor), clave)
+                """
+                INSERT INTO configuracion (clave, valor)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE valor = VALUES(valor)
+                """,
+                (clave, str(valor))
             )
+
+
+def obtener_valores_lavado(configuracion=None):
+    """
+    Retorna los valores de lavado configurados por categoría.
+
+    Args:
+        configuracion (dict | None): Configuración ya cargada, para evitar
+            consultas repetidas desde la UI o lógica de negocio.
+
+    Returns:
+        dict: clave -> {label, valor}
+    """
+    config = configuracion or obtener_configuracion()
+    return {
+        clave: {
+            "label": label,
+            "valor": int(config.get(clave, valor_default)),
+        }
+        for clave, label, valor_default in LAVADO_CATEGORIAS
+    }
