@@ -18,10 +18,10 @@ if __name__ == "__main__":
     app.setStyleSheet(GLOBAL_STYLESHEET)
 
     if hay_usuarios_registrados():
-        print("✅ Usuarios encontrados. Abriendo LoginWindow.")
+        print("Usuarios encontrados. Abriendo LoginWindow.")
         ventana = LoginWindow()
     else:
-        print("🆕 No hay usuarios. Abriendo SetupWindow.")
+        print("No hay usuarios. Abriendo SetupWindow.")
         ventana = SetupWindow(mostrar_login)
 
     ventana.show()
