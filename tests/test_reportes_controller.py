@@ -46,15 +46,23 @@ class ObtenerReportesTests(unittest.TestCase):
             "monto": 300,
             "usuario": "admin",
         }
-        cursor = FakeCursor(fetchall_results=[[movimiento], [bano]])
+        lavado = {
+            "patente": "ABC123",
+            "fecha_hora_inicio": datetime(2026, 1, 1, 12, 30),
+            "fecha_hora_fin": datetime(2026, 1, 1, 13, 0),
+            "valor_lavado": 8000,
+        }
+        cursor = FakeCursor(fetchall_results=[[movimiento], [bano], [lavado]])
         db_cursor.return_value = fake_db_cursor(cursor)
 
         resultado = reportes_controller.obtener_reportes(date(2026, 1, 1), date(2026, 1, 31))
 
-        self.assertEqual(len(resultado), 2)
+        self.assertEqual(len(resultado), 3)
         self.assertEqual(resultado[1]["patente"], "[BAÑO]")
         self.assertEqual(resultado[1]["tarifa_aplicada"], 300)
-        self.assertEqual(len(cursor.executed), 2)
+        self.assertEqual(resultado[2]["patente"], "[LAVADO] ABC123")
+        self.assertEqual(resultado[2]["tarifa_aplicada"], 8000)
+        self.assertEqual(len(cursor.executed), 3)
 
     @patch.object(reportes_controller, "db_cursor")
     def test_obtener_reportes_filtra_por_patente_y_no_incluye_banos(self, db_cursor):
@@ -86,7 +94,10 @@ class ExportarPdfTests(unittest.TestCase):
         os_mock,
         abrir_pdf,
     ):
-        cursor = FakeCursor(fetchone_results=[{"cantidad": 2, "total": 600}])
+        cursor = FakeCursor(fetchone_results=[
+            {"cantidad": 2, "total": 600},
+            {"cantidad": 1, "total": 8000},
+        ])
         db_cursor.return_value = fake_db_cursor(cursor)
         pdf = Mock()
         reporte_pdf.return_value = pdf

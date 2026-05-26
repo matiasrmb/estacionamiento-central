@@ -64,6 +64,23 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
                     "tarifa_aplicada": b["monto"]
                 })
 
+            cursor.execute("""
+                SELECT patente, fecha_hora_inicio, fecha_hora_fin, valor_lavado
+                FROM lavados
+                WHERE estado = 'finalizado'
+                  AND fecha_hora_fin IS NOT NULL
+                  AND DATE(fecha_hora_fin) BETWEEN %s AND %s
+            """, (fecha_inicio, fecha_fin))
+            lavados = cursor.fetchall()
+            for lavado in lavados:
+                resultados.append({
+                    "patente": f"[LAVADO] {lavado['patente']}",
+                    "fecha_hora_ingreso": lavado["fecha_hora_inicio"],
+                    "fecha_hora_salida": lavado["fecha_hora_fin"],
+                    "minutos": 0,
+                    "tarifa_aplicada": lavado["valor_lavado"]
+                })
+
     return resultados
 
 def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
@@ -84,6 +101,8 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
     total = 0
     total_banos = 0
     monto_banos = 0
+    total_lavados = 0
+    monto_lavados = 0
 
     if incluir_banos and fecha_inicio and fecha_fin:
         with db_cursor(dictionary=True) as cursor:
@@ -95,6 +114,17 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
             resultado = cursor.fetchone()
             total_banos = resultado["cantidad"] or 0
             monto_banos = resultado["total"] or 0
+
+            cursor.execute("""
+                SELECT COUNT(*) AS cantidad, SUM(valor_lavado) AS total
+                FROM lavados
+                WHERE estado = 'finalizado'
+                  AND fecha_hora_fin IS NOT NULL
+                  AND DATE(fecha_hora_fin) BETWEEN %s AND %s
+            """, (fecha_inicio, fecha_fin))
+            resultado_lavados = cursor.fetchone()
+            total_lavados = resultado_lavados["cantidad"] or 0
+            monto_lavados = resultado_lavados["total"] or 0
 
     for row in datos:
         ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
@@ -112,8 +142,10 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
         pdf.set_font("Arial", "", 11)
         pdf.cell(0, 8, f"Baños registrados: {total_banos}", ln=True)
         pdf.cell(0, 8, f"Total recaudado por baños: ${monto_banos:.0f}", ln=True)
+        pdf.cell(0, 8, f"Lavados registrados: {total_lavados}", ln=True)
+        pdf.cell(0, 8, f"Total recaudado por lavados: ${monto_lavados:.0f}", ln=True)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Total general (vehículos + baños): ${total + monto_banos:.0f}", ln=True)
+        pdf.cell(0, 10, f"Total general (vehículos + baños + lavados): ${total + monto_banos + monto_lavados:.0f}", ln=True)
 
     carpeta = "reportes"
     os.makedirs(carpeta, exist_ok=True)
