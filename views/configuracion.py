@@ -5,7 +5,7 @@ from fpdf import FPDF
 from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QComboBox, QMessageBox,
-    QGridLayout, QSizePolicy, QFrame
+    QGridLayout, QSizePolicy, QFrame, QCheckBox
 )
 from PySide6.QtCore import Qt
 
@@ -150,6 +150,48 @@ class ConfiguracionWindow(QWidget):
         layout_lavados.setColumnStretch(1, 1)
         layout_lavados_wrapper.addLayout(layout_lavados)
         layout.addWidget(panel_lavados)
+
+        # =========================================================
+        # LIMPIEZA AUTOMÁTICA
+        # =========================================================
+        panel_limpieza = QFrame()
+        panel_limpieza.setObjectName("PanelFormulario")
+        layout_limpieza_wrapper = QVBoxLayout(panel_limpieza)
+        layout_limpieza_wrapper.setContentsMargins(14, 14, 14, 14)
+        layout_limpieza_wrapper.setSpacing(10)
+
+        titulo_limpieza = QLabel("Limpieza automática")
+        titulo_limpieza.setObjectName("EtiquetaFormulario")
+        layout_limpieza_wrapper.addWidget(titulo_limpieza)
+
+        descripcion_limpieza = QLabel(
+            "Elimina archivos generados antiguos de tickets, reportes, cierres, PDFs y asistencias. "
+            "Nunca elimina configuración, esquema, assets ni código."
+        )
+        descripcion_limpieza.setObjectName("SubtituloSeccion")
+        descripcion_limpieza.setWordWrap(True)
+        layout_limpieza_wrapper.addWidget(descripcion_limpieza)
+
+        layout_limpieza = QGridLayout()
+        layout_limpieza.setHorizontalSpacing(14)
+        layout_limpieza.setVerticalSpacing(12)
+
+        self.limpieza_activa_check = QCheckBox("Activar limpieza automática diaria")
+        self.limpieza_activa_check.setChecked(self.config.get("limpieza_automatica_activa", "1") == "1")
+
+        label_dias_limpieza = QLabel("Días a conservar")
+        label_dias_limpieza.setObjectName("EtiquetaFormulario")
+        self.dias_limpieza_input = QLineEdit(self.config.get("dias_conservar_archivos", "30"))
+        self.dias_limpieza_input.setMinimumHeight(38)
+        self.dias_limpieza_input.returnPressed.connect(self.guardar)
+
+        layout_limpieza.addWidget(self.limpieza_activa_check, 0, 0, 1, 2)
+        layout_limpieza.addWidget(label_dias_limpieza, 1, 0)
+        layout_limpieza.addWidget(self.dias_limpieza_input, 1, 1)
+        layout_limpieza.setColumnStretch(1, 1)
+
+        layout_limpieza_wrapper.addLayout(layout_limpieza)
+        layout.addWidget(panel_limpieza)
 
         # =========================================================
         # IMPRESIÓN DE TICKETS
@@ -354,6 +396,7 @@ class ConfiguracionWindow(QWidget):
             clave: input_valor.text().strip()
             for clave, input_valor in self.lavado_inputs.items()
         }
+        dias_limpieza = self.dias_limpieza_input.text().strip()
 
         if (
             not tarifa_minima.isdigit() 
@@ -361,8 +404,9 @@ class ConfiguracionWindow(QWidget):
             or not tarifa_hora.isdigit() 
             or not valor_bano.isdigit()
             or any(not valor.isdigit() for valor in valores_lavado.values())
+            or not dias_limpieza.isdigit()
         ):
-            QMessageBox.warning(self, "Error", "Tarifas y valores de lavado deben ser números enteros.")
+            QMessageBox.warning(self, "Error", "Tarifas, valores de lavado y días de limpieza deben ser números enteros.")
             return
 
         actualizar_configuracion("modo_cobro", modo)
@@ -372,6 +416,8 @@ class ConfiguracionWindow(QWidget):
         actualizar_configuracion("valor_bano", valor_bano)
         for clave, valor in valores_lavado.items():
             actualizar_configuracion(clave, valor)
+        actualizar_configuracion("limpieza_automatica_activa", 1 if self.limpieza_activa_check.isChecked() else 0)
+        actualizar_configuracion("dias_conservar_archivos", dias_limpieza)
 
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 

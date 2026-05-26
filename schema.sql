@@ -128,5 +128,8 @@ INSERT INTO configuracion (clave, valor) VALUES
 ('lavado_suv', '8000'),
 ('lavado_camioneta', '10000'),
 ('lavado_furgon', '15000'),
-('lavado_minibus', '25000')
+('lavado_minibus', '25000'),
+('limpieza_automatica_activa', '1'),
+('dias_conservar_archivos', '30'),
+('ultima_limpieza_archivos', '')
 ON DUPLICATE KEY UPDATE valor = VALUES(valor);
