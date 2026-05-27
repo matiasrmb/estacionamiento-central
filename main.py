@@ -4,6 +4,7 @@ from controllers.login_controller import hay_usuarios_registrados
 from PySide6.QtWidgets import QApplication
 from styles import GLOBAL_STYLESHEET
 from utils.file_cleanup import ejecutar_limpieza_periodica
+from utils.update_notifier import schedule_startup_update_check
 import sys
 
 
@@ -33,4 +34,5 @@ if __name__ == "__main__":
         ventana = SetupWindow(mostrar_login)
 
     ventana.show()
+    schedule_startup_update_check(ventana)
     sys.exit(app.exec())
