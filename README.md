@@ -75,7 +75,6 @@ Verificar que el equipo cumpla con los requisitos indicados anteriormente.
 
 - Instalador:
   (https://www.mediafire.com/file/2ia3358r75d33nt/Instalador_EstacionamientoCentral_1.1.5.exe/file)
-
 - Repositorio del proyecto:
   (https://github.com/matiasrmb/estacionamiento-central)
 > Nota: Es posible que Windows o el antivirus muestren advertencias de seguridad debido a la naturaleza del instalador.
