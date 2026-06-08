@@ -2,7 +2,7 @@
 Controlador de operaciones de ingreso, salida y estado de vehículos en el estacionamiento.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from utils.db import db_cursor
 from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
@@ -121,7 +121,31 @@ def buscar_estado_vehiculo(patente):
         return None
 
 
-def registrar_ingreso(patente):
+def validar_fecha_hora_ingreso_personalizada(fecha_hora_ingreso, ahora=None):
+    """
+    Valida una hora de ingreso personalizada para casos de carga tardía.
+
+    La fecha debe corresponder al día actual, no puede estar en el futuro y
+    solo se admite un atraso máximo de 4 horas.
+    """
+    if fecha_hora_ingreso is None:
+        return False, "Ingresa una hora de ingreso."
+
+    ahora = ahora or datetime.now()
+
+    if fecha_hora_ingreso.date() != ahora.date():
+        return False, "La hora personalizada debe ser del día actual."
+
+    if fecha_hora_ingreso > ahora:
+        return False, "La hora personalizada no puede ser futura."
+
+    if fecha_hora_ingreso < ahora - timedelta(hours=4):
+        return False, "La hora personalizada no puede tener más de 4 horas de antigüedad."
+
+    return True, ""
+
+
+def registrar_ingreso(patente, fecha_hora_ingreso=None):
     """
     Registra la entrada de un vehículo al estacionamiento.
 
@@ -133,11 +157,11 @@ def registrar_ingreso(patente):
     Returns:
         bool: True si se registró correctamente, False en caso contrario.
     """
-    resultado = registrar_ingreso_detallado(patente)
+    resultado = registrar_ingreso_detallado(patente, fecha_hora_ingreso)
     return bool(resultado)
 
 
-def registrar_ingreso_detallado(patente):
+def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
     """
     Registra la entrada de un vehículo y retorna datos para feedback de UI.
 
@@ -149,6 +173,13 @@ def registrar_ingreso_detallado(patente):
         if activos:
             print(f"[WARN] No se registró ingreso para {patente}: ya existe un ingreso activo.")
             return None
+
+        es_ingreso_personalizado = fecha_hora_ingreso is not None
+        if es_ingreso_personalizado:
+            es_valida, mensaje = validar_fecha_hora_ingreso_personalizada(fecha_hora_ingreso)
+            if not es_valida:
+                print(f"[WARN] No se registró ingreso para {patente}: {mensaje}")
+                return None
 
         with db_cursor(commit=True) as cursor:
             cursor.execute(
@@ -166,7 +197,7 @@ def registrar_ingreso_detallado(patente):
                 )
                 id_vehiculo = cursor.lastrowid
 
-            fecha_hora = datetime.now()
+            fecha_hora = fecha_hora_ingreso if es_ingreso_personalizado else datetime.now()
 
             cursor.execute("""
                 INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso, en_espera)

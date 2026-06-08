@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 from controllers import registro_controller
@@ -138,6 +138,103 @@ class RegistrarIngresoTests(unittest.TestCase):
         self.assertIn("SELECT id_vehiculo", consultas)
         self.assertNotIn("INSERT INTO vehiculos", consultas)
         self.assertIn("INSERT INTO ingresos", consultas)
+
+    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_registrar_ingreso_detallado_usa_fecha_hora_personalizada_valida(
+        self,
+        db_cursor,
+        obtener_activos,
+        generar_ticket,
+    ):
+        cursor = FakeCursor(fetchone_results=[(77,)])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_activos.return_value = []
+        fecha_personalizada = datetime.now().replace(second=0, microsecond=0) - timedelta(hours=1)
+
+        resultado = registro_controller.registrar_ingreso_detallado("ABC123", fecha_personalizada)
+
+        self.assertEqual(resultado["fecha_hora_ingreso"], fecha_personalizada)
+        generar_ticket.assert_called_once_with("ABC123", fecha_personalizada)
+        insert_ingreso = next(
+            params for query, params in cursor.executed
+            if "INSERT INTO ingresos" in query
+        )
+        self.assertEqual(insert_ingreso, (77, fecha_personalizada))
+
+    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_registrar_ingreso_retorna_true_con_fecha_hora_personalizada_valida(
+        self,
+        db_cursor,
+        obtener_activos,
+        generar_ticket,
+    ):
+        cursor = FakeCursor(fetchone_results=[(77,)])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_activos.return_value = []
+        fecha_personalizada = datetime.now().replace(second=0, microsecond=0) - timedelta(hours=2)
+
+        resultado = registro_controller.registrar_ingreso("ABC123", fecha_personalizada)
+
+        self.assertTrue(resultado)
+        generar_ticket.assert_called_once_with("ABC123", fecha_personalizada)
+
+    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_no_registra_ingreso_personalizado_futuro(
+        self,
+        db_cursor,
+        obtener_activos,
+        generar_ticket,
+    ):
+        obtener_activos.return_value = []
+        fecha_futura = datetime.now() + timedelta(minutes=5)
+
+        resultado = registro_controller.registrar_ingreso_detallado("ABC123", fecha_futura)
+
+        self.assertIsNone(resultado)
+        db_cursor.assert_not_called()
+        generar_ticket.assert_not_called()
+
+    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_no_registra_ingreso_personalizado_mayor_a_cuatro_horas(
+        self,
+        db_cursor,
+        obtener_activos,
+        generar_ticket,
+    ):
+        obtener_activos.return_value = []
+        fecha_antigua = datetime.now() - timedelta(hours=4, minutes=1)
+
+        resultado = registro_controller.registrar_ingreso_detallado("ABC123", fecha_antigua)
+
+        self.assertIsNone(resultado)
+        db_cursor.assert_not_called()
+        generar_ticket.assert_not_called()
+
+    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_no_registra_ingreso_personalizado_de_dia_anterior(
+        self,
+        db_cursor,
+        obtener_activos,
+        generar_ticket,
+    ):
+        obtener_activos.return_value = []
+        fecha_anterior = datetime.now() - timedelta(days=1)
+
+        resultado = registro_controller.registrar_ingreso_detallado("ABC123", fecha_anterior)
+
+        self.assertIsNone(resultado)
+        db_cursor.assert_not_called()
+        generar_ticket.assert_not_called()
 
 
 class CalcularMinutosEstadiaTests(unittest.TestCase):

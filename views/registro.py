@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QPushButton, QMessageBox, QTableWidget,
     QTableWidgetItem, QGroupBox, QHeaderView, QCompleter,
     QHBoxLayout, QGridLayout, QFrame, QSizePolicy, QScrollArea,
-    QInputDialog
+    QDialog, QDialogButtonBox, QInputDialog
 )
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QShortcut, QKeySequence
@@ -133,6 +133,11 @@ class RegistroWindow(QWidget):
         self.boton_ingreso.setMinimumHeight(32)
         self.boton_ingreso.clicked.connect(self.registrar_ingreso)
 
+        self.boton_ingreso_personalizado = QPushButton("Registrar ingreso con hora")
+        self.boton_ingreso_personalizado.setEnabled(False)
+        self.boton_ingreso_personalizado.setMinimumHeight(32)
+        self.boton_ingreso_personalizado.clicked.connect(self.registrar_ingreso_con_hora_personalizada)
+
         self.boton_salida = QPushButton("Registrar salida")
         self.boton_salida.setEnabled(False)
         self.boton_salida.setMinimumHeight(32)
@@ -152,6 +157,7 @@ class RegistroWindow(QWidget):
         self.boton_lavado.clicked.connect(self.alternar_lavado_seleccionado)
 
         layout_acciones.addWidget(self.boton_ingreso)
+        layout_acciones.addWidget(self.boton_ingreso_personalizado)
         layout_acciones.addWidget(self.boton_salida)
         layout_acciones.addWidget(self.boton_espera)
         layout_acciones.addWidget(self.boton_bano)
@@ -210,6 +216,7 @@ class RegistroWindow(QWidget):
             "F8: alternar espera\n"
             "F9: eliminar ingreso\n"
             "F10: consultar tarifa\n"
+            "F11: ingresar con hora personalizada\n"
             "Ctrl+L: iniciar/finalizar lavado seleccionado"
         )
         self.label_atajos.setWordWrap(True)
@@ -388,6 +395,7 @@ class RegistroWindow(QWidget):
             self.actualizar_estilo_info("ok")
             self.info_label.setText("Vehículo no registrado. Puedes crear su ingreso.")
             self.boton_ingreso.setEnabled(True)
+            self.boton_ingreso_personalizado.setEnabled(True)
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
 
@@ -396,12 +404,14 @@ class RegistroWindow(QWidget):
             self.info_label.setText("Vehículo actualmente dentro del estacionamiento. Puedes registrar salida o marcar en espera.")
             self.boton_salida.setEnabled(True)
             self.boton_ingreso.setEnabled(False)
+            self.boton_ingreso_personalizado.setEnabled(False)
             self.boton_espera.setEnabled(True)
 
         elif estado == "fuera":
             self.actualizar_estilo_info("neutro")
             self.info_label.setText("Vehículo fuera del estacionamiento. Puedes registrar un nuevo ingreso.")
             self.boton_ingreso.setEnabled(True)
+            self.boton_ingreso_personalizado.setEnabled(True)
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
 
@@ -409,6 +419,7 @@ class RegistroWindow(QWidget):
             self.actualizar_estilo_info("error")
             self.info_label.setText("No fue posible determinar el estado del vehículo.")
             self.boton_ingreso.setEnabled(False)
+            self.boton_ingreso_personalizado.setEnabled(False)
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
             QMessageBox.critical(self, "Error", "Error al consultar la patente.")
@@ -440,6 +451,79 @@ class RegistroWindow(QWidget):
             self.actualizar_estilo_info("error")
             self.info_label.setText("No se pudo registrar el ingreso.")
             QMessageBox.critical(self, "Error", "No se pudo registrar el ingreso.")
+            self.enfocar_patente()
+
+        self.actualizar_tabla_activos()
+
+    def registrar_ingreso_con_hora_personalizada(self):
+        if not self.boton_ingreso_personalizado.isEnabled():
+            QMessageBox.information(
+                self,
+                "Sin acción",
+                "Busca una patente disponible para registrar un ingreso con hora personalizada."
+            )
+            return
+
+        patente = self.input_patente.text().strip().upper()
+
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            self.actualizar_estilo_info("warn")
+            self.info_label.setText(mensaje)
+            QMessageBox.warning(self, "Atención", mensaje)
+            self.enfocar_patente()
+            return
+
+        dialogo = QDialog(self)
+        dialogo.setWindowTitle("Ingreso con hora personalizada")
+
+        layout = QVBoxLayout(dialogo)
+        layout.addWidget(QLabel("Ingresa la hora de ingreso de hoy:"))
+
+        input_hora = QLineEdit(dialogo)
+        input_hora.setInputMask("00:00;_")
+        input_hora.setPlaceholderText("HH:MM")
+        input_hora.setMinimumHeight(36)
+        input_hora.setAlignment(Qt.AlignCenter)
+        layout.addWidget(input_hora)
+
+        botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialogo)
+        botones.accepted.connect(dialogo.accept)
+        botones.rejected.connect(dialogo.reject)
+        layout.addWidget(botones)
+
+        if dialogo.exec() != QDialog.Accepted:
+            return
+
+        hora_texto = input_hora.text().strip()
+        try:
+            hora_personalizada = datetime.strptime(hora_texto, "%H:%M").time()
+        except ValueError:
+            mensaje = "Formato inválido. Completa la hora con 4 números, por ejemplo 1430."
+            self.actualizar_estilo_info("warn")
+            self.info_label.setText(mensaje)
+            QMessageBox.warning(self, "Hora inválida", mensaje)
+            return
+
+        ahora = datetime.now()
+        fecha_hora_ingreso = datetime.combine(ahora.date(), hora_personalizada)
+
+        ingreso = registrar_ingreso_detallado(patente, fecha_hora_ingreso)
+        if ingreso:
+            QMessageBox.information(
+                self,
+                "Ingreso registrado",
+                "Vehículo ingresado correctamente con hora personalizada\n\n"
+                f"Patente: {ingreso['patente']}\n"
+                f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}"
+            )
+            self.actualizar_lista_patentes()
+            self.reset()
+        else:
+            self.actualizar_estilo_info("error")
+            mensaje = "No se pudo registrar el ingreso. La hora debe ser de hoy, no futura y no superar 4 horas de antigüedad."
+            self.info_label.setText(mensaje)
+            QMessageBox.critical(self, "Error", mensaje)
             self.enfocar_patente()
 
         self.actualizar_tabla_activos()
@@ -480,6 +564,7 @@ class RegistroWindow(QWidget):
     def reset(self):
         self.input_patente.clear()
         self.boton_ingreso.setEnabled(False)
+        self.boton_ingreso_personalizado.setEnabled(False)
         self.boton_salida.setEnabled(False)
         self.boton_espera.setEnabled(False)
         self.actualizar_estilo_info("neutro")
@@ -1081,6 +1166,9 @@ class RegistroWindow(QWidget):
 
         self.shortcut_f10 = QShortcut(QKeySequence("F10"), self)
         self.shortcut_f10.activated.connect(self.consultar_tarifa_actual)
+
+        self.shortcut_f11 = QShortcut(QKeySequence("F11"), self)
+        self.shortcut_f11.activated.connect(self.registrar_ingreso_con_hora_personalizada)
 
         self.shortcut_lavado = QShortcut(QKeySequence("Ctrl+L"), self)
         self.shortcut_lavado.activated.connect(self.alternar_lavado_seleccionado)
