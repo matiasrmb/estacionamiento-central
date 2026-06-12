@@ -358,6 +358,28 @@ def obtener_vehiculos_activos():
     return lista
 
 
+def obtener_total_vehiculos_pagados_turno_actual():
+    """
+    Obtiene el total cobrado a vehículos que ya salieron y aún no fueron cerrados.
+
+    Returns:
+        float: Suma de tarifas aplicadas en el turno actual.
+    """
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("""
+            SELECT COALESCE(SUM(tarifa_aplicada), 0) AS total
+            FROM ingresos
+            WHERE fecha_hora_salida IS NOT NULL
+              AND cerrado = FALSE
+        """)
+        resultado = cursor.fetchone()
+
+    if not resultado:
+        return 0.0
+
+    return float(resultado["total"] or 0)
+
+
 def obtener_ingresos_editables():
     """
     Obtiene ingresos marcados como 'en espera' o 'cerrados', aún visibles para edición manual.

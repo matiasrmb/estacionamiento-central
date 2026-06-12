@@ -664,6 +664,29 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertGreaterEqual(resultado[0]["minutos"], 0)
 
     @patch.object(registro_controller, "db_cursor")
+    def test_obtener_total_vehiculos_pagados_turno_actual_suma_no_cerrados(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[{"total": 3500}])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.obtener_total_vehiculos_pagados_turno_actual()
+
+        self.assertEqual(resultado, 3500.0)
+        db_cursor.assert_called_once_with(dictionary=True)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("SUM(tarifa_aplicada)", consultas)
+        self.assertIn("fecha_hora_salida IS NOT NULL", consultas)
+        self.assertIn("cerrado = FALSE", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_obtener_total_vehiculos_pagados_turno_actual_retorna_cero_si_no_hay_total(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[{"total": None}])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.obtener_total_vehiculos_pagados_turno_actual()
+
+        self.assertEqual(resultado, 0.0)
+
+    @patch.object(registro_controller, "db_cursor")
     def test_obtener_ingresos_activos_por_patente_retorna_filas(self, db_cursor):
         ingresos = [
             {"id_ingreso": 1, "patente": "ABC123", "en_espera": 0},

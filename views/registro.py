@@ -13,7 +13,7 @@ from controllers.registro_controller import (
     registrar_salida_detallada, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
-    registrar_uso_bano
+    registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from controllers.config_controller import obtener_configuracion
@@ -113,11 +113,16 @@ class RegistroWindow(QWidget):
         self.info_label.setWordWrap(True)
         self.actualizar_estilo_info("neutro")
 
+        self.hora_consulta_label = QLabel("")
+        self.hora_consulta_label.setObjectName("EstadoInfoNeutro")
+        self.hora_consulta_label.setWordWrap(True)
+
         layout_busqueda.addWidget(self.label_patente)
         layout_busqueda.addWidget(self.input_patente)
         layout_busqueda.addWidget(self.boton_buscar)
         layout_busqueda.addWidget(self.boton_refrescar_patentes)
         layout_busqueda.addWidget(self.info_label)
+        layout_busqueda.addWidget(self.hora_consulta_label)
         layout_busqueda.addStretch()
 
         grupo_busqueda.setLayout(layout_busqueda)
@@ -265,11 +270,13 @@ class RegistroWindow(QWidget):
 
         self.card_estacionados = self.crear_tarjeta_resumen("Vehículos activos", "0")
         self.card_banos = self.crear_tarjeta_resumen("Usos de baño hoy", "0")
-        self.card_total = self.crear_tarjeta_resumen("Total general", "$0")
+        self.card_total_activos = self.crear_tarjeta_resumen("Total activos", "$0")
+        self.card_total_turno = self.crear_tarjeta_resumen("Total turno", "$0")
 
         resumen_layout.addWidget(self.card_estacionados)
         resumen_layout.addWidget(self.card_banos)
-        resumen_layout.addWidget(self.card_total)
+        resumen_layout.addWidget(self.card_total_activos)
+        resumen_layout.addWidget(self.card_total_turno)
         resumen_layout.addStretch()
 
         layout.addLayout(resumen_layout)
@@ -388,6 +395,9 @@ class RegistroWindow(QWidget):
             QMessageBox.warning(self, "Atención", mensaje)
             self.enfocar_patente()
             return
+
+        hora_consulta = datetime.now().strftime("%H:%M")
+        self.hora_consulta_label.setText(f"HORA DE ENTRADA: {hora_consulta}")
 
         estado = buscar_estado_vehiculo(patente)
 
@@ -569,6 +579,7 @@ class RegistroWindow(QWidget):
         self.boton_espera.setEnabled(False)
         self.actualizar_estilo_info("neutro")
         self.info_label.setText("Escribe una patente y presiona Enter o el botón de búsqueda.")
+        self.hora_consulta_label.clear()
         self.enfocar_patente()
 
     def actualizar_tabla_activos(self):
@@ -642,10 +653,12 @@ class RegistroWindow(QWidget):
 
         resumen_banos = obtener_resumen_banos()
         total_banos = float(resumen_banos["total"])
-        total_general = total + total_banos
+        total_pagados_turno = obtener_total_vehiculos_pagados_turno_actual()
+        total_turno = total_pagados_turno + total + total_banos
 
         self.card_estacionados.label_valor.setText(str(len(datos)))
-        self.card_total.label_valor.setText(f"${total_general:.0f}")
+        self.card_total_activos.label_valor.setText(f"${total:.0f}")
+        self.card_total_turno.label_valor.setText(f"${total_turno:.0f}")
         self.card_banos.label_valor.setText(
             f"{resumen_banos['cantidad']} | ${total_banos:.0f}"
         )
