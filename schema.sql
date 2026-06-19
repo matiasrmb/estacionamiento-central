@@ -116,6 +116,31 @@ CREATE TABLE IF NOT EXISTS subida_precios (
     activa BOOLEAN DEFAULT TRUE
 );
 
+-- Cola de trabajos de impresión generados por la API móvil y procesados por el agente local
+CREATE TABLE IF NOT EXISTS print_jobs (
+    id_print_job INT AUTO_INCREMENT PRIMARY KEY,
+    tipo VARCHAR(50) NOT NULL,
+    destino VARCHAR(30) NOT NULL,
+    id_ingreso INT NULL,
+    patente VARCHAR(10) NULL,
+    payload_json JSON NOT NULL,
+    estado ENUM('PENDIENTE', 'IMPRIMIENDO', 'IMPRESO', 'ERROR') NOT NULL DEFAULT 'PENDIENTE',
+    prioridad INT NOT NULL DEFAULT 100,
+    idempotency_key VARCHAR(120) NOT NULL UNIQUE,
+    intentos INT NOT NULL DEFAULT 0,
+    max_intentos INT NOT NULL DEFAULT 3,
+    last_error VARCHAR(500) NULL,
+    locked_at DATETIME NULL,
+    locked_by VARCHAR(100) NULL,
+    next_retry_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_print_jobs_estado_destino_prioridad (destino, estado, prioridad, created_at),
+    INDEX idx_print_jobs_ingreso (id_ingreso),
+    INDEX idx_print_jobs_patente (patente),
+    FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso)
+);
+
 -- Inserción inicial de configuración
 INSERT INTO configuracion (clave, valor) VALUES
 ('modo_cobro', 'minuto'),
