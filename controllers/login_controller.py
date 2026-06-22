@@ -35,6 +35,7 @@ def validar_usuario(usuario, clave_plana):
 
         clave_hash = resultado["clave_hash"].encode("utf-8")
         if bcrypt.checkpw(clave_plana.encode("utf-8"), clave_hash):
+            cerrar_asistencias_activas(usuario)
             registrar_asistencia_inicio(usuario)  # 👈 se registra aquí
             return True, resultado["rol"]
 
@@ -80,15 +81,7 @@ def registrar_asistencia_salida(usuario):
             id_asistencia = asistencia["id_asistencia"]
             hora_inicio = asistencia["hora_inicio"]
 
-            # 2. Calcular totales
-            cursor.execute("""
-                SELECT COUNT(*) AS cantidad, SUM(tarifa_aplicada) AS total
-                FROM ingresos
-                WHERE usuario = %s AND fecha_hora_salida BETWEEN %s AND NOW()
-            """, (usuario, hora_inicio))
-            resultado = cursor.fetchone()
-            cantidad = resultado["cantidad"] or 0
-            total = resultado["total"] or 0
+            cantidad, total = calcular_totales_turno(cursor, usuario, hora_inicio, datetime.now())
 
             resumen["cantidad"] = cantidad
             resumen["total"] = total
@@ -104,6 +97,54 @@ def registrar_asistencia_salida(usuario):
             """, (total, cantidad, id_asistencia))
 
     return resumen
+
+
+def cerrar_asistencias_activas(usuario):
+    """
+    Cierra asistencias activas previas del usuario.
+
+    Esto evita turnos abiertos si la app o PC se cerró abruptamente y el usuario
+    vuelve a iniciar sesión más tarde.
+    """
+    with db_cursor(dictionary=True, commit=True) as cursor:
+        cursor.execute("""
+            SELECT id_asistencia, hora_inicio
+            FROM asistencias
+            WHERE usuario = %s AND hora_salida IS NULL
+            ORDER BY hora_inicio ASC
+        """, (usuario,))
+        asistencias = cursor.fetchall()
+
+        ahora = datetime.now()
+        for asistencia in asistencias:
+            cantidad, total = calcular_totales_turno(cursor, usuario, asistencia["hora_inicio"], ahora)
+            cursor.execute("""
+                UPDATE asistencias
+                SET hora_salida = %s,
+                    total_recaudado = %s,
+                    cantidad_movimientos = %s
+                WHERE id_asistencia = %s
+            """, (ahora, total, cantidad, asistencia["id_asistencia"]))
+
+
+def calcular_totales_turno(cursor, usuario, hora_inicio, hora_fin):
+    cursor.execute("""
+        SELECT COUNT(*) AS cantidad, COALESCE(SUM(tarifa_aplicada), 0) AS total
+        FROM ingresos
+        WHERE usuario = %s AND fecha_hora_salida BETWEEN %s AND %s
+    """, (usuario, hora_inicio, hora_fin))
+    salidas = cursor.fetchone()
+
+    cursor.execute("""
+        SELECT COUNT(*) AS cantidad, COALESCE(SUM(monto), 0) AS total
+        FROM usos_bano
+        WHERE usuario = %s AND fecha_hora BETWEEN %s AND %s
+    """, (usuario, hora_inicio, hora_fin))
+    banos = cursor.fetchone()
+
+    cantidad = (salidas["cantidad"] or 0) + (banos["cantidad"] or 0)
+    total = (salidas["total"] or 0) + (banos["total"] or 0)
+    return cantidad, total
 
 def hay_usuarios_registrados():
     try:

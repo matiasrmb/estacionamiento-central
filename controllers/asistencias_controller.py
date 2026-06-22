@@ -42,4 +42,36 @@ def obtener_asistencias(usuario=None, fecha_inicio=None, fecha_fin=None):
         cursor.execute(query, params)
         resultados = cursor.fetchall()
 
+        ahora = datetime.now()
+        for fila in resultados:
+            if fila["hora_salida"] is None:
+                cantidad, total = _calcular_totales_turno(
+                    cursor,
+                    fila["usuario"],
+                    fila["hora_inicio"],
+                    ahora,
+                )
+                fila["cantidad_movimientos"] = cantidad
+                fila["total_recaudado"] = total
+
     return resultados
+
+
+def _calcular_totales_turno(cursor, usuario, hora_inicio, hora_fin):
+    cursor.execute("""
+        SELECT COUNT(*) AS cantidad, COALESCE(SUM(tarifa_aplicada), 0) AS total
+        FROM ingresos
+        WHERE usuario = %s AND fecha_hora_salida BETWEEN %s AND %s
+    """, (usuario, hora_inicio, hora_fin))
+    salidas = cursor.fetchone()
+
+    cursor.execute("""
+        SELECT COUNT(*) AS cantidad, COALESCE(SUM(monto), 0) AS total
+        FROM usos_bano
+        WHERE usuario = %s AND fecha_hora BETWEEN %s AND %s
+    """, (usuario, hora_inicio, hora_fin))
+    banos = cursor.fetchone()
+
+    cantidad = (salidas["cantidad"] or 0) + (banos["cantidad"] or 0)
+    total = (salidas["total"] or 0) + (banos["total"] or 0)
+    return cantidad, total
