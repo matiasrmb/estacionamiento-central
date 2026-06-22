@@ -47,7 +47,9 @@ def generar_ticket_salida(
     subida_aplicada=False,
     monto_extra=0,
     minutos=None,
-    modo_cobro="minuto"
+    modo_cobro="minuto",
+    total_lavados=0,
+    tarifa_estacionamiento=None,
 ):
     """
     Genera e imprime automáticamente un ticket de salida para un vehículo.
@@ -56,11 +58,13 @@ def generar_ticket_salida(
         patente (str): Patente del vehículo.
         fecha_hora_ingreso (datetime): Fecha y hora de ingreso.
         fecha_hora_salida (datetime): Fecha y hora de salida.
-        tarifa (int or float): Monto total a pagar.
+        tarifa (int or float): Monto total a pagar, incluyendo lavados.
         subida_aplicada (bool): Indica si hubo subida temporal aplicada.
         monto_extra (int or float): Monto extra aplicado por subida temporal.
         minutos (int, optional): Minutos totales de permanencia.
         modo_cobro (str): Modo de cobro aplicado ("minuto", "personalizado", "auto").
+        total_lavados (int or float): Total por lavados asociados a la estadía.
+        tarifa_estacionamiento (int or float, optional): Subtotal por estacionamiento.
 
     Returns:
         str: Ruta del archivo PDF generado.
@@ -96,6 +100,12 @@ def generar_ticket_salida(
 
     if subida_aplicada:
         pdf.cell(0, 5, f"Subida aplicada: +${monto_extra:.0f}", ln=True)
+
+    if tarifa_estacionamiento is not None:
+        pdf.cell(0, 5, f"Estacionamiento: ${tarifa_estacionamiento:.0f}", ln=True)
+
+    if total_lavados:
+        pdf.cell(0, 5, f"Lavados: ${total_lavados:.0f}", ln=True)
 
     pdf.cell(0, 4, "-" * 28, ln=True, align="C")
     pdf.set_font("Courier", size=10)

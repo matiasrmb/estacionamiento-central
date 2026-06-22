@@ -64,23 +64,6 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
                     "tarifa_aplicada": b["monto"]
                 })
 
-            cursor.execute("""
-                SELECT patente, fecha_hora_inicio, fecha_hora_fin, valor_lavado
-                FROM lavados
-                WHERE estado = 'finalizado'
-                  AND fecha_hora_fin IS NOT NULL
-                  AND DATE(fecha_hora_fin) BETWEEN %s AND %s
-            """, (fecha_inicio, fecha_fin))
-            lavados = cursor.fetchall()
-            for lavado in lavados:
-                resultados.append({
-                    "patente": f"[LAVADO] {lavado['patente']}",
-                    "fecha_hora_ingreso": lavado["fecha_hora_inicio"],
-                    "fecha_hora_salida": lavado["fecha_hora_fin"],
-                    "minutos": 0,
-                    "tarifa_aplicada": lavado["valor_lavado"]
-                })
-
     return resultados
 
 def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
@@ -145,7 +128,7 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
         pdf.cell(0, 8, f"Lavados registrados: {total_lavados}", ln=True)
         pdf.cell(0, 8, f"Total recaudado por lavados: ${monto_lavados:.0f}", ln=True)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Total general (vehículos + baños + lavados): ${total + monto_banos + monto_lavados:.0f}", ln=True)
+        pdf.cell(0, 10, f"Total general (vehículos + baños): ${total:.0f}", ln=True)
 
     carpeta = "reportes"
     os.makedirs(carpeta, exist_ok=True)

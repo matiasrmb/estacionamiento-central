@@ -208,6 +208,19 @@ def calcular_minutos_lavado(id_ingreso, fecha_hora_salida=None):
     return total
 
 
+def calcular_total_lavados(id_ingreso):
+    """
+    Calcula el total monetario de lavados asociados a un ingreso.
+
+    El lavado pausa el cobro de estacionamiento, pero su valor propio se cobra
+    junto con la salida del vehículo.
+    """
+    total = 0
+    for lavado in obtener_lavados_por_ingreso(id_ingreso):
+        total += int(lavado.get("valor_lavado") or 0)
+    return total
+
+
 def obtener_minutos_lavado_por_ingresos(id_ingresos, fecha_hora_salida=None):
     """
     Calcula minutos de lavado por ingreso en una sola consulta.
@@ -235,3 +248,25 @@ def obtener_minutos_lavado_por_ingresos(id_ingresos, fecha_hora_salida=None):
             minutos_por_ingreso[lavado["id_ingreso"]] += int((fin - inicio).total_seconds() / 60)
 
     return minutos_por_ingreso
+
+
+def obtener_totales_lavado_por_ingresos(id_ingresos):
+    """
+    Calcula el total monetario de lavados por ingreso en una sola consulta.
+    """
+    if not id_ingresos:
+        return {}
+
+    asegurar_schema_lavados()
+    placeholders = ", ".join(["%s"] * len(id_ingresos))
+
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute(f"""
+            SELECT id_ingreso, COALESCE(SUM(valor_lavado), 0) AS total_lavados
+            FROM lavados
+            WHERE id_ingreso IN ({placeholders})
+            GROUP BY id_ingreso
+        """, tuple(id_ingresos))
+        rows = cursor.fetchall()
+
+    return {row["id_ingreso"]: int(row["total_lavados"] or 0) for row in rows}

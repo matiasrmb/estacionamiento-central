@@ -11,7 +11,9 @@ from controllers.config_controller import obtener_configuracion
 from controllers.lavados_controller import (
     asegurar_schema_lavados,
     calcular_minutos_lavado,
+    calcular_total_lavados,
     obtener_minutos_lavado_por_ingresos,
+    obtener_totales_lavado_por_ingresos,
 )
 
 
@@ -263,6 +265,8 @@ def registrar_salida_detallada(patente, usuario):
             ahora,
             devolver_flag=True
         )
+        total_lavados = calcular_total_lavados(ingreso["id_ingreso"])
+        total_a_cobrar = tarifa + total_lavados
 
         config = obtener_configuracion()
         modo_cobro = config.get("modo_cobro", "minuto")
@@ -274,7 +278,7 @@ def registrar_salida_detallada(patente, usuario):
                     tarifa_aplicada = %s,
                     usuario = %s
                 WHERE id_ingreso = %s
-            """, (ahora, tarifa, usuario, ingreso["id_ingreso"]))
+            """, (ahora, total_a_cobrar, usuario, ingreso["id_ingreso"]))
 
     except Exception as e:
         print(f"Error al registrar salida: {e}")
@@ -284,18 +288,22 @@ def registrar_salida_detallada(patente, usuario):
         patente=patente,
         fecha_hora_ingreso=fecha_ingreso,
         fecha_hora_salida=ahora,
-        tarifa=tarifa,
+        tarifa=total_a_cobrar,
         subida_aplicada=subida_aplicada,
         monto_extra=monto_extra,
         minutos=minutos,
-        modo_cobro=modo_cobro
+        modo_cobro=modo_cobro,
+        total_lavados=total_lavados,
+        tarifa_estacionamiento=tarifa,
     )
     return {
         "patente": patente,
         "fecha_hora_ingreso": fecha_ingreso,
         "fecha_hora_salida": ahora,
         "minutos": minutos,
-        "tarifa": tarifa,
+        "tarifa": total_a_cobrar,
+        "tarifa_estacionamiento": tarifa,
+        "total_lavados": total_lavados,
     }
 
 
@@ -328,6 +336,9 @@ def obtener_vehiculos_activos():
         [r["id_ingreso"] for r in resultados],
         ahora,
     )
+    totales_lavado_por_ingreso = obtener_totales_lavado_por_ingresos(
+        [r["id_ingreso"] for r in resultados]
+    )
     lista = []
 
     for r in resultados:
@@ -341,6 +352,8 @@ def obtener_vehiculos_activos():
             if r["en_espera"] == 0
             else 0
         )
+        total_lavados = totales_lavado_por_ingreso.get(r["id_ingreso"], 0)
+        monto = tarifa + total_lavados
 
         lista.append({
             "id_ingreso": r["id_ingreso"],
@@ -349,10 +362,11 @@ def obtener_vehiculos_activos():
                 + (" [EN ESPERA]" if r["en_espera"] else "")
                 + (" [EN LAVADO]" if r["en_lavado"] else ""),
             "hora": fecha_ingreso.strftime("%Y-%m-%d %H:%M:%S"),
-            "monto": tarifa,
+            "monto": monto,
             "en_espera": bool(r["en_espera"]),
             "en_lavado": bool(r["en_lavado"]),
             "minutos": minutos,
+            "total_lavados": total_lavados,
         })
 
     return lista
