@@ -7,8 +7,9 @@ from controllers import asistencias_controller
 
 
 class FakeCursor:
-    def __init__(self, fetchall_results=None):
+    def __init__(self, fetchall_results=None, fetchone_results=None):
         self.fetchall_results = list(fetchall_results or [])
+        self.fetchone_results = list(fetchone_results or [])
         self.executed = []
 
     def execute(self, query, params=None):
@@ -19,6 +20,11 @@ class FakeCursor:
             return self.fetchall_results.pop(0)
         return []
 
+    def fetchone(self):
+        if self.fetchone_results:
+            return self.fetchone_results.pop(0)
+        return None
+
 
 @contextmanager
 def fake_db_cursor(cursor):
@@ -28,7 +34,7 @@ def fake_db_cursor(cursor):
 class ObtenerAsistenciasTests(unittest.TestCase):
     @patch.object(asistencias_controller, "db_cursor")
     def test_obtiene_asistencias_sin_filtros(self, db_cursor):
-        filas = [{"usuario": "admin", "total_recaudado": 1000}]
+        filas = [{"usuario": "admin", "hora_inicio": datetime(2026, 1, 1, 9), "hora_salida": datetime(2026, 1, 1, 10), "cantidad_movimientos": 1, "total_recaudado": 1000}]
         cursor = FakeCursor(fetchall_results=[filas])
         db_cursor.return_value = fake_db_cursor(cursor)
 

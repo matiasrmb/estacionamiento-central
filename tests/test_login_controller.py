@@ -45,8 +45,9 @@ class ValidarUsuarioTests(unittest.TestCase):
         registrar_asistencia.assert_not_called()
 
     @patch.object(login_controller, "registrar_asistencia_inicio")
+    @patch.object(login_controller, "cerrar_asistencias_activas")
     @patch.object(login_controller, "db_cursor")
-    def test_retorna_true_y_rol_si_la_clave_es_correcta(self, db_cursor, registrar_asistencia):
+    def test_retorna_true_y_rol_si_la_clave_es_correcta(self, db_cursor, cerrar_activas, registrar_asistencia):
         clave_hash = bcrypt.hashpw("secreta".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         cursor = FakeCursor(
             fetchone_results=[
@@ -63,6 +64,7 @@ class ValidarUsuarioTests(unittest.TestCase):
         resultado = login_controller.validar_usuario("admin", "secreta")
 
         self.assertEqual(resultado, (True, "administrador"))
+        cerrar_activas.assert_called_once_with("admin")
         registrar_asistencia.assert_called_once_with("admin")
 
     @patch.object(login_controller, "registrar_asistencia_inicio")
@@ -104,13 +106,14 @@ class RegistrarAsistenciaSalidaTests(unittest.TestCase):
             fetchone_results=[
                 {"id_asistencia": 5, "hora_inicio": hora_inicio},
                 {"cantidad": 3, "total": 4500},
+                {"cantidad": 1, "total": 300},
             ]
         )
         db_cursor.return_value = fake_db_cursor(cursor)
 
         resumen = login_controller.registrar_asistencia_salida("admin")
 
-        self.assertEqual(resumen, {"cantidad": 3, "total": 4500, "hora_inicio": hora_inicio})
+        self.assertEqual(resumen, {"cantidad": 4, "total": 4800, "hora_inicio": hora_inicio})
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("UPDATE asistencias", consultas)
 

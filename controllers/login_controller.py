@@ -142,6 +142,8 @@ def calcular_totales_turno(cursor, usuario, hora_inicio, hora_fin):
     """, (usuario, hora_inicio, hora_fin))
     banos = cursor.fetchone()
 
+    salidas = salidas or {"cantidad": 0, "total": 0}
+    banos = banos or {"cantidad": 0, "total": 0}
     cantidad = (salidas["cantidad"] or 0) + (banos["cantidad"] or 0)
     total = (salidas["total"] or 0) + (banos["total"] or 0)
     return cantidad, total
