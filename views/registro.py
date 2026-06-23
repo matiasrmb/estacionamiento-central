@@ -13,7 +13,8 @@ from controllers.registro_controller import (
     registrar_salida_detallada, obtener_vehiculos_activos,
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
-    registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual
+    registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual,
+    obtener_patentes_cerradas_turno_actual,
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from controllers.config_controller import obtener_configuracion
@@ -62,8 +63,14 @@ class RegistroWindow(QWidget):
         self.boton_volver.setMinimumHeight(38)
         self.boton_volver.clicked.connect(self.volver_al_panel)
 
+        self.boton_actualizar_pantalla = QPushButton("Actualizar pantalla")
+        self.boton_actualizar_pantalla.setObjectName("BotonSecundario")
+        self.boton_actualizar_pantalla.setMinimumHeight(38)
+        self.boton_actualizar_pantalla.clicked.connect(self.actualizar_pantalla)
+
         header_layout.addWidget(self.boton_volver, 0, alignment=Qt.AlignLeft)
         header_layout.addStretch(1)
+        header_layout.addWidget(self.boton_actualizar_pantalla, 0, alignment=Qt.AlignRight)
 
         layout.addLayout(header_layout)
 
@@ -216,6 +223,7 @@ class RegistroWindow(QWidget):
             "F1: ingresar o salir\n"
             "F2 o ESC: limpiar formulario\n"
             "F3: enfocar patente\n"
+            "F4: ver patentes cerradas del turno\n"
             "F6: registrar baño\n"
             "F7: reingresar vehículo\n"
             "F8: alternar espera\n"
@@ -434,6 +442,74 @@ class RegistroWindow(QWidget):
             self.boton_espera.setEnabled(False)
             QMessageBox.critical(self, "Error", "Error al consultar la patente.")
             self.enfocar_patente()
+
+    def mostrar_patentes_cerradas_turno(self):
+        try:
+            cerradas = obtener_patentes_cerradas_turno_actual()
+        except Exception as e:
+            self.actualizar_estilo_info("error")
+            self.info_label.setText("No se pudieron consultar las salidas cerradas del turno.")
+            QMessageBox.critical(self, "Error", f"No se pudieron consultar las salidas cerradas:\n{e}")
+            return
+
+        if not cerradas:
+            self.actualizar_estilo_info("neutro")
+            self.info_label.setText("No hay patentes cerradas en el turno actual.")
+            QMessageBox.information(self, "Sin salidas", "No hay patentes cerradas en el turno actual.")
+            return
+
+        dialogo = QDialog(self)
+        dialogo.setWindowTitle("Patentes cerradas del turno actual")
+        dialogo.resize(760, 420)
+
+        layout = QVBoxLayout(dialogo)
+        layout.addWidget(QLabel("Salidas cerradas hoy hasta el cierre de día:"))
+
+        tabla = QTableWidget(dialogo)
+        tabla.setColumnCount(6)
+        tabla.setHorizontalHeaderLabels(["Patente", "Ingreso", "Salida", "Minutos", "Total", "Usuario"])
+        tabla.setRowCount(len(cerradas))
+        tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        tabla.setSelectionMode(QTableWidget.SingleSelection)
+        tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        for fila, historial in enumerate(cerradas):
+            ingreso = historial["fecha_hora_ingreso"]
+            salida = historial["fecha_hora_salida"]
+            minutos = int((salida - ingreso).total_seconds() // 60) if ingreso and salida else 0
+            total = float(historial.get("tarifa_aplicada") or 0)
+            usuario = historial.get("usuario") or "Sin usuario"
+            valores = [
+                historial["patente"],
+                formatear_fecha_hora(ingreso),
+                formatear_fecha_hora(salida),
+                f"{minutos} min",
+                f"${total:.0f}",
+                usuario,
+            ]
+
+            for col, valor in enumerate(valores):
+                item = QTableWidgetItem(str(valor))
+                item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                tabla.setItem(fila, col, item)
+
+        def cargar_seleccion(fila, _columna=0):
+            item = tabla.item(fila, 0)
+            if item:
+                self.input_patente.setText(item.text())
+                self.enfocar_patente()
+            dialogo.accept()
+
+        tabla.cellDoubleClicked.connect(cargar_seleccion)
+        layout.addWidget(tabla)
+
+        botones = QDialogButtonBox(QDialogButtonBox.Close, dialogo)
+        botones.rejected.connect(dialogo.reject)
+        layout.addWidget(botones)
+
+        self.actualizar_estilo_info("ok")
+        self.info_label.setText(f"F4: {len(cerradas)} patente(s) cerradas en el turno actual.")
+        dialogo.exec()
 
     def registrar_ingreso(self):
         patente = self.input_patente.text().strip().upper()
@@ -1050,6 +1126,17 @@ class RegistroWindow(QWidget):
         if modelo is not None:
             modelo.setStringList(patentes)
 
+    def actualizar_pantalla(self):
+        """
+        Refresca datos visibles que pueden cambiar desde mobile/API.
+        """
+        self.actualizar_tabla_activos()
+        self.actualizar_lista_patentes()
+        self.actualizar_estado_subida()
+        self.actualizar_visibilidad_header_tabla()
+        self.info_label.setText("Pantalla actualizada con los últimos datos disponibles.")
+        self.actualizar_estilo_info("neutro")
+
     def normalizar_hora_tabla(self, valor):
         if hasattr(valor, "hour") and hasattr(valor, "minute"):
             return valor
@@ -1164,6 +1251,9 @@ class RegistroWindow(QWidget):
 
         self.shortcut_f3 = QShortcut(QKeySequence("F3"), self)
         self.shortcut_f3.activated.connect(self.enfocar_patente)
+
+        self.shortcut_f4 = QShortcut(QKeySequence("F4"), self)
+        self.shortcut_f4.activated.connect(self.mostrar_patentes_cerradas_turno)
 
         self.shortcut_f6 = QShortcut(QKeySequence("F6"), self)
         self.shortcut_f6.activated.connect(self.mostrar_opciones_bano)

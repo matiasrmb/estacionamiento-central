@@ -124,6 +124,47 @@ def calcular_tarifa(minutos, fecha_hora_ingreso=None, fecha_hora_salida=None, de
     )
 
 
+def describir_detalle_tarifa(minutos, contexto=None):
+    """
+    Devuelve una descripción legible del tramo/modo cobrado para mostrar en ticket.
+
+    No calcula montos; solo explica qué tramo aplicó para evitar tickets genéricos
+    como "Modo personalizado" cuando el cliente necesita ver el tramo cobrado.
+    """
+    contexto = contexto or obtener_contexto_tarifa()
+    config = contexto["config"]
+    modo = config.get("modo_cobro", "minuto")
+
+    if modo != "personalizado":
+        return {
+            "minuto": "Modo minuto",
+            "auto": "Modo automático",
+        }.get(modo, f"Modo {modo}")
+
+    tramos = list(contexto.get("tramos") or [])
+    if not tramos:
+        return "Modo personalizado sin tramos"
+
+    ultimo_tramo = tramos[-1]
+    duracion_ciclo = ultimo_tramo["minuto_fin"] + 1
+    horas_completas = minutos // duracion_ciclo
+    minutos_restantes = minutos % duracion_ciclo
+
+    tramo_aplicado = ultimo_tramo
+    for tramo in tramos:
+        if tramo["minuto_inicio"] <= minutos_restantes <= tramo["minuto_fin"]:
+            tramo_aplicado = tramo
+            break
+
+    detalle = (
+        "Modo personalizado - tramo "
+        f"{tramo_aplicado['minuto_inicio']}-{tramo_aplicado['minuto_fin']} min"
+    )
+    if horas_completas:
+        detalle += f" (+{horas_completas} ciclo(s) completo(s))"
+    return detalle
+
+
 def calcular_tarifa_con_contexto(
     minutos,
     fecha_hora_ingreso=None,

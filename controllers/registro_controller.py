@@ -6,7 +6,12 @@ from datetime import datetime, timedelta
 
 from utils.db import db_cursor
 from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
-from controllers.tarifas_controller import calcular_tarifa, calcular_tarifa_con_contexto, obtener_contexto_tarifa
+from controllers.tarifas_controller import (
+    calcular_tarifa,
+    calcular_tarifa_con_contexto,
+    describir_detalle_tarifa,
+    obtener_contexto_tarifa,
+)
 from controllers.config_controller import obtener_configuracion
 from controllers.lavados_controller import (
     asegurar_schema_lavados,
@@ -270,6 +275,11 @@ def registrar_salida_detallada(patente, usuario):
 
         config = obtener_configuracion()
         modo_cobro = config.get("modo_cobro", "minuto")
+        detalle_cobro = (
+            describir_detalle_tarifa(minutos)
+            if modo_cobro == "personalizado"
+            else None
+        )
 
         with db_cursor(commit=True) as cursor:
             cursor.execute("""
@@ -295,6 +305,7 @@ def registrar_salida_detallada(patente, usuario):
         modo_cobro=modo_cobro,
         total_lavados=total_lavados,
         tarifa_estacionamiento=tarifa,
+        detalle_cobro=detalle_cobro,
     )
     return {
         "patente": patente,
@@ -370,6 +381,56 @@ def obtener_vehiculos_activos():
         })
 
     return lista
+
+
+def obtener_patentes_cerradas_turno_actual():
+    """
+    Obtiene las estadías cerradas del turno/día actual aún no cerradas.
+
+    Returns:
+        list[dict]: Ingresos con salida y cerrado=FALSE.
+    """
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("""
+            SELECT i.id_ingreso,
+                   v.patente,
+                   i.fecha_hora_ingreso,
+                   i.fecha_hora_salida,
+                   i.tarifa_aplicada,
+                   i.usuario
+            FROM ingresos i
+            JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
+            WHERE i.fecha_hora_salida IS NOT NULL
+              AND i.cerrado = FALSE
+              AND DATE(i.fecha_hora_salida) = CURDATE()
+            ORDER BY i.fecha_hora_salida DESC, i.id_ingreso DESC
+        """)
+        return cursor.fetchall()
+
+
+def obtener_ultimo_ingreso_cerrado_por_patente(patente):
+    """
+    Obtiene la última estadía cerrada de una patente para monitoreo.
+
+    Returns:
+        dict | None: Último ingreso con salida, o None si no hay historial cerrado.
+    """
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("""
+            SELECT i.id_ingreso,
+                   v.patente,
+                   i.fecha_hora_ingreso,
+                   i.fecha_hora_salida,
+                   i.tarifa_aplicada,
+                   i.usuario
+            FROM ingresos i
+            JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
+            WHERE UPPER(v.patente) = UPPER(%s)
+              AND i.fecha_hora_salida IS NOT NULL
+            ORDER BY i.fecha_hora_salida DESC, i.id_ingreso DESC
+            LIMIT 1
+        """, (patente,))
+        return cursor.fetchone()
 
 
 def obtener_total_vehiculos_pagados_turno_actual():

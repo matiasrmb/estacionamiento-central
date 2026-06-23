@@ -269,7 +269,13 @@ class ConfiguracionWindow(QWidget):
         self.btn_guardar.setMinimumHeight(40)
         self.btn_guardar.clicked.connect(self.guardar)
 
+        self.btn_actualizar_config = QPushButton("Actualizar configuración")
+        self.btn_actualizar_config.setObjectName("BotonSecundario")
+        self.btn_actualizar_config.setMinimumHeight(40)
+        self.btn_actualizar_config.clicked.connect(self.recargar_configuracion)
+
         layout_acciones_wrapper.addWidget(self.btn_generar_tramos)
+        layout_acciones_wrapper.addWidget(self.btn_actualizar_config)
         layout_acciones_wrapper.addWidget(self.btn_guardar)
 
         layout.addWidget(panel_acciones)
@@ -277,6 +283,24 @@ class ConfiguracionWindow(QWidget):
 
         self.cargar_impresoras_en_combo()
         self.setLayout(layout)
+
+    def recargar_configuracion(self):
+        self.config = obtener_configuracion()
+        self.modo_combo.setCurrentText(self.config.get("modo_cobro", "minuto"))
+        self.minima_input.setText(self.config.get("tarifa_minima", "300"))
+        self.minuto_input.setText(self.config.get("valor_minuto", "25"))
+        self.hora_input.setText(self.config.get("tarifa_hora", "1300"))
+        self.bano_input.setText(self.config.get("valor_bano", "300"))
+        for clave, input_valor in self.lavado_inputs.items():
+            valor_default = next(
+                (default for item_clave, _label, default in LAVADO_CATEGORIAS if item_clave == clave),
+                "0",
+            )
+            input_valor.setText(self.config.get(clave, valor_default))
+        self.limpieza_activa_check.setChecked(self.config.get("limpieza_automatica_activa", "1") == "1")
+        self.dias_limpieza_input.setText(self.config.get("dias_conservar_archivos", "30"))
+        self.cargar_impresoras_en_combo()
+        QMessageBox.information(self, "Actualizado", "Configuración recargada desde la base de datos.")
 
     def cargar_impresoras_en_combo(self):
         """

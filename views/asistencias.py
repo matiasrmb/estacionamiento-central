@@ -75,6 +75,11 @@ class AsistenciasWindow(QWidget):
         self.btn_limpiar.setMinimumHeight(38)
         self.btn_limpiar.clicked.connect(self.limpiar_filtros)
 
+        self.btn_actualizar = QPushButton("Actualizar")
+        self.btn_actualizar.setObjectName("BotonSecundario")
+        self.btn_actualizar.setMinimumHeight(38)
+        self.btn_actualizar.clicked.connect(self.filtrar)
+
         self.btn_exportar = QPushButton("Exportar PDF")
         self.btn_exportar.setMinimumHeight(40)
         self.btn_exportar.setEnabled(False)
@@ -88,7 +93,8 @@ class AsistenciasWindow(QWidget):
         filtros_layout.addWidget(self.fecha_fin, 0, 5)
         filtros_layout.addWidget(self.btn_filtrar, 0, 6)
 
-        filtros_layout.addWidget(self.btn_limpiar, 1, 5)
+        filtros_layout.addWidget(self.btn_limpiar, 1, 4)
+        filtros_layout.addWidget(self.btn_actualizar, 1, 5)
         filtros_layout.addWidget(self.btn_exportar, 1, 6)
 
         filtros_layout.setColumnStretch(1, 1)

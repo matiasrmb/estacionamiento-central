@@ -59,8 +59,14 @@ class MensualesWindow(QWidget):
         self.btn_agregar.setMinimumHeight(38)
         self.btn_agregar.clicked.connect(self.agregar_mensual)
 
+        self.btn_actualizar = QPushButton("Actualizar")
+        self.btn_actualizar.setObjectName("BotonSecundario")
+        self.btn_actualizar.setMinimumHeight(38)
+        self.btn_actualizar.clicked.connect(self.cargar_mensuales)
+
         form_layout.addWidget(self.patente_input, 3)
         form_layout.addWidget(self.btn_agregar, 1)
+        form_layout.addWidget(self.btn_actualizar, 1)
 
         form_wrapper.addLayout(form_layout)
         layout.addWidget(formulario)

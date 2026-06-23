@@ -34,6 +34,15 @@ class UsuariosWindow(QWidget):
         subtitulo.setWordWrap(True)
         layout.addWidget(subtitulo)
 
+        acciones_superiores = QHBoxLayout()
+        acciones_superiores.addStretch()
+        self.btn_actualizar = QPushButton("Actualizar")
+        self.btn_actualizar.setObjectName("BotonSecundario")
+        self.btn_actualizar.setMinimumHeight(38)
+        self.btn_actualizar.clicked.connect(self.cargar_usuarios)
+        acciones_superiores.addWidget(self.btn_actualizar)
+        layout.addLayout(acciones_superiores)
+
         # =========================================================
         # TABLA
         # =========================================================

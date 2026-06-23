@@ -62,9 +62,15 @@ class TarifasPersonalizadasWindow(QWidget):
         self.btn_eliminar.setMinimumHeight(40)
         self.btn_eliminar.clicked.connect(self.eliminar)
 
+        self.btn_refrescar = QPushButton("Actualizar")
+        self.btn_refrescar.setObjectName("BotonSecundario")
+        self.btn_refrescar.setMinimumHeight(40)
+        self.btn_refrescar.clicked.connect(self.cargar_datos)
+
         botones_layout.addWidget(self.btn_agregar)
         botones_layout.addWidget(self.btn_actualizar)
         botones_layout.addWidget(self.btn_eliminar)
+        botones_layout.addWidget(self.btn_refrescar)
 
         layout_acciones_wrapper.addLayout(botones_layout)
         layout.addWidget(panel_acciones)

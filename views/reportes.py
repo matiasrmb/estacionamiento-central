@@ -74,6 +74,11 @@ class ReportesWindow(QWidget):
         self.boton_limpiar.setMinimumHeight(38)
         self.boton_limpiar.clicked.connect(self.limpiar_filtros)
 
+        self.boton_actualizar = QPushButton("Actualizar")
+        self.boton_actualizar.setObjectName("BotonSecundario")
+        self.boton_actualizar.setMinimumHeight(38)
+        self.boton_actualizar.clicked.connect(self.filtrar)
+
         self.boton_exportar = QPushButton("Exportar PDF")
         self.boton_exportar.setMinimumHeight(40)
         self.boton_exportar.setEnabled(False)
@@ -87,7 +92,8 @@ class ReportesWindow(QWidget):
         filtros_layout.addWidget(self.input_patente, 0, 5)
         filtros_layout.addWidget(self.boton_filtrar, 0, 6)
 
-        filtros_layout.addWidget(self.boton_limpiar, 1, 5)
+        filtros_layout.addWidget(self.boton_limpiar, 1, 4)
+        filtros_layout.addWidget(self.boton_actualizar, 1, 5)
         filtros_layout.addWidget(self.boton_exportar, 1, 6)
 
         filtros_layout.setColumnStretch(1, 1)
