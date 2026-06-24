@@ -16,10 +16,12 @@ def generar_ticket_ingreso(patente, fecha_hora):
     """
     Genera e imprime automáticamente un ticket de ingreso para un vehículo.
     """
-    pdf = FPDF(format=(58, 135), unit="mm")
+    pdf = FPDF(format=(58, 180), unit="mm")
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=4)
     pdf.set_font("Courier", size=13)
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
 
     pdf.cell(0, 7, "ESTACIONAMIENTO", ln=True, align="C")
     pdf.cell(0, 7, "CENTRAL", ln=True, align="C")
@@ -31,6 +33,9 @@ def generar_ticket_ingreso(patente, fecha_hora):
     pdf.cell(0, 7, fecha_hora.strftime("Hora: %H:%M:%S"), ln=True)
     pdf.cell(0, 5, "-" * 24, ln=True, align="C")
     pdf.cell(0, 7, "Gracias por su visita", ln=True, align="C")
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
 
     carpeta = "tickets"
     os.makedirs(carpeta, exist_ok=True)
@@ -73,10 +78,12 @@ def generar_ticket_salida(
     Returns:
         str: Ruta del archivo PDF generado.
     """
-    pdf = FPDF(format=(58, 185), unit="mm")
+    pdf = FPDF(format=(58, 240), unit="mm")
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=4)
     pdf.set_font("Courier", size=13)
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
 
     pdf.cell(0, 7, "ESTACIONAMIENTO", ln=True, align="C")
     pdf.cell(0, 7, "CENTRAL", ln=True, align="C")
@@ -121,6 +128,9 @@ def generar_ticket_salida(
     pdf.set_font("Courier", size=13)
     pdf.cell(0, 5, "-" * 24, ln=True, align="C")
     pdf.cell(0, 7, "Gracias por su visita", ln=True, align="C")
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
+    pdf.cell(0, 5, "-" * 24, ln=True, align="C")
 
     carpeta = "tickets"
     os.makedirs(carpeta, exist_ok=True)
