@@ -408,6 +408,48 @@ def obtener_patentes_cerradas_turno_actual():
         return cursor.fetchall()
 
 
+def obtener_patentes_turno_actual_para_f4():
+    """
+    Obtiene patentes abiertas y cerradas del turno actual para navegación rápida.
+
+    Incluye ingresos activos y salidas del día/turno actual que aún no fueron
+    cerradas en caja. Devuelve una fila por patente/ingreso ordenada por patente.
+    """
+    activos = obtener_vehiculos_activos()
+    cerrados = obtener_patentes_cerradas_turno_actual()
+
+    filas = []
+    for activo in activos:
+        filas.append({
+            "id_ingreso": activo["id_ingreso"],
+            "patente": activo.get("patente_base") or str(activo["patente"]).split()[0],
+            "estado": "ABIERTO",
+            "fecha_hora_ingreso": activo["hora"],
+            "fecha_hora_salida": None,
+            "minutos": int(activo.get("minutos") or 0),
+            "monto": float(activo.get("monto") or 0),
+            "en_espera": bool(activo.get("en_espera")),
+            "en_lavado": bool(activo.get("en_lavado")),
+        })
+
+    for cerrado in cerrados:
+        ingreso = cerrado["fecha_hora_ingreso"]
+        salida = cerrado["fecha_hora_salida"]
+        minutos = int((salida - ingreso).total_seconds() // 60) if ingreso and salida else 0
+        filas.append({
+            "id_ingreso": cerrado["id_ingreso"],
+            "patente": cerrado["patente"],
+            "estado": "CERRADO",
+            "fecha_hora_ingreso": ingreso,
+            "fecha_hora_salida": salida,
+            "minutos": minutos,
+            "monto": float(cerrado.get("tarifa_aplicada") or 0),
+            "usuario": cerrado.get("usuario"),
+        })
+
+    return sorted(filas, key=lambda row: (str(row["patente"]).upper(), row["estado"]))
+
+
 def obtener_ultimo_ingreso_cerrado_por_patente(patente):
     """
     Obtiene la última estadía cerrada de una patente para monitoreo.
