@@ -7,6 +7,15 @@ Incluye funciones para listar, crear, actualizar estado y cambiar la contraseña
 import bcrypt
 from utils.db import db_cursor
 
+
+def _normalizar_rol(rol):
+    normalizado = (rol or "").strip().lower()
+    if normalizado in {"administrador", "admin"}:
+        return "administrador"
+    if normalizado in {"operador", "operator"}:
+        return "operador"
+    raise ValueError("Rol inválido")
+
 def obtener_usuarios():
     """
     Obtiene todos los usuarios registrados en el sistema.
@@ -34,11 +43,12 @@ def crear_usuario(usuario, clave, rol):
     """
     clave_hash = bcrypt.hashpw(clave.encode('utf-8'), bcrypt.gensalt())
     try:
+        rol_db = _normalizar_rol(rol)
         with db_cursor(commit=True) as cursor:
             cursor.execute("""
                 INSERT INTO usuarios (usuario, clave_hash, rol)
                 VALUES (%s, %s, %s)
-            """, (usuario, clave_hash, rol))
+            """, (usuario, clave_hash, rol_db))
         exito = True
     except Exception as e:
         print("Error al crear usuario:", e)

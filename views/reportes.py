@@ -19,6 +19,7 @@ class ReportesWindow(QWidget):
         super().__init__()
         self.setMinimumSize(900, 600)
         self.resultados = []
+        self.ultimos_filtros = None
         self.init_ui()
 
     def init_ui(self):
@@ -180,6 +181,11 @@ class ReportesWindow(QWidget):
         patente = self.input_patente.text().strip().upper()
 
         self.resultados = obtener_reportes(fecha_inicio, fecha_fin, patente)
+        self.ultimos_filtros = {
+            "fecha_inicio": fecha_inicio,
+            "fecha_fin": fecha_fin,
+            "patente": patente,
+        }
 
         if not self.resultados:
             self.tabla.setRowCount(0)
@@ -242,6 +248,15 @@ class ReportesWindow(QWidget):
 
     def exportar_pdf(self):
         if self.resultados:
-            exportar_pdf(self.resultados)
+            filtros = self.ultimos_filtros or {}
+            fecha_inicio = filtros.get("fecha_inicio")
+            fecha_fin = filtros.get("fecha_fin")
+            patente = filtros.get("patente", "")
+            exportar_pdf(
+                self.resultados,
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+                incluir_banos=not bool(patente),
+            )
         else:
             QMessageBox.information(self, "Aviso", "Primero realiza una búsqueda para poder exportar.")

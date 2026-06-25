@@ -100,7 +100,8 @@ class UsuariosWindow(QWidget):
         self.input_clave.returnPressed.connect(self.crear_usuario)
 
         self.select_rol = QComboBox()
-        self.select_rol.addItems(["Operador", "Administrador"])
+        self.select_rol.addItem("Operador", "operador")
+        self.select_rol.addItem("Administrador", "administrador")
         self.select_rol.setMinimumHeight(38)
 
         self.btn_crear = QPushButton("Crear usuario")
@@ -167,7 +168,7 @@ class UsuariosWindow(QWidget):
     def crear_usuario(self):
         usuario = self.input_usuario.text().strip()
         clave = self.input_clave.text().strip()
-        rol = self.select_rol.currentText()
+        rol = self.select_rol.currentData()
 
         if not usuario or not clave:
             QMessageBox.warning(self, "Campos vacíos", "Debes ingresar usuario y contraseña.")

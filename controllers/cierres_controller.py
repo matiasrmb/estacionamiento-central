@@ -20,17 +20,27 @@ def realizar_cierre_diario(usuario):
     """
     with db_cursor(dictionary=True, commit=True) as cursor:
         cursor.execute("""
+            SELECT MAX(fecha_cierre) AS ultimo_cierre
+            FROM cierres_diarios
+        """)
+        ultimo = cursor.fetchone() or {}
+        ultimo_cierre = ultimo.get("ultimo_cierre")
+
+        cursor.execute("""
             SELECT id_ingreso, fecha_hora_ingreso, fecha_hora_salida, tarifa_aplicada
             FROM ingresos
             WHERE fecha_hora_salida IS NOT NULL AND cerrado = FALSE
         """)
         registros = cursor.fetchall()
 
-        if not registros:
-            return False, "No hay registros para cerrar hoy."
-
-        fecha_inicio = min([r["fecha_hora_ingreso"] for r in registros])
         fecha_cierre = datetime.now()
+        if ultimo_cierre:
+            fecha_inicio = ultimo_cierre
+        elif registros:
+            fecha_inicio = min([r["fecha_hora_ingreso"] for r in registros])
+        else:
+            fecha_inicio = fecha_cierre.replace(hour=0, minute=0, second=0, microsecond=0)
+
         total_recaudado = sum([r["tarifa_aplicada"] for r in registros if r["tarifa_aplicada"] is not None])
         total_ingresos = len(registros)
         total_salidas = total_ingresos  # Ingreso con salida registrada
@@ -41,9 +51,12 @@ def realizar_cierre_diario(usuario):
             FROM usos_bano
             WHERE fecha_hora BETWEEN %s AND %s
         """, (fecha_inicio, fecha_cierre))
-        banos = cursor.fetchone()
-        total_banos = banos["cantidad"] or 0
-        total_banos_monto = banos["total"] or 0
+        banos = cursor.fetchone() or {}
+        total_banos = banos.get("cantidad") or 0
+        total_banos_monto = banos.get("total") or 0
+
+        if not registros and total_banos == 0:
+            return False, "No hay registros para cerrar hoy."
 
         # Total combinado
         total_general = total_recaudado + total_banos_monto
@@ -62,11 +75,12 @@ def realizar_cierre_diario(usuario):
 
         # Marcar ingresos como cerrados
         ids = [r["id_ingreso"] for r in registros]
-        formato = ','.join(['%s'] * len(ids))
-        cursor.execute(f"""
-            UPDATE ingresos SET cerrado = TRUE
-            WHERE id_ingreso IN ({formato})
-        """, ids)
+        if ids:
+            formato = ','.join(['%s'] * len(ids))
+            cursor.execute(f"""
+                UPDATE ingresos SET cerrado = TRUE
+                WHERE id_ingreso IN ({formato})
+            """, ids)
 
     datos_pdf = {
         "Fecha de inicio": fecha_inicio.strftime("%Y-%m-%d %H:%M"),

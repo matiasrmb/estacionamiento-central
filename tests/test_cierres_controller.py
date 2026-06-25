@@ -39,7 +39,10 @@ class RealizarCierreDiarioTests(unittest.TestCase):
     @patch.object(cierres_controller, "generar_pdf_cierre")
     @patch.object(cierres_controller, "db_cursor")
     def test_retorna_false_si_no_hay_registros_para_cerrar(self, db_cursor, generar_pdf):
-        cursor = FakeCursor(fetchall_results=[[]])
+        cursor = FakeCursor(
+            fetchall_results=[[]],
+            fetchone_results=[None, {"cantidad": 0, "total": 0}],
+        )
         db_cursor.return_value = fake_db_cursor(cursor)
 
         exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
@@ -72,7 +75,7 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         ]
         cursor = FakeCursor(
             fetchall_results=[registros],
-            fetchone_results=[{"cantidad": 2, "total": 600}],
+            fetchone_results=[None, {"cantidad": 2, "total": 600}],
         )
         db_cursor.return_value = fake_db_cursor(cursor)
 
@@ -85,6 +88,27 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("INSERT INTO cierres_diarios", consultas)
         self.assertIn("UPDATE ingresos SET cerrado = TRUE", consultas)
+
+    @patch.object(cierres_controller, "generar_pdf_cierre")
+    @patch.object(cierres_controller, "db_cursor")
+    def test_cierra_banos_sin_registros_de_vehiculos(self, db_cursor, generar_pdf):
+        cursor = FakeCursor(
+            fetchall_results=[[]],
+            fetchone_results=[
+                {"ultimo_cierre": datetime(2026, 1, 1, 8, 0)},
+                {"cantidad": 3, "total": 900},
+            ],
+        )
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
+
+        self.assertTrue(exito)
+        self.assertIn("$900", mensaje)
+        generar_pdf.assert_called_once()
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("INSERT INTO cierres_diarios", consultas)
+        self.assertNotIn("UPDATE ingresos SET cerrado = TRUE", consultas)
 
 
 if __name__ == "__main__":

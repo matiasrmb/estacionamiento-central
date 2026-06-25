@@ -129,6 +129,8 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
         pdf.cell(0, 8, f"Total recaudado por lavados: ${monto_lavados:.0f}", ln=True)
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, f"Total general (vehículos + baños): ${total:.0f}", ln=True)
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(0, 6, "Nota: los lavados ya están incluidos en el importe de cada vehículo.", ln=True)
 
     carpeta = "reportes"
     os.makedirs(carpeta, exist_ok=True)
