@@ -73,7 +73,7 @@ Verificar que el equipo cumpla con los requisitos indicados anteriormente.
 
 ### 2. Descarga del instalador
 
-- Instalador: (https://www.mediafire.com/file/4epomni4jgigohw/Instalador_EstacionamientoCentral_1.2.0.exe/file)
+- Instalador: https://www.mediafire.com/file/67awq8z0gqcr9sc/Instalador_EstacionamientoCentral_1.2.0.exe/file
 > Nota: Es posible que Windows o el antivirus muestren advertencias de seguridad debido a la naturaleza del instalador.
 
 En ese caso:
