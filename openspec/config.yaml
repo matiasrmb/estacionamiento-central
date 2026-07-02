@@ -1,0 +1,122 @@
+schema: spec-driven
+
+project: estacionamiento-central
+persistence: openspec
+detected_at: 2026-06-25
+
+context: |
+  Umbrella ecosystem spans desktop, API, mobile, and installer sibling repos under C:\Users\matia.
+  Desktop: Python/PySide6 MVC-style app with controllers, views, utils, MySQL, reports/tickets, PyInstaller packaging.
+  API: Python FastAPI app with versioned /api/v1 endpoints, repositories/services, SQLAlchemy/PyMySQL, JWT/security helpers, printer agent.
+  Mobile: Flutter/Dart app using Dio, Provider, GoRouter, secure storage, Sunmi printing, mobile_scanner, Android Gradle Kotlin DSL.
+  Installer: Inno Setup script bundles PyInstaller desktop app, MySQL 8.4.8 zip, schema/config scripts, and admin install flow.
+  Testing: desktop/API use unittest-style Python tests; mobile has flutter_test smoke coverage; installer has no automated runner detected.
+
+strict_tdd: true
+
+testing:
+  strict_tdd:
+    enabled: true
+    source: "No explicit SDD/TDD marker found; enabled because automated test runners were detected in desktop/API/mobile. Installer changes require manual verification unless tests are added."
+  repos:
+    desktop:
+      path: C:\Users\matia\estacionamiento-central
+      stack: Python 3 / PySide6 / MySQL / PyInstaller
+      runner: unittest
+      command: "python -m unittest discover -s tests"
+      layers:
+        unit: true
+        integration: false
+        e2e: false
+      coverage:
+        available: false
+        command: ""
+      quality:
+        linter: ""
+        type_checker: ""
+        formatter: ""
+      build:
+        command: "pyinstaller EstacionamientoCentral.spec"
+    api:
+      path: C:\Users\matia\estacionamiento-central-api
+      stack: Python / FastAPI / SQLAlchemy / PyMySQL / Uvicorn
+      runner: unittest
+      command: "python -m unittest discover -s tests"
+      layers:
+        unit: true
+        integration: false
+        e2e: false
+      coverage:
+        available: false
+        command: ""
+      quality:
+        linter: ""
+        type_checker: ""
+        formatter: ""
+      build:
+        command: ""
+    mobile:
+      path: C:\Users\matia\estacionamiento_central_mobile
+      stack: Flutter / Dart / Android Gradle Kotlin DSL
+      runner: flutter_test
+      command: "flutter test"
+      layers:
+        unit: true
+        widget: true
+        integration: false
+        e2e: false
+      coverage:
+        available: true
+        command: "flutter test --coverage"
+      quality:
+        linter: flutter_lints
+        type_checker: "flutter analyze"
+        formatter: "dart format ."
+      build:
+        command: "flutter build apk"
+    installer:
+      path: C:\Users\matia\estacionamiento-central-installer
+      stack: Inno Setup / batch scripts / MySQL 8.4.8 payload / PyInstaller app payload
+      runner: ""
+      command: ""
+      layers:
+        unit: false
+        integration: false
+        e2e: false
+      coverage:
+        available: false
+        command: ""
+      quality:
+        linter: ""
+        type_checker: ""
+        formatter: ""
+      build:
+        command: "ISCC EstacionamientoCentral.iss"
+
+rules:
+  proposal:
+    - Keep ecosystem changes scoped by repo and include rollback notes for installer/database changes.
+    - Respect chained_pr_strategy=ask-always and review_budget_lines=400.
+  specs:
+    - Use RFC 2119 keywords and Given/When/Then scenarios.
+    - State which sibling repos are affected by each requirement.
+  design:
+    - Document cross-repo contracts explicitly for API/mobile/desktop compatibility.
+    - Include database and installer impact when schema, config, or bundled assets change.
+  tasks:
+    - Group tasks by repo and keep each work unit reviewable under the 400-line budget when practical.
+  apply:
+    tdd: true
+    test_command: "python -m unittest discover -s tests"
+    guidelines:
+      - Do not implement feature changes without an active OpenSpec change.
+      - For mobile tasks, use flutter test/analyze commands from testing.mobile.
+      - For installer tasks, document manual verification if no automated test exists.
+  verify:
+    test_command: "python -m unittest discover -s tests"
+    build_command: ""
+    coverage_threshold: 0
+    guidelines:
+      - Verify every affected repo with its detected runner/build command or document why unavailable.
+  archive:
+    - Warn before merging destructive deltas or installer/database reset behavior changes.
