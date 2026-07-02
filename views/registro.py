@@ -24,6 +24,12 @@ from controllers.lavados_controller import (
     iniciar_lavado,
     obtener_categorias_lavado,
 )
+from controllers.operaciones_servicio_controller import (
+    finalizar_solo_lavado_cobrando,
+    finalizar_solo_lavado_como_estadia,
+    iniciar_solo_lavado,
+)
+from controllers.wash_pricing_controller import list_wash_vehicle_types
 from views.subida_dialog import SubidaDialog
 
 
@@ -172,12 +178,18 @@ class RegistroWindow(QWidget):
         self.boton_lavado.setMinimumHeight(32)
         self.boton_lavado.clicked.connect(self.alternar_lavado_seleccionado)
 
+        self.boton_solo_lavado = QPushButton("Iniciar solo lavado")
+        self.boton_solo_lavado.setMinimumHeight(32)
+        self.boton_solo_lavado.setVisible(False)
+        self.boton_solo_lavado.clicked.connect(self.iniciar_solo_lavado_desde_patente)
+
         layout_acciones.addWidget(self.boton_ingreso)
         layout_acciones.addWidget(self.boton_ingreso_personalizado)
         layout_acciones.addWidget(self.boton_salida)
         layout_acciones.addWidget(self.boton_espera)
         layout_acciones.addWidget(self.boton_bano)
         layout_acciones.addWidget(self.boton_lavado)
+        layout_acciones.addWidget(self.boton_solo_lavado)
 
         if self.rol == "administrador":
             self.boton_subida = QPushButton("Subida temporal de precios")
@@ -1041,6 +1053,63 @@ class RegistroWindow(QWidget):
             return
 
         QMessageBox.critical(self, "Error", "No se pudo iniciar el lavado.")
+
+    def iniciar_solo_lavado_desde_patente(self):
+        patente = self.input_patente.text().strip().upper()
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            QMessageBox.warning(self, "Atención", mensaje)
+            self.enfocar_patente()
+            return
+
+        tipos = [tipo for tipo in list_wash_vehicle_types() if int(tipo.get("activo", 0))]
+        if not tipos:
+            QMessageBox.warning(self, "Sin tipos activos", "No hay tipos de lavado activos configurados.")
+            return
+
+        opciones = [f"{tipo['nombre']} - ${float(tipo['valor_lavado']):.0f}" for tipo in tipos]
+        seleccion, confirmado = QInputDialog.getItem(
+            self,
+            "Solo lavado",
+            f"Selecciona el tipo de lavado para {patente}:",
+            opciones,
+            0,
+            False,
+        )
+        if not confirmado or not seleccion:
+            return
+
+        tipo = tipos[opciones.index(seleccion)]
+        resultado = iniciar_solo_lavado(patente, tipo["id_tipo_vehiculo_lavado"], self.usuario)
+        if not resultado:
+            QMessageBox.warning(self, "No se pudo iniciar", "La patente puede tener un ingreso activo o el tipo elegido no está disponible.")
+            return
+
+        QMessageBox.information(
+            self,
+            "Solo lavado iniciado",
+            "El lavado quedó activo sin crear una estadía.\n\n"
+            f"Patente: {resultado['patente']}\n"
+            f"Valor lavado: ${resultado['valor_lavado_snapshot']:.0f}"
+        )
+        self.actualizar_tabla_activos()
+        self.enfocar_patente(limpiar=True)
+
+    def finalizar_solo_lavado_desde_operacion(self, id_operacion_servicio, cobrar_ahora=True):
+        if cobrar_ahora:
+            resultado = finalizar_solo_lavado_cobrando(id_operacion_servicio, self.usuario)
+            titulo = "Solo lavado cobrado"
+        else:
+            resultado = finalizar_solo_lavado_como_estadia(id_operacion_servicio, self.usuario)
+            titulo = "Solo lavado convertido en estadía"
+
+        if not resultado:
+            QMessageBox.critical(self, "Error", "No se pudo finalizar el solo lavado.")
+            return None
+
+        QMessageBox.information(self, titulo, f"Patente: {resultado['patente']}")
+        self.actualizar_tabla_activos()
+        return resultado
 
     def reingresar_vehiculo(self):
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado

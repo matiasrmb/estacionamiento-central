@@ -7,10 +7,27 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from controllers.usuarios_controller import (
     obtener_usuarios, crear_usuario,
-    cambiar_contrasena, cambiar_estado_usuario
+    cambiar_contrasena, cambiar_estado_usuario,
+    eliminar_usuario_seguro,
 )
 from views.dialog_cambiar_clave import CambiarClaveDialog
 from functools import partial
+
+
+def formatear_error_eliminacion(resultado):
+    mensajes = {
+        "CANNOT_DELETE_CURRENT_USER": "No puedes eliminar el usuario con sesión activa.",
+        "CANNOT_DELETE_LAST_ADMIN": "No puedes eliminar el último administrador activo.",
+        "USER_NOT_FOUND": "El usuario ya no existe.",
+    }
+    codigo = resultado.get("message")
+    if codigo == "USER_DELETE_ERROR":
+        return (
+            "Error interno",
+            "No se pudo validar la eliminación del usuario. Revisá los logs antes de intentar nuevamente.",
+            "critical",
+        )
+    return ("Eliminación bloqueada", mensajes.get(codigo, "No se pudo eliminar el usuario."), "warning")
 
 
 class UsuariosWindow(QWidget):
@@ -19,8 +36,9 @@ class UsuariosWindow(QWidget):
     Permite ver, crear, activar/desactivar y cambiar contraseñas.
     """
 
-    def __init__(self):
+    def __init__(self, usuario_actual=None):
         super().__init__()
+        self.usuario_actual = usuario_actual
         self.setMinimumSize(900, 600)
         self.init_ui()
 
@@ -159,8 +177,15 @@ class UsuariosWindow(QWidget):
                 partial(self.toggle_estado_usuario, u["usuario"], not u["activo"])
             )
 
+            btn_eliminar = QPushButton("Eliminar")
+            btn_eliminar.setObjectName("BotonTablaPeligro")
+            btn_eliminar.setMinimumHeight(34)
+            btn_eliminar.setMinimumWidth(90)
+            btn_eliminar.clicked.connect(partial(self.eliminar_usuario, u["usuario"]))
+
             layout_btn.addWidget(btn_clave)
             layout_btn.addWidget(btn_estado)
+            layout_btn.addWidget(btn_eliminar)
 
             botones.setLayout(layout_btn)
             self.tabla.setCellWidget(i, 2, botones)
@@ -224,6 +249,36 @@ class UsuariosWindow(QWidget):
                 self.cargar_usuarios()
             else:
                 QMessageBox.critical(self, "Error", "No se pudo actualizar el estado.")
+
+    def eliminar_usuario(self, usuario):
+        confirmar = QMessageBox.question(
+            self,
+            "Confirmar eliminación",
+            "Si el usuario tiene historial, se desactivará para preservar auditoría. "
+            f"¿Deseas eliminar el usuario '{usuario}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirmar != QMessageBox.Yes:
+            return
+
+        resultado = eliminar_usuario_seguro(usuario, usuario_actual=self.usuario_actual)
+        if resultado.get("ok"):
+            if resultado.get("action") == "deleted":
+                QMessageBox.information(self, "Usuario eliminado", "El usuario fue eliminado correctamente.")
+            else:
+                QMessageBox.information(
+                    self,
+                    "Usuario desactivado",
+                    "El usuario tiene historial, por eso fue desactivado para preservar auditoría."
+                )
+            self.cargar_usuarios()
+            return
+
+        titulo, mensaje, severidad = formatear_error_eliminacion(resultado)
+        if severidad == "critical":
+            QMessageBox.critical(self, titulo, mensaje)
+        else:
+            QMessageBox.warning(self, titulo, mensaje)
 
     def toggle_password_visibility(self):
         """

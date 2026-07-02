@@ -20,6 +20,7 @@ from utils.printer_manager import (obtener_impresoras_instaladas,
                                    cargar_impresora_guardada,
                                    guardar_impresora_tickets,
 )
+from utils.printer_diagnostics import SUPPORTED_PRINT_PATH
 from utils.ticket import imprimir_pdf_directamente
 
 class ConfiguracionWindow(QWidget):
@@ -209,7 +210,8 @@ class ConfiguracionWindow(QWidget):
         descripcion_impresion = QLabel(
             "Selecciona la impresora que se utilizará para los tickets térmicos. "
             "Si la impresora configurada deja de existir, el sistema intentará usar "
-            "la impresora predeterminada de Windows."
+            "la impresora predeterminada de Windows. "
+            f"{SUPPORTED_PRINT_PATH}"
         )
         descripcion_impresion.setWordWrap(True)
         descripcion_impresion.setObjectName("SubtituloSeccion")

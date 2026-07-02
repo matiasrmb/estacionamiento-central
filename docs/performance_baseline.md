@@ -2,6 +2,8 @@
 
 Herramientas para medir el rendimiento actual antes de optimizar la aplicación.
 
+> Nota de producción: los cambios de preparación para producción agregan logs lentos por umbral y diagnósticos, pero no agregan índices, cambios de esquema ni tuning especulativo. Cualquier optimización debe partir de mediciones reproducibles con este baseline o de evidencia de logs lentos.
+
 Equipo objetivo: AMD E1-2100 APU 1.00GHz con 4GB de RAM. El caso mínimo a validar es más de 50 vehículos estacionados simultáneamente.
 
 ## Seguridad

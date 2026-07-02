@@ -222,7 +222,7 @@ class MainWindow(QWidget):
             self.usuario,
             on_volver_panel=self.mostrar_dashboard
         )
-        self.usuarios_view = UsuariosWindow()
+        self.usuarios_view = UsuariosWindow(self.usuario)
         self.asistencias_view = AsistenciasWindow()
 
         self.dashboard_page = self.crear_pagina_scrollable(self.dashboard_view)

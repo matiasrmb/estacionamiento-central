@@ -65,6 +65,8 @@ Su objetivo es modernizar la operación de estacionamientos mediante la automati
 
 ## Instalación Paso a Paso
 
+> Estado de despliegue validado: el instalador es el camino de producción. No se requiere ejecutar manualmente la API con `run.ps1` en una instalación normal.
+
 ### 1. Requisitos previos
 
 Verificar que el equipo cumpla con los requisitos indicados anteriormente.
@@ -155,13 +157,38 @@ C:\EstacionamientoCentral_internal\config.ini
 
 #### 4.6 Instalación de visor PDF
 
-Descargar manualmente:
+El instalador incluye el visor portable esperado en:
 
-https://www.sumatrapdfreader.org/download-free-pdf-viewer  
+```text
+C:\EstacionamientoCentral\tools\SumatraPDF\SumatraPDF.exe
+```
+
+La impresión física sigue dependiendo de que la impresora térmica real esté instalada, disponible y configurada con el nombre correcto.
 
 ---
 
-#### 4.7 Accesos directos
+#### 4.7 Servicios y conectividad de producción
+
+El instalador configura los componentes de producción validados:
+
+- Servicio Windows **EstacionamientoCentralAPI** con inicio automático mediante WinSW.
+- Servicio Windows **EstacionamientoCentralPrintAgent** para consumir la cola de impresión.
+- Regla de firewall privada para el puerto LAN de la API, por defecto `8000`.
+- Verificación de salud de API, MySQL, Print Agent, firewall, SumatraPDF, spooler e impresora.
+- Diagnósticos en `C:\EstacionamientoCentral\diagnostics` con logs/configuración redactados.
+- Guía de conexión móvil en `C:\EstacionamientoCentral\config\mobile-connection.txt`.
+
+Para conectar la app móvil, usar la IP LAN del servidor y el puerto configurado:
+
+```text
+http://<ip-lan-del-servidor>:8000/api/v1
+```
+
+La app móvil no debe depender de una IP de desarrollo fija; la URL se guarda desde QR o configuración manual.
+
+---
+
+#### 4.8 Accesos directos
 
 - Menú inicio
 - Escritorio (opcional)

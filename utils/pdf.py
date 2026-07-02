@@ -3,9 +3,11 @@ Módulo para generar archivos PDF de cierres diarios o mensuales en el sistema E
 """
 
 from utils.pdf_utils import ReportePDF, abrir_pdf
+from utils.slowlog import slow_operation
 from datetime import datetime
 import os
 
+@slow_operation("pdf_generation")
 def generar_pdf_cierre(tipo, datos):
     """
     Genera un PDF con la información de un cierre diario o mensual.

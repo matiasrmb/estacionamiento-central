@@ -20,6 +20,8 @@ from controllers.lavados_controller import (
     obtener_minutos_lavado_por_ingresos,
     obtener_totales_lavado_por_ingresos,
 )
+from controllers.operaciones_servicio_controller import obtener_operacion_convertida_por_ingreso
+from utils.slowlog import slow_operation
 
 
 def calcular_minutos_estadia(fecha_hora_ingreso, fecha_hora_salida=None):
@@ -168,6 +170,7 @@ def registrar_ingreso(patente, fecha_hora_ingreso=None):
     return bool(resultado)
 
 
+@slow_operation("registration")
 def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
     """
     Registra la entrada de un vehículo y retorna datos para feedback de UI.
@@ -241,6 +244,7 @@ def registrar_salida(patente, usuario):
     return resultado["tarifa"] if resultado else None
 
 
+@slow_operation("exit")
 def registrar_salida_detallada(patente, usuario):
     """
     Registra la salida de un vehículo y retorna datos para feedback de UI.
@@ -271,6 +275,17 @@ def registrar_salida_detallada(patente, usuario):
             devolver_flag=True
         )
         total_lavados = calcular_total_lavados(ingreso["id_ingreso"])
+        operacion_convertida = obtener_operacion_convertida_por_ingreso(ingreso["id_ingreso"])
+        detalle_secciones = None
+        if operacion_convertida:
+            total_lavados += int(operacion_convertida.get("valor_lavado_snapshot") or 0)
+            detalle_secciones = _build_detalle_salida_lavado_convertido(
+                operacion_convertida,
+                fecha_ingreso,
+                ahora,
+                tarifa,
+                minutos,
+            )
         total_a_cobrar = tarifa + total_lavados
 
         config = obtener_configuracion()
@@ -306,6 +321,7 @@ def registrar_salida_detallada(patente, usuario):
         total_lavados=total_lavados,
         tarifa_estacionamiento=tarifa,
         detalle_cobro=detalle_cobro,
+        detalle_secciones=detalle_secciones,
     )
     return {
         "patente": patente,
@@ -318,6 +334,29 @@ def registrar_salida_detallada(patente, usuario):
     }
 
 
+def _build_detalle_salida_lavado_convertido(operacion, fecha_ingreso, fecha_hora_salida, tarifa_estadia, minutos_estadia):
+    inicio_lavado = operacion.get("fecha_hora_inicio")
+    fin_lavado = operacion.get("fecha_hora_fin") or fecha_ingreso
+    minutos_lavado = calcular_minutos_estadia(inicio_lavado, fin_lavado) if inicio_lavado else 0
+    monto_lavado = int(operacion.get("valor_lavado_snapshot") or 0)
+
+    return {
+        "lavado": {
+            "inicio": inicio_lavado,
+            "fin": fin_lavado,
+            "duracion_minutos": minutos_lavado,
+            "monto": monto_lavado,
+        },
+        "estadia": {
+            "inicio": fecha_ingreso,
+            "fin": fecha_hora_salida,
+            "duracion_minutos": minutos_estadia,
+            "monto": tarifa_estadia,
+        },
+    }
+
+
+@slow_operation("table_refresh")
 def obtener_vehiculos_activos():
     """
     Obtiene la lista de vehículos actualmente estacionados.

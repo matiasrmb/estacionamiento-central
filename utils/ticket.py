@@ -10,8 +10,10 @@ import subprocess
 from pathlib import Path
 
 from utils.printer_manager import resolver_impresora_tickets
+from utils.slowlog import slow_operation
 
 
+@slow_operation("pdf_generation")
 def generar_ticket_ingreso(patente, fecha_hora):
     """
     Genera e imprime automáticamente un ticket de ingreso para un vehículo.
@@ -46,6 +48,7 @@ def generar_ticket_ingreso(patente, fecha_hora):
     imprimir_pdf_directamente(ruta)
     return ruta
 
+@slow_operation("pdf_generation")
 def generar_ticket_salida(
     patente,
     fecha_hora_ingreso,
@@ -58,6 +61,7 @@ def generar_ticket_salida(
     total_lavados=0,
     tarifa_estacionamiento=None,
     detalle_cobro=None,
+    detalle_secciones=None,
 ):
     """
     Genera e imprime automáticamente un ticket de salida para un vehículo.
@@ -122,6 +126,9 @@ def generar_ticket_salida(
     if total_lavados:
         pdf.cell(0, 7, f"Lavados: ${total_lavados:.0f}", ln=True)
 
+    for line in build_ticket_detail_lines(detalle_secciones):
+        pdf.cell(0, 7, line, ln=True)
+
     pdf.cell(0, 5, "-" * 24, ln=True, align="C")
     pdf.set_font("Courier", size=14)
     pdf.cell(0, 8, f"TOTAL: ${tarifa:.0f}", ln=True, align="C")
@@ -140,6 +147,59 @@ def generar_ticket_salida(
     pdf.output(ruta)
     imprimir_pdf_directamente(ruta)
     return ruta
+
+
+def generar_ticket_solo_lavado(operacion):
+    """Genera ticket para un solo lavado cobrado en el momento."""
+    return generar_ticket_salida(
+        patente=operacion["patente"],
+        fecha_hora_ingreso=operacion["fecha_hora_inicio"],
+        fecha_hora_salida=operacion["fecha_hora_fin"],
+        tarifa=operacion["valor_lavado_snapshot"],
+        minutos=operacion.get("duracion_minutos"),
+        modo_cobro="lavado",
+        total_lavados=operacion["valor_lavado_snapshot"],
+        tarifa_estacionamiento=0,
+        detalle_secciones={
+            "lavado": {
+                "inicio": operacion["fecha_hora_inicio"],
+                "fin": operacion["fecha_hora_fin"],
+                "duracion_minutos": operacion.get("duracion_minutos"),
+                "monto": operacion["valor_lavado_snapshot"],
+            }
+        },
+    )
+
+
+def build_ticket_detail_lines(detalle_secciones):
+    if not detalle_secciones:
+        return []
+
+    lines = []
+    total = 0
+    for key, title in (("lavado", "Lavado"), ("estadia", "Estadia")):
+        section = detalle_secciones.get(key)
+        if not section:
+            continue
+        monto = int(section.get("monto") or 0)
+        total += monto
+        lines.extend([
+            f"{title}:",
+            f"Inicio: {_format_ticket_datetime(section.get('inicio'))}",
+            f"Fin: {_format_ticket_datetime(section.get('fin'))}",
+            f"Duracion: {int(section.get('duracion_minutos') or 0)} min",
+            f"Monto: ${monto:.0f}",
+        ])
+
+    if lines and "lavado" in detalle_secciones and "estadia" in detalle_secciones:
+        lines.append(f"Total detalle: ${total:.0f}")
+    return lines
+
+
+def _format_ticket_datetime(value):
+    if hasattr(value, "strftime"):
+        return value.strftime("%d-%m-%Y %H:%M:%S")
+    return str(value or "-")
 
 def obtener_ruta_sumatra() -> str | None:
     """
@@ -160,6 +220,7 @@ def obtener_ruta_sumatra() -> str | None:
 
     return None
 
+@slow_operation("print")
 def imprimir_pdf_directamente(ruta, nombre_impresora=None):
     """
     Envía un archivo PDF a imprimir directamente usando SumatraPDF.

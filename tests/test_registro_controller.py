@@ -325,6 +325,7 @@ class RegistrarSalidaTests(unittest.TestCase):
     @patch.object(registro_controller, "generar_ticket_salida")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
     @patch.object(registro_controller, "calcular_minutos_lavado")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
@@ -333,6 +334,7 @@ class RegistrarSalidaTests(unittest.TestCase):
         db_cursor,
         obtener_activos,
         calcular_minutos_lavado,
+        obtener_operacion_convertida,
         calcular_tarifa,
         obtener_configuracion,
         generar_ticket,
@@ -349,6 +351,7 @@ class RegistrarSalidaTests(unittest.TestCase):
             }
         ]
         calcular_minutos_lavado.return_value = 0
+        obtener_operacion_convertida.return_value = None
         calcular_tarifa.return_value = (1500, False, 0)
         obtener_configuracion.return_value = {"modo_cobro": "minuto"}
 
@@ -360,6 +363,95 @@ class RegistrarSalidaTests(unittest.TestCase):
         generar_ticket.assert_called_once()
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("UPDATE ingresos", consultas)
+
+    @patch.object(registro_controller, "generar_ticket_salida")
+    @patch.object(registro_controller, "obtener_configuracion")
+    @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
+    @patch.object(registro_controller, "calcular_minutos_lavado")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_salida_de_lavado_convertido_detalla_lavado_y_estadia_en_ticket(
+        self,
+        db_cursor,
+        obtener_activos,
+        calcular_minutos_lavado,
+        obtener_operacion_convertida,
+        calcular_tarifa,
+        obtener_configuracion,
+        generar_ticket,
+    ):
+        cursor = FakeCursor()
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        inicio_lavado = datetime(2026, 1, 1, 9, 30)
+        fecha_ingreso = datetime(2026, 1, 1, 10, 0)
+        obtener_activos.return_value = [{
+            "id_ingreso": 10,
+            "fecha_hora_ingreso": fecha_ingreso,
+            "patente": "ABC123",
+            "en_lavado": 0,
+        }]
+        calcular_minutos_lavado.return_value = 0
+        obtener_operacion_convertida.return_value = {
+            "fecha_hora_inicio": inicio_lavado,
+            "fecha_hora_fin": fecha_ingreso,
+            "valor_lavado_snapshot": 9000,
+        }
+        calcular_tarifa.return_value = (1500, False, 0)
+        obtener_configuracion.return_value = {"modo_cobro": "minuto"}
+
+        resultado = registro_controller.registrar_salida_detallada("ABC123", "admin")
+
+        self.assertEqual(resultado["tarifa"], 10500)
+        self.assertEqual(resultado["tarifa_estacionamiento"], 1500)
+        self.assertEqual(resultado["total_lavados"], 9000)
+        detalle = generar_ticket.call_args.kwargs["detalle_secciones"]
+        self.assertEqual(detalle["lavado"]["inicio"], inicio_lavado)
+        self.assertEqual(detalle["lavado"]["fin"], fecha_ingreso)
+        self.assertEqual(detalle["lavado"]["monto"], 9000)
+        self.assertEqual(detalle["estadia"]["inicio"], fecha_ingreso)
+        self.assertEqual(detalle["estadia"]["monto"], 1500)
+
+    @patch.object(registro_controller, "generar_ticket_salida")
+    @patch.object(registro_controller, "obtener_configuracion")
+    @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
+    @patch.object(registro_controller, "calcular_total_lavados")
+    @patch.object(registro_controller, "calcular_minutos_lavado")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_ingreso_mas_lavado_existente_mantiene_totales_de_ticket_sin_detalle_solo(
+        self,
+        db_cursor,
+        obtener_activos,
+        calcular_minutos_lavado,
+        calcular_total_lavados,
+        obtener_operacion_convertida,
+        calcular_tarifa,
+        obtener_configuracion,
+        generar_ticket,
+    ):
+        cursor = FakeCursor()
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
+        obtener_activos.return_value = [{
+            "id_ingreso": 10,
+            "fecha_hora_ingreso": fecha_ingreso,
+            "patente": "ABC123",
+            "en_lavado": 0,
+        }]
+        calcular_minutos_lavado.return_value = 20
+        calcular_total_lavados.return_value = 8000
+        obtener_operacion_convertida.return_value = None
+        calcular_tarifa.return_value = (1500, False, 0)
+        obtener_configuracion.return_value = {"modo_cobro": "minuto"}
+
+        resultado = registro_controller.registrar_salida_detallada("ABC123", "admin")
+
+        self.assertEqual(resultado["tarifa"], 9500)
+        self.assertEqual(resultado["tarifa_estacionamiento"], 1500)
+        self.assertEqual(resultado["total_lavados"], 8000)
+        self.assertIsNone(generar_ticket.call_args.kwargs["detalle_secciones"])
 
     @patch.object(registro_controller, "generar_ticket_salida")
     @patch.object(registro_controller, "obtener_configuracion")

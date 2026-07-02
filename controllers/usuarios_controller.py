@@ -44,7 +44,7 @@ def crear_usuario(usuario, clave, rol):
     clave_hash = bcrypt.hashpw(clave.encode('utf-8'), bcrypt.gensalt())
     try:
         rol_db = _normalizar_rol(rol)
-        with db_cursor(commit=True) as cursor:
+        with db_cursor(dictionary=True, commit=True) as cursor:
             cursor.execute("""
                 INSERT INTO usuarios (usuario, clave_hash, rol)
                 VALUES (%s, %s, %s)
@@ -105,3 +105,92 @@ def cambiar_estado_usuario(usuario, nuevo_estado):
         exito = False
         
     return exito
+
+
+def eliminar_usuario_seguro(usuario, usuario_actual=None):
+    usuario = (usuario or "").strip()
+    usuario_actual = (usuario_actual or "").strip()
+    if not usuario:
+        return {"ok": False, "action": "blocked", "message": "INVALID_USER_DATA"}
+
+    try:
+        with db_cursor(dictionary=True, commit=True) as cursor:
+            cursor.execute(
+                """
+                SELECT usuario, rol, activo
+                FROM usuarios
+                WHERE usuario = %s
+                LIMIT 1
+                """,
+                (usuario,),
+            )
+            user = cursor.fetchone()
+            if not user:
+                return {"ok": False, "action": "blocked", "message": "USER_NOT_FOUND"}
+
+            if usuario_actual and usuario.lower() == usuario_actual.lower():
+                return {"ok": False, "action": "blocked", "message": "CANNOT_DELETE_CURRENT_USER"}
+
+            if user["rol"] == "administrador" and int(user.get("activo", 0)) == 1:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS active_admins_after_delete
+                    FROM usuarios
+                    WHERE rol = 'administrador'
+                      AND activo = 1
+                      AND usuario <> %s
+                    """,
+                    (usuario,),
+                )
+                row = cursor.fetchone() or {}
+                if int(row.get("active_admins_after_delete", 0) or 0) == 0:
+                    return {"ok": False, "action": "blocked", "message": "CANNOT_DELETE_LAST_ADMIN"}
+
+            if _usuario_tiene_actividad(cursor, usuario):
+                cursor.execute("UPDATE usuarios SET activo = %s WHERE usuario = %s", (False, usuario))
+                return {"ok": True, "action": "deactivated", "message": "USER_DEACTIVATED_HISTORY_PRESERVED"}
+
+            cursor.execute("DELETE FROM usuarios WHERE usuario = %s", (usuario,))
+            return {"ok": True, "action": "deleted", "message": "USER_DELETED"}
+    except Exception as e:
+        print("Error al eliminar usuario:", e)
+        return {"ok": False, "action": "error", "message": "USER_DELETE_ERROR"}
+
+
+def _usuario_tiene_actividad(cursor, usuario):
+    consultas_requeridas = [
+        "SELECT 1 AS found FROM ingresos WHERE usuario = %s LIMIT 1",
+        "SELECT 1 AS found FROM lavados WHERE usuario_inicio = %s OR usuario_fin = %s LIMIT 1",
+        "SELECT 1 AS found FROM usos_bano WHERE usuario = %s LIMIT 1",
+        "SELECT 1 AS found FROM cierres_diarios WHERE usuario = %s LIMIT 1",
+        "SELECT 1 AS found FROM asistencias WHERE usuario = %s LIMIT 1",
+    ]
+    consultas_opcionales = [
+        ("operaciones_servicio", "SELECT 1 AS found FROM operaciones_servicio WHERE usuario_inicio = %s OR usuario_fin = %s LIMIT 1"),
+        ("ingresos_eliminados", "SELECT 1 AS found FROM ingresos_eliminados WHERE usuario_eliminador = %s LIMIT 1"),
+        ("print_jobs", "SELECT 1 AS found FROM print_jobs WHERE JSON_SEARCH(payload_json, 'one', %s) IS NOT NULL LIMIT 1"),
+    ]
+
+    for consulta in consultas_requeridas:
+        parametros = (usuario, usuario) if consulta.count("%s") == 2 else (usuario,)
+        cursor.execute(consulta, parametros)
+        if cursor.fetchone():
+            return True
+
+    for tabla, consulta in consultas_opcionales:
+        parametros = (usuario, usuario) if consulta.count("%s") == 2 else (usuario,)
+        try:
+            cursor.execute(consulta, parametros)
+        except Exception as e:
+            if _es_error_tabla_faltante(e):
+                print(f"Tabla opcional '{tabla}' no encontrada al validar actividad de usuario; se omite.")
+                continue
+            raise
+        if cursor.fetchone():
+            return True
+    return False
+
+
+def _es_error_tabla_faltante(error):
+    texto = str(error).lower()
+    return "doesn't exist" in texto or "no existe" in texto or "unknown table" in texto

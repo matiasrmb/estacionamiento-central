@@ -5,7 +5,9 @@ Obtiene estadísticas simples para el panel principal (dashboard) del sistema.
 """
 
 from utils.db import db_cursor
+from utils.slowlog import slow_operation
 
+@slow_operation("dashboard_refresh")
 def obtener_resumen_diario():
     """
     Obtiene el resumen desde el último cierre diario hasta ahora,
@@ -54,6 +56,7 @@ def obtener_resumen_diario():
     }
 
 
+@slow_operation("dashboard_refresh")
 def obtener_resumen_banos():
     """
     Obtiene estadísticas de usos de baños desde el último cierre diario hasta ahora.

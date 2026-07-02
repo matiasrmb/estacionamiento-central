@@ -35,6 +35,26 @@ CREATE TABLE IF NOT EXISTS ingresos (
     FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo)
 );
 
+-- Tipos configurables para precios de lavado, independientes de tarifas de estadía
+CREATE TABLE IF NOT EXISTS tipos_lavado (
+    id_tipo_lavado INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(50) NOT NULL UNIQUE,
+    nombre VARCHAR(80) NOT NULL,
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tipos_vehiculo_lavado (
+    id_tipo_vehiculo_lavado INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(50) NOT NULL UNIQUE,
+    nombre VARCHAR(80) NOT NULL,
+    valor_lavado INT NOT NULL,
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Tabla de lavados de vehículos
 CREATE TABLE IF NOT EXISTS lavados (
     id_lavado INT AUTO_INCREMENT PRIMARY KEY,
@@ -43,13 +63,39 @@ CREATE TABLE IF NOT EXISTS lavados (
     patente VARCHAR(10) NOT NULL,
     categoria_lavado VARCHAR(50) NOT NULL,
     valor_lavado INT NOT NULL,
+    id_tipo_vehiculo_lavado INT NULL,
+    tipo_vehiculo_lavado_snapshot VARCHAR(80) DEFAULT NULL,
     fecha_hora_inicio DATETIME NOT NULL,
     fecha_hora_fin DATETIME DEFAULT NULL,
     usuario_inicio VARCHAR(50) NOT NULL,
     usuario_fin VARCHAR(50) DEFAULT NULL,
     estado ENUM('activo', 'finalizado') NOT NULL DEFAULT 'activo',
     FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso),
-    FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo)
+    FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo),
+    FOREIGN KEY (id_tipo_vehiculo_lavado) REFERENCES tipos_vehiculo_lavado(id_tipo_vehiculo_lavado)
+);
+
+-- Operaciones de servicio independientes, como solo lavado, sin crear ingresos falsos
+CREATE TABLE IF NOT EXISTS operaciones_servicio (
+    id_operacion_servicio INT AUTO_INCREMENT PRIMARY KEY,
+    patente VARCHAR(10) NOT NULL,
+    id_tipo_vehiculo_lavado INT NULL,
+    tipo_vehiculo_lavado_snapshot VARCHAR(80) NOT NULL,
+    valor_lavado_snapshot INT NOT NULL,
+    fecha_hora_inicio DATETIME NOT NULL,
+    fecha_hora_fin DATETIME NULL,
+    duracion_minutos INT NULL,
+    usuario_inicio VARCHAR(50) NOT NULL,
+    usuario_fin VARCHAR(50) NULL,
+    estado ENUM('ACTIVO', 'FINALIZADO_COBRADO', 'CONVERTIDO_ESTADIA') NOT NULL DEFAULT 'ACTIVO',
+    id_ingreso_generado INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_operaciones_servicio_estado_fecha (estado, fecha_hora_inicio),
+    INDEX idx_operaciones_servicio_patente (patente),
+    INDEX idx_operaciones_servicio_ingreso_generado (id_ingreso_generado),
+    FOREIGN KEY (id_tipo_vehiculo_lavado) REFERENCES tipos_vehiculo_lavado(id_tipo_vehiculo_lavado),
+    FOREIGN KEY (id_ingreso_generado) REFERENCES ingresos(id_ingreso)
 );
 
 -- Tabla de ingresos eliminados
@@ -158,3 +204,18 @@ INSERT INTO configuracion (clave, valor) VALUES
 ('dias_conservar_archivos', '30'),
 ('ultima_limpieza_archivos', '')
 ON DUPLICATE KEY UPDATE valor = VALUES(valor);
+
+INSERT INTO tipos_lavado (codigo, nombre, activo) VALUES
+('lavado_general', 'Lavado', 1)
+ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), activo = VALUES(activo);
+
+INSERT INTO tipos_vehiculo_lavado (codigo, nombre, valor_lavado, activo) VALUES
+('lavado_citycar', 'CityCar', 5000, 1),
+('lavado_suv', 'SUV', 8000, 1),
+('lavado_camioneta', 'Camioneta', 10000, 1),
+('lavado_furgon', 'Furgon', 15000, 1),
+('lavado_minibus', 'Mini bus o vehiculos grandes', 25000, 1)
+ON DUPLICATE KEY UPDATE
+    nombre = VALUES(nombre),
+    valor_lavado = VALUES(valor_lavado),
+    activo = VALUES(activo);
