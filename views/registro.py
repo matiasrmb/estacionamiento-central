@@ -31,7 +31,7 @@ from controllers.operaciones_servicio_controller import (
     iniciar_solo_lavado,
     obtener_solo_lavados_activos,
 )
-from controllers.wash_pricing_controller import list_wash_vehicle_types
+from controllers.wash_pricing_controller import SOLO_LAVADO_PRICE_CONFIG_MESSAGE, list_wash_vehicle_types
 from controllers.cotizaciones_controller import (
     calcular_minutos_estadia_por_horarios,
     preview_cotizacion,
@@ -779,7 +779,12 @@ class RegistroWindow(QWidget):
 
     def actualizar_tabla_activos(self):
         datos = obtener_vehiculos_activos()
-        solo_lavados = obtener_solo_lavados_activos()
+        solo_lavados = []
+        try:
+            solo_lavados = obtener_solo_lavados_activos()
+        except RuntimeError as exc:
+            self.actualizar_estilo_info("warn")
+            self.info_label.setText(str(exc))
         filas = datos + [self._fila_solo_lavado(op) for op in solo_lavados]
         hay_subida_activa = self.subida_vigente_ahora()
 
@@ -1111,9 +1116,13 @@ class RegistroWindow(QWidget):
             self.enfocar_patente()
             return
 
-        tipos = [tipo for tipo in list_wash_vehicle_types() if int(tipo.get("activo", 0))]
+        try:
+            tipos = [tipo for tipo in list_wash_vehicle_types() if int(tipo.get("activo", 0))]
+        except Exception as exc:
+            QMessageBox.critical(self, "Solo lavado no disponible", str(exc))
+            return
         if not tipos:
-            QMessageBox.warning(self, "Sin tipos activos", "No hay tipos de lavado activos configurados.")
+            QMessageBox.warning(self, "Sin tipos activos", SOLO_LAVADO_PRICE_CONFIG_MESSAGE)
             return
 
         opciones = [f"{tipo['nombre']} - ${float(tipo['valor_lavado']):.0f}" for tipo in tipos]
@@ -1129,7 +1138,11 @@ class RegistroWindow(QWidget):
             return
 
         tipo = tipos[opciones.index(seleccion)]
-        resultado = iniciar_solo_lavado(patente, tipo["id_tipo_vehiculo_lavado"], self.usuario)
+        try:
+            resultado = iniciar_solo_lavado(patente, tipo["id_tipo_vehiculo_lavado"], self.usuario)
+        except RuntimeError as exc:
+            QMessageBox.critical(self, "Solo lavado no disponible", str(exc))
+            return
         if not resultado:
             QMessageBox.warning(self, "No se pudo iniciar", "La patente puede tener un ingreso activo o el tipo elegido no está disponible.")
             return
@@ -1145,12 +1158,16 @@ class RegistroWindow(QWidget):
         self.enfocar_patente(limpiar=True)
 
     def finalizar_solo_lavado_desde_operacion(self, id_operacion_servicio, cobrar_ahora=True):
-        if cobrar_ahora:
-            resultado = finalizar_solo_lavado_cobrando(id_operacion_servicio, self.usuario)
-            titulo = "Solo lavado cobrado"
-        else:
-            resultado = finalizar_solo_lavado_como_estadia(id_operacion_servicio, self.usuario)
-            titulo = "Solo lavado convertido en estadía"
+        try:
+            if cobrar_ahora:
+                resultado = finalizar_solo_lavado_cobrando(id_operacion_servicio, self.usuario)
+                titulo = "Solo lavado cobrado"
+            else:
+                resultado = finalizar_solo_lavado_como_estadia(id_operacion_servicio, self.usuario)
+                titulo = "Solo lavado convertido en estadía"
+        except RuntimeError as exc:
+            QMessageBox.critical(self, "Solo lavado no disponible", str(exc))
+            return None
 
         if not resultado:
             QMessageBox.critical(self, "Error", "No se pudo finalizar el solo lavado.")

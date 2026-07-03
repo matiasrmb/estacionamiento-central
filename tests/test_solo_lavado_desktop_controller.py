@@ -1,6 +1,7 @@
 import unittest
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 from controllers import operaciones_servicio_controller as solo_controller
@@ -28,9 +29,57 @@ def fake_db_cursor(cursor):
 
 
 class SoloLavadoDesktopControllerTests(unittest.TestCase):
-    @patch.object(solo_controller, "datetime")
+    def setUp(self):
+        solo_controller._SCHEMA_ENSURED = False
+
     @patch.object(solo_controller, "db_cursor")
-    def test_iniciar_solo_lavado_usa_tipo_activo_y_snapshot_de_precio(self, db_cursor, datetime_mock):
+    def test_asegurar_schema_operaciones_servicio_crea_tabla_y_columnas(self, db_cursor):
+        cursor = FakeCursor()
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        solo_controller.asegurar_schema_operaciones_servicio()
+
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("CREATE TABLE IF NOT EXISTS operaciones_servicio", consultas)
+        self.assertIn("cerrado TINYINT(1) NOT NULL DEFAULT 0", consultas)
+        self.assertIn("ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos", consultas)
+
+    @patch.object(solo_controller, "db_cursor")
+    def test_asegurar_schema_operaciones_servicio_oculta_error_crudo(self, db_cursor):
+        db_cursor.side_effect = RuntimeError("raw db failure")
+
+        with self.assertRaises(RuntimeError) as raised:
+            solo_controller.asegurar_schema_operaciones_servicio()
+
+        self.assertEqual(str(raised.exception), solo_controller.SOLO_LAVADO_SCHEMA_ERROR_MESSAGE)
+        self.assertFalse(solo_controller._SCHEMA_ENSURED)
+
+    def test_registro_view_catches_solo_lavado_runtime_errors(self):
+        source = Path(__file__).resolve().parents[1].joinpath("views", "registro.py").read_text(encoding="utf-8")
+
+        self.assertIn("except RuntimeError as exc:", source)
+        self.assertIn("obtener_solo_lavados_activos()", source)
+        self.assertIn("QMessageBox.critical(self, \"Solo lavado no disponible\", str(exc))", source)
+
+    def test_registro_view_uses_actionable_message_when_no_active_solo_lavado_types(self):
+        source = Path(__file__).resolve().parents[1].joinpath("views", "registro.py").read_text(encoding="utf-8")
+
+        self.assertIn("SOLO_LAVADO_PRICE_CONFIG_MESSAGE", source)
+        self.assertIn("QMessageBox.warning(self, \"Sin tipos activos\", SOLO_LAVADO_PRICE_CONFIG_MESSAGE)", source)
+
+    @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
+    def test_obtener_solo_lavados_activos_propaga_mensaje_claro_de_schema(self, ensure):
+        ensure.side_effect = RuntimeError(solo_controller.SOLO_LAVADO_SCHEMA_ERROR_MESSAGE)
+
+        with self.assertRaises(RuntimeError) as raised:
+            solo_controller.obtener_solo_lavados_activos()
+
+        self.assertEqual(str(raised.exception), solo_controller.SOLO_LAVADO_SCHEMA_ERROR_MESSAGE)
+
+    @patch.object(solo_controller, "datetime")
+    @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
+    @patch.object(solo_controller, "db_cursor")
+    def test_iniciar_solo_lavado_usa_tipo_activo_y_snapshot_de_precio(self, db_cursor, _ensure, datetime_mock):
         ahora = datetime(2026, 7, 1, 10, 0)
         datetime_mock.now.return_value = ahora
         cursor = FakeCursor(fetchone_results=[
@@ -50,8 +99,9 @@ class SoloLavadoDesktopControllerTests(unittest.TestCase):
         self.assertIn("FROM tipos_vehiculo_lavado", consultas)
         self.assertIn("INSERT INTO operaciones_servicio", consultas)
 
+    @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(solo_controller, "db_cursor")
-    def test_iniciar_solo_lavado_rechaza_patente_con_ingreso_activo(self, db_cursor):
+    def test_iniciar_solo_lavado_rechaza_patente_con_ingreso_activo(self, db_cursor, _ensure):
         cursor = FakeCursor(fetchone_results=[{"id_ingreso": 10}])
         db_cursor.return_value = fake_db_cursor(cursor)
 
@@ -63,10 +113,12 @@ class SoloLavadoDesktopControllerTests(unittest.TestCase):
 
     @patch.object(solo_controller, "generar_ticket_solo_lavado")
     @patch.object(solo_controller, "datetime")
+    @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(solo_controller, "db_cursor")
     def test_finalizar_solo_lavado_cobrando_genera_ticket_y_no_crea_ingreso(
         self,
         db_cursor,
+        _ensure,
         datetime_mock,
         generar_ticket,
     ):
@@ -96,10 +148,12 @@ class SoloLavadoDesktopControllerTests(unittest.TestCase):
         self.assertNotIn("INSERT INTO ingresos", consultas)
 
     @patch.object(solo_controller, "datetime")
+    @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(solo_controller, "db_cursor")
     def test_finalizar_solo_lavado_como_estadia_crea_ingreso_desde_fin_y_difiere_cobro(
         self,
         db_cursor,
+        _ensure,
         datetime_mock,
     ):
         inicio = datetime(2026, 7, 1, 10, 0)
