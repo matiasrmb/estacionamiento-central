@@ -149,12 +149,14 @@ def finalizar_solo_lavado_cobrando(id_operacion_servicio, usuario_fin):
             UPDATE operaciones_servicio
             SET fecha_hora_fin = %s,
                 usuario_fin = %s,
-                estado = %s
+                estado = %s,
+                duracion_minutos = TIMESTAMPDIFF(MINUTE, fecha_hora_inicio, %s)
             WHERE id_operacion_servicio = %s
         """, (
             finalizada["fecha_hora_fin"],
             finalizada["usuario_fin"],
             finalizada["estado"],
+            finalizada["fecha_hora_fin"],
             int(id_operacion_servicio),
         ))
 
@@ -206,13 +208,15 @@ def finalizar_solo_lavado_como_estadia(id_operacion_servicio, usuario_fin):
             SET fecha_hora_fin = %s,
                 usuario_fin = %s,
                 estado = %s,
-                id_ingreso_generado = %s
+                id_ingreso_generado = %s,
+                duracion_minutos = TIMESTAMPDIFF(MINUTE, fecha_hora_inicio, %s)
             WHERE id_operacion_servicio = %s
         """, (
             finalizada["fecha_hora_fin"],
             finalizada["usuario_fin"],
             finalizada["estado"],
             finalizada["id_ingreso_generado"],
+            finalizada["fecha_hora_fin"],
             int(id_operacion_servicio),
         ))
 
@@ -240,3 +244,20 @@ def obtener_operacion_convertida_por_ingreso(id_ingreso):
     except Exception as exc:
         print(f"[WARN] No se pudo consultar lavado convertido: {exc}")
         return None
+
+
+def obtener_solo_lavados_activos():
+    try:
+        with db_cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT id_operacion_servicio, patente, tipo_vehiculo_lavado_snapshot,
+                       valor_lavado_snapshot, fecha_hora_inicio,
+                       TIMESTAMPDIFF(MINUTE, fecha_hora_inicio, NOW()) AS minutos
+                FROM operaciones_servicio
+                WHERE estado = 'ACTIVO'
+                ORDER BY fecha_hora_inicio DESC
+            """)
+            return cursor.fetchall()
+    except Exception as exc:
+        print(f"[WARN] No se pudieron consultar solo lavados activos: {exc}")
+        return []

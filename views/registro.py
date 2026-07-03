@@ -18,6 +18,7 @@ from controllers.registro_controller import (
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from controllers.config_controller import obtener_configuracion
+from controllers.tarifas_controller import calcular_tarifa, describir_detalle_tarifa
 from controllers.dashboard_controller import obtener_resumen_banos
 from controllers.lavados_controller import (
     finalizar_lavado,
@@ -28,13 +29,28 @@ from controllers.operaciones_servicio_controller import (
     finalizar_solo_lavado_cobrando,
     finalizar_solo_lavado_como_estadia,
     iniciar_solo_lavado,
+    obtener_solo_lavados_activos,
 )
 from controllers.wash_pricing_controller import list_wash_vehicle_types
+from controllers.cotizaciones_controller import (
+    calcular_minutos_estadia_por_horarios,
+    preview_cotizacion,
+    resolve_wash_quote_options,
+    wash_quote_options_from_legacy_config,
+)
 from views.subida_dialog import SubidaDialog
 
 
 def formatear_fecha_hora(valor):
     return valor.strftime("%d/%m/%Y %H:%M")
+
+
+def _es_tabla_lavado_faltante(exc):
+    mensaje = str(exc).lower()
+    tablas_lavado = ("tipos_vehiculo_lavado", "tipos_vehiculos_lavado")
+    return any(tabla in mensaje for tabla in tablas_lavado) and (
+        "doesn't exist" in mensaje or "does not exist" in mensaje or "no such table" in mensaje
+    )
 
 
 class RegistroWindow(QWidget):
@@ -180,8 +196,11 @@ class RegistroWindow(QWidget):
 
         self.boton_solo_lavado = QPushButton("Iniciar solo lavado")
         self.boton_solo_lavado.setMinimumHeight(32)
-        self.boton_solo_lavado.setVisible(False)
         self.boton_solo_lavado.clicked.connect(self.iniciar_solo_lavado_desde_patente)
+
+        self.boton_cotizar = QPushButton("Cotizaciones")
+        self.boton_cotizar.setMinimumHeight(32)
+        self.boton_cotizar.clicked.connect(self.mostrar_cotizacion)
 
         layout_acciones.addWidget(self.boton_ingreso)
         layout_acciones.addWidget(self.boton_ingreso_personalizado)
@@ -190,6 +209,7 @@ class RegistroWindow(QWidget):
         layout_acciones.addWidget(self.boton_bano)
         layout_acciones.addWidget(self.boton_lavado)
         layout_acciones.addWidget(self.boton_solo_lavado)
+        layout_acciones.addWidget(self.boton_cotizar)
 
         if self.rol == "administrador":
             self.boton_subida = QPushButton("Subida temporal de precios")
@@ -759,16 +779,18 @@ class RegistroWindow(QWidget):
 
     def actualizar_tabla_activos(self):
         datos = obtener_vehiculos_activos()
+        solo_lavados = obtener_solo_lavados_activos()
+        filas = datos + [self._fila_solo_lavado(op) for op in solo_lavados]
         hay_subida_activa = self.subida_vigente_ahora()
 
         self.tabla_activos.setSortingEnabled(False)
         self.tabla_activos.setUpdatesEnabled(False)
         self.tabla_activos.clearContents()
-        self.tabla_activos.setRowCount(len(datos) + 1)
+        self.tabla_activos.setRowCount(len(filas) + 1)
 
         total = 0
 
-        for i, vehiculo in enumerate(datos):
+        for i, vehiculo in enumerate(filas):
             patente = vehiculo["patente"]
             hora = vehiculo["hora"]
             monto = vehiculo["monto"]
@@ -777,9 +799,11 @@ class RegistroWindow(QWidget):
             patente_mostrar = f"▲ {patente}" if hay_subida_activa else patente
 
             item_patente = QTableWidgetItem(patente_mostrar)
-            item_patente.setData(Qt.UserRole, vehiculo["id_ingreso"])
+            item_patente.setData(Qt.UserRole, vehiculo.get("id_ingreso"))
             item_patente.setData(Qt.UserRole + 1, vehiculo.get("patente_base", patente))
             item_patente.setData(Qt.UserRole + 2, vehiculo.get("en_lavado", False))
+            item_patente.setData(Qt.UserRole + 3, vehiculo.get("tipo_fila", "ingreso"))
+            item_patente.setData(Qt.UserRole + 4, vehiculo.get("id_operacion_servicio"))
             item_patente.setFlags(item_patente.flags() ^ Qt.ItemIsEditable)
             item_patente.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 0, item_patente)
@@ -799,9 +823,10 @@ class RegistroWindow(QWidget):
             item_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 3, item_monto)
 
-            total += monto
+            if vehiculo.get("tipo_fila") != "solo_lavado":
+                total += monto
 
-        fila_total = len(datos)
+        fila_total = len(filas)
 
         item_vacio_0 = QTableWidgetItem("")
         item_vacio_1 = QTableWidgetItem("")
@@ -823,7 +848,7 @@ class RegistroWindow(QWidget):
 
         self.aplicar_estilo_fila_total(fila_total)
 
-        self.grupo_tabla.setVisible(len(datos) > 0)
+        self.grupo_tabla.setVisible(len(filas) > 0)
         self.label_leyenda_tabla.setVisible(len(datos) > 0 and hay_subida_activa)
 
         resumen_banos = obtener_resumen_banos()
@@ -840,6 +865,18 @@ class RegistroWindow(QWidget):
 
         self.tabla_activos.setUpdatesEnabled(True)
         self.tabla_activos.viewport().update()
+
+    def _fila_solo_lavado(self, operacion):
+        return {
+            "patente": f"Solo lavado: {operacion['patente']}",
+            "patente_base": operacion["patente"],
+            "hora": self.formatear_fecha_hora_info(operacion.get("fecha_hora_inicio")),
+            "minutos": int(operacion.get("minutos") or 0),
+            "monto": float(operacion.get("valor_lavado_snapshot") or 0),
+            "en_lavado": True,
+            "tipo_fila": "solo_lavado",
+            "id_operacion_servicio": operacion["id_operacion_servicio"],
+        }
 
     def actualizar_estado_subida(self):
         subida = obtener_subida_activa()
@@ -985,6 +1022,13 @@ class RegistroWindow(QWidget):
             return None
 
         id_ingreso = item_patente.data(Qt.UserRole)
+        if item_patente.data(Qt.UserRole + 3) == "solo_lavado":
+            return {
+                "tipo_fila": "solo_lavado",
+                "id_operacion_servicio": item_patente.data(Qt.UserRole + 4),
+                "patente": item_patente.data(Qt.UserRole + 1),
+                "en_lavado": True,
+            }
         if not id_ingreso:
             return None
 
@@ -992,6 +1036,7 @@ class RegistroWindow(QWidget):
             "id_ingreso": id_ingreso,
             "patente": item_patente.data(Qt.UserRole + 1),
             "en_lavado": bool(item_patente.data(Qt.UserRole + 2)),
+            "tipo_fila": "ingreso",
         }
 
     def alternar_lavado_seleccionado(self):
@@ -1002,6 +1047,10 @@ class RegistroWindow(QWidget):
                 "Selecciona un vehículo",
                 "Selecciona un vehículo activo en la tabla para iniciar o finalizar lavado."
             )
+            return
+
+        if vehiculo.get("tipo_fila") == "solo_lavado":
+            self.mostrar_finalizacion_solo_lavado(vehiculo["id_operacion_servicio"])
             return
 
         if vehiculo["en_lavado"]:
@@ -1110,6 +1159,131 @@ class RegistroWindow(QWidget):
         QMessageBox.information(self, titulo, f"Patente: {resultado['patente']}")
         self.actualizar_tabla_activos()
         return resultado
+
+    def mostrar_finalizacion_solo_lavado(self, id_operacion_servicio):
+        seleccion, confirmado = QInputDialog.getItem(
+            self,
+            "Finalizar solo lavado",
+            "Selecciona cómo finalizar el solo lavado:",
+            ["Cobrar ahora", "Convertir a estadía"],
+            0,
+            False,
+        )
+        if not confirmado or not seleccion:
+            return
+        self.finalizar_solo_lavado_desde_operacion(
+            id_operacion_servicio,
+            cobrar_ahora=seleccion == "Cobrar ahora",
+        )
+
+    def mostrar_cotizacion(self):
+        tipo, confirmado = QInputDialog.getItem(
+            self,
+            "Cotizaciones",
+            "Selecciona qué cotizar:",
+            ["Estadía", "Lavado", "Mensualidad"],
+            0,
+            False,
+        )
+        if not confirmado or not tipo:
+            return
+
+        try:
+            if tipo == "Estadía":
+                tiempos = self._pedir_horarios_cotizacion_estadia()
+                if tiempos is None:
+                    return
+                hora_ingreso, hora_salida = tiempos
+                minutos = calcular_minutos_estadia_por_horarios(hora_ingreso, hora_salida)
+                monto = calcular_tarifa(minutos)
+                cotizacion = preview_cotizacion({"estadia": {"minutos": minutos, "monto_estadia": monto}})
+                detalle = (
+                    f"Ingreso: {hora_ingreso}\n"
+                    f"Salida: {hora_salida}\n"
+                    f"Duración: {minutos} min\n"
+                    f"{describir_detalle_tarifa(minutos)}"
+                )
+            elif tipo == "Lavado":
+                try:
+                    tipos = resolve_wash_quote_options(list_wash_vehicle_types())
+                except Exception as exc:
+                    if not _es_tabla_lavado_faltante(exc):
+                        raise
+                    tipos = wash_quote_options_from_legacy_config()
+                if not tipos:
+                    QMessageBox.warning(
+                        self,
+                        "Sin precios de lavado",
+                        "No hay precios de lavado configurados para cotizar.",
+                    )
+                    return
+                opciones = [f"{item['nombre']} - ${float(item['valor_lavado']):.0f}" for item in tipos]
+                seleccion, ok = QInputDialog.getItem(self, "Cotizar lavado", "Tipo de lavado:", opciones, 0, False)
+                if not ok or not seleccion:
+                    return
+                elegido = tipos[opciones.index(seleccion)]
+                cotizacion = preview_cotizacion({
+                    "lavado": {
+                        "tipo_lavado": elegido["nombre"],
+                        "monto_lavado": int(elegido["valor_lavado"]),
+                    }
+                })
+                detalle = f"{elegido['nombre']}"
+            else:
+                monto, ok = QInputDialog.getInt(
+                    self,
+                    "Cotizar mensualidad",
+                    "Monto mensual negociado:",
+                    0,
+                    0,
+                )
+                if not ok:
+                    return
+                if monto <= 0:
+                    QMessageBox.warning(self, "Monto inválido", "Ingresá un monto mensual mayor a cero.")
+                    return
+                patente = self.input_patente.text().strip().upper() or "MENSUAL"
+                cotizacion = preview_cotizacion({
+                    "mensualidad": {"vehiculos": [{"patente": patente, "monto_mensual": monto}]}
+                })
+                detalle = f"Mensual: ${monto:.0f}\nEquivalente diario (30 días): ${round(monto / 30):.0f}"
+
+            total = cotizacion.get("total", cotizacion.get("monto", 0))
+            QMessageBox.information(
+                self,
+                "Cotización",
+                f"{detalle}\nTotal estimado: ${float(total):.0f}",
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", f"No se pudo generar la cotización: {exc}")
+
+    def _pedir_horarios_cotizacion_estadia(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Cotizar estadía")
+
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("Ingresá la hora de ingreso y salida (HH:MM)."))
+
+        input_ingreso = QLineEdit("13:00")
+        input_ingreso.setInputMask("99:99")
+        input_ingreso.setPlaceholderText("HH:MM")
+        input_salida = QLineEdit("19:00")
+        input_salida.setInputMask("99:99")
+        input_salida.setPlaceholderText("HH:MM")
+
+        layout.addWidget(QLabel("Hora de ingreso"))
+        layout.addWidget(input_ingreso)
+        layout.addWidget(QLabel("Hora de salida"))
+        layout.addWidget(input_salida)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() != QDialog.Accepted:
+            return None
+        return input_ingreso.text().strip(), input_salida.text().strip()
 
     def reingresar_vehiculo(self):
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado
@@ -1346,6 +1520,9 @@ class RegistroWindow(QWidget):
             return
 
         patente = item_patente.data(Qt.UserRole + 1) or item_patente.text().replace("▲ ", "").strip()
+        if item_patente.data(Qt.UserRole + 3) == "solo_lavado":
+            self.mostrar_finalizacion_solo_lavado(item_patente.data(Qt.UserRole + 4))
+            return
         if not patente:
             return
 
