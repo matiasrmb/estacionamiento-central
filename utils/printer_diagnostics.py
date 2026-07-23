@@ -16,6 +16,29 @@ SUPPORTED_PRINT_PATH = (
 )
 
 
+def format_ticket_queue_status(status: dict) -> str:
+    """Format the in-memory ticket queue status for support/debug UI."""
+    submitted = status.get("submitted", 0)
+    succeeded = status.get("succeeded", 0)
+    failed = status.get("failed", 0)
+    message = (
+        "Estado de tickets: "
+        f"enviados {submitted}, correctos {succeeded}, fallidos {failed}."
+    )
+
+    last_failure_description = status.get("last_failure_description")
+    last_failure_error = status.get("last_failure_error")
+    if last_failure_description or last_failure_error:
+        failure_parts = []
+        if last_failure_description:
+            failure_parts.append(f"último fallo: {last_failure_description}")
+        if last_failure_error:
+            failure_parts.append(f"error: {last_failure_error}")
+        message = f"{message} {'; '.join(failure_parts)}."
+
+    return message
+
+
 def build_printer_diagnostics(
     *,
     sumatra_path: str,

@@ -2,10 +2,12 @@
 Controlador de operaciones de ingreso, salida y estado de vehículos en el estacionamiento.
 """
 
+import logging
 from datetime import datetime, timedelta
 
 from utils.db import db_cursor
 from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
+from utils.ticket_queue import enqueue_ticket_job
 from controllers.tarifas_controller import (
     calcular_tarifa,
     calcular_tarifa_con_contexto,
@@ -22,6 +24,16 @@ from controllers.lavados_controller import (
 )
 from controllers.operaciones_servicio_controller import obtener_operacion_convertida_por_ingreso
 from utils.slowlog import slow_operation
+
+
+logger = logging.getLogger(__name__)
+
+
+def _enqueue_ticket_safely(description, func, *args, **kwargs):
+    try:
+        enqueue_ticket_job(description, func, *args, **kwargs)
+    except Exception:
+        logger.exception("No se pudo encolar el ticket: %s", description)
 
 
 def calcular_minutos_estadia(fecha_hora_ingreso, fecha_hora_salida=None):
@@ -218,7 +230,12 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
         print(f"Error al registrar ingreso: {e}")
         return None
 
-    generar_ticket_ingreso(patente, fecha_hora)
+    _enqueue_ticket_safely(
+        f"ticket ingreso {patente}",
+        generar_ticket_ingreso,
+        patente,
+        fecha_hora,
+    )
     return {
         "patente": patente,
         "fecha_hora_ingreso": fecha_hora,
@@ -309,7 +326,9 @@ def registrar_salida_detallada(patente, usuario):
         print(f"Error al registrar salida: {e}")
         return None
 
-    generar_ticket_salida(
+    _enqueue_ticket_safely(
+        f"ticket salida {patente}",
+        generar_ticket_salida,
         patente=patente,
         fecha_hora_ingreso=fecha_ingreso,
         fecha_hora_salida=ahora,

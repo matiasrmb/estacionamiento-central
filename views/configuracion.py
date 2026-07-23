@@ -20,8 +20,9 @@ from utils.printer_manager import (obtener_impresoras_instaladas,
                                    cargar_impresora_guardada,
                                    guardar_impresora_tickets,
 )
-from utils.printer_diagnostics import SUPPORTED_PRINT_PATH
+from utils.printer_diagnostics import SUPPORTED_PRINT_PATH, format_ticket_queue_status
 from utils.ticket import imprimir_pdf_directamente
+from utils.ticket_queue import get_ticket_queue_status
 
 class ConfiguracionWindow(QWidget):
     """
@@ -239,11 +240,21 @@ class ConfiguracionWindow(QWidget):
         self.btn_probar_impresion.setMinimumHeight(38)
         self.btn_probar_impresion.clicked.connect(self.probar_impresion_ticket)
 
+        self.ticket_queue_status_label = QLabel("")
+        self.ticket_queue_status_label.setObjectName("SubtituloSeccion")
+        self.ticket_queue_status_label.setWordWrap(True)
+
+        self.btn_actualizar_estado_tickets = QPushButton("Actualizar estado de tickets")
+        self.btn_actualizar_estado_tickets.setMinimumHeight(38)
+        self.btn_actualizar_estado_tickets.clicked.connect(self.actualizar_estado_tickets)
+
         layout_impresion.addWidget(label_impresora, 0, 0)
         layout_impresion.addWidget(self.impresora_combo, 0, 1)
         layout_impresion.addWidget(self.btn_actualizar_impresoras, 0, 2)
         layout_impresion.addWidget(self.btn_guardar_impresora, 1, 1)
         layout_impresion.addWidget(self.btn_probar_impresion, 1, 2)
+        layout_impresion.addWidget(self.ticket_queue_status_label, 2, 0, 1, 2)
+        layout_impresion.addWidget(self.btn_actualizar_estado_tickets, 2, 2)
 
         layout_impresion.setColumnStretch(1, 1)
 
@@ -284,6 +295,7 @@ class ConfiguracionWindow(QWidget):
         layout.addStretch()
 
         self.cargar_impresoras_en_combo()
+        self.actualizar_estado_tickets()
         self.setLayout(layout)
 
     def recargar_configuracion(self):
@@ -302,7 +314,12 @@ class ConfiguracionWindow(QWidget):
         self.limpieza_activa_check.setChecked(self.config.get("limpieza_automatica_activa", "1") == "1")
         self.dias_limpieza_input.setText(self.config.get("dias_conservar_archivos", "30"))
         self.cargar_impresoras_en_combo()
+        self.actualizar_estado_tickets()
         QMessageBox.information(self, "Actualizado", "Configuración recargada desde la base de datos.")
+
+    def actualizar_estado_tickets(self):
+        status = get_ticket_queue_status()
+        self.ticket_queue_status_label.setText(format_ticket_queue_status(status))
 
     def cargar_impresoras_en_combo(self):
         """

@@ -4,9 +4,13 @@ Módulo de conexión a la base de datos MySQL utilizando configuración desde co
 
 import os
 import sys
+import logging
 import mysql.connector
 from configparser import ConfigParser
 from contextlib import contextmanager
+
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseConnectionError(RuntimeError):
@@ -53,16 +57,16 @@ def get_connection():
             break
 
     if not config_path:
-        print("No se encontró config.ini en las rutas esperadas.")
+        logger.error("No se encontró config.ini en las rutas esperadas.")
         return None
 
     archivos = config.read(config_path, encoding="utf-8")
     if not archivos:
-        print(f"No se pudo leer config.ini desde: {config_path}")
+        logger.error("No se pudo leer config.ini desde: %s", config_path)
         return None
 
     if not config.has_section("mysql"):
-        print("El archivo config.ini no contiene la sección [mysql].")
+        logger.error("El archivo config.ini no contiene la sección [mysql].")
         return None
 
     db_config = {
@@ -77,7 +81,7 @@ def get_connection():
         connection = mysql.connector.connect(charset="utf8mb4", **db_config)
         return connection
     except mysql.connector.Error as err:
-        print(f"Error al conectar a la base de datos: {err}")
+        logger.error("Error al conectar a la base de datos: %s", err)
         return None
 
 

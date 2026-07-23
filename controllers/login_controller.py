@@ -6,8 +6,13 @@ y salida, y calcular estadísticas del turno.
 """
 
 import bcrypt
+import logging
 from utils.db import db_cursor
 from datetime import datetime, timedelta
+
+
+logger = logging.getLogger(__name__)
+
 
 def validar_usuario(usuario, clave_plana):
     """
@@ -26,7 +31,7 @@ def validar_usuario(usuario, clave_plana):
             cursor.execute(query, (usuario,))
             resultado = cursor.fetchone()
     except Exception as e:
-        print(f"Error al validar usuario: {e}")
+        logger.exception("Error al validar usuario: %s", e)
         return False, None
     
     if resultado:
@@ -149,11 +154,7 @@ def calcular_totales_turno(cursor, usuario, hora_inicio, hora_fin):
     return cantidad, total
 
 def hay_usuarios_registrados():
-    try:
-        with db_cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM usuarios")
-            resultado = cursor.fetchone()
-        return resultado[0] > 0
-    except Exception as e:
-        print(f"Error al verificar usuarios: {e}")
-        return False  # Por defecto, si falla, se asume que no hay usuarios
+    with db_cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        resultado = cursor.fetchone()
+    return resultado[0] > 0

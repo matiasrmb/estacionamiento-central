@@ -59,7 +59,7 @@ class FakeDbCursorContext:
 
 
 class RegistrarIngresoTests(unittest.TestCase):
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_si_la_patente_ya_tiene_un_ingreso_activo(
@@ -76,7 +76,7 @@ class RegistrarIngresoTests(unittest.TestCase):
         db_cursor.assert_not_called()
         generar_ticket.assert_not_called()
 
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registra_ingreso_creando_vehiculo_si_no_existe(
@@ -98,7 +98,7 @@ class RegistrarIngresoTests(unittest.TestCase):
         self.assertIn("INSERT INTO vehiculos", consultas)
         self.assertIn("INSERT INTO ingresos", consultas)
 
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registrar_ingreso_detallado_retorna_fecha_de_ingreso(
@@ -117,7 +117,7 @@ class RegistrarIngresoTests(unittest.TestCase):
         self.assertIsInstance(resultado["fecha_hora_ingreso"], datetime)
         generar_ticket.assert_called_once()
 
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registra_ingreso_usando_vehiculo_existente(
@@ -139,7 +139,7 @@ class RegistrarIngresoTests(unittest.TestCase):
         self.assertNotIn("INSERT INTO vehiculos", consultas)
         self.assertIn("INSERT INTO ingresos", consultas)
 
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registrar_ingreso_detallado_usa_fecha_hora_personalizada_valida(
@@ -156,14 +156,19 @@ class RegistrarIngresoTests(unittest.TestCase):
         resultado = registro_controller.registrar_ingreso_detallado("ABC123", fecha_personalizada)
 
         self.assertEqual(resultado["fecha_hora_ingreso"], fecha_personalizada)
-        generar_ticket.assert_called_once_with("ABC123", fecha_personalizada)
+        generar_ticket.assert_called_once_with(
+            "ticket ingreso ABC123",
+            registro_controller.generar_ticket_ingreso,
+            "ABC123",
+            fecha_personalizada,
+        )
         insert_ingreso = next(
             params for query, params in cursor.executed
             if "INSERT INTO ingresos" in query
         )
         self.assertEqual(insert_ingreso, (77, fecha_personalizada))
 
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registrar_ingreso_retorna_true_con_fecha_hora_personalizada_valida(
@@ -180,9 +185,35 @@ class RegistrarIngresoTests(unittest.TestCase):
         resultado = registro_controller.registrar_ingreso("ABC123", fecha_personalizada)
 
         self.assertTrue(resultado)
-        generar_ticket.assert_called_once_with("ABC123", fecha_personalizada)
+        generar_ticket.assert_called_once_with(
+            "ticket ingreso ABC123",
+            registro_controller.generar_ticket_ingreso,
+            "ABC123",
+            fecha_personalizada,
+        )
 
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_registrar_ingreso_no_falla_si_no_puede_encolar_ticket(
+        self,
+        db_cursor,
+        obtener_activos,
+        generar_ticket,
+    ):
+        cursor = FakeCursor(fetchone_results=[(77,)])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_activos.return_value = []
+        generar_ticket.side_effect = RuntimeError("queue unavailable")
+
+        with patch.object(registro_controller.logger, "exception") as log_exception:
+            resultado = registro_controller.registrar_ingreso("ABC123")
+
+        self.assertTrue(resultado)
+        generar_ticket.assert_called_once()
+        log_exception.assert_called_once()
+
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_personalizado_futuro(
@@ -200,7 +231,7 @@ class RegistrarIngresoTests(unittest.TestCase):
         db_cursor.assert_not_called()
         generar_ticket.assert_not_called()
 
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_personalizado_mayor_a_cuatro_horas(
@@ -218,7 +249,7 @@ class RegistrarIngresoTests(unittest.TestCase):
         db_cursor.assert_not_called()
         generar_ticket.assert_not_called()
 
-    @patch.object(registro_controller, "generar_ticket_ingreso")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_personalizado_de_dia_anterior(
@@ -322,7 +353,7 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertIsNone(resultado)
         db_cursor.assert_not_called()
 
-    @patch.object(registro_controller, "generar_ticket_salida")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
@@ -361,10 +392,12 @@ class RegistrarSalidaTests(unittest.TestCase):
         db_cursor.assert_called_once_with(commit=True)
         calcular_tarifa.assert_called_once()
         generar_ticket.assert_called_once()
+        self.assertEqual(generar_ticket.call_args.args[0], "ticket salida ABC123")
+        self.assertIs(generar_ticket.call_args.args[1], registro_controller.generar_ticket_salida)
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("UPDATE ingresos", consultas)
 
-    @patch.object(registro_controller, "generar_ticket_salida")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
@@ -412,7 +445,7 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertEqual(detalle["estadia"]["inicio"], fecha_ingreso)
         self.assertEqual(detalle["estadia"]["monto"], 1500)
 
-    @patch.object(registro_controller, "generar_ticket_salida")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
@@ -453,7 +486,7 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertEqual(resultado["total_lavados"], 8000)
         self.assertIsNone(generar_ticket.call_args.kwargs["detalle_secciones"])
 
-    @patch.object(registro_controller, "generar_ticket_salida")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "calcular_minutos_lavado")
@@ -492,7 +525,7 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertEqual(resultado["tarifa"], 1500)
         generar_ticket.assert_called_once()
 
-    @patch.object(registro_controller, "generar_ticket_salida")
+    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "calcular_minutos_lavado")

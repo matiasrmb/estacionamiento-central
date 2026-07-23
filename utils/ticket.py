@@ -4,6 +4,7 @@ en formato PDF optimizado para impresoras térmicas de 58mm.
 """
 
 from fpdf import FPDF
+import logging
 import os
 import platform
 import subprocess
@@ -11,6 +12,9 @@ from pathlib import Path
 
 from utils.printer_manager import resolver_impresora_tickets
 from utils.slowlog import slow_operation
+
+
+logger = logging.getLogger(__name__)
 
 
 @slow_operation("pdf_generation")
@@ -266,8 +270,8 @@ def imprimir_pdf_directamente(ruta, nombre_impresora=None):
         )
         return True
 
-    except Exception as e:
-        print(f"Error al imprimir el ticket con SumatraPDF: {e}")
+    except Exception:
+        logger.exception("Error al imprimir el ticket con SumatraPDF")
         return False
 
 def abrir_pdf(ruta):

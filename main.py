@@ -1,11 +1,17 @@
 from views.login import LoginWindow
 from views.setup_window import SetupWindow
 from controllers.login_controller import hay_usuarios_registrados
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 from styles import GLOBAL_STYLESHEET
 from utils.file_cleanup import ejecutar_limpieza_periodica
+from utils.logging_config import setup_logging
 from utils.update_notifier import schedule_startup_update_check
+import logging
 import sys
+
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 def mostrar_login():
@@ -22,15 +28,27 @@ if __name__ == "__main__":
     try:
         resultado_limpieza = ejecutar_limpieza_periodica()
         if resultado_limpieza.get("ejecutada"):
-            print(f"Limpieza de archivos: {resultado_limpieza['eliminados']} eliminados.")
+            logger.info("Limpieza de archivos: %s eliminados.", resultado_limpieza["eliminados"])
     except Exception as e:
-        print(f"No se pudo ejecutar la limpieza de archivos: {e}")
+        logger.exception("No se pudo ejecutar la limpieza de archivos: %s", e)
 
-    if hay_usuarios_registrados():
-        print("Usuarios encontrados. Abriendo LoginWindow.")
+    try:
+        usuarios_registrados = hay_usuarios_registrados()
+    except Exception as e:
+        logger.exception("No se pudo verificar usuarios registrados: %s", e)
+        QMessageBox.critical(
+            None,
+            "Error de conexión",
+            "No se pudo conectar o verificar la base de datos.\n\n"
+            "Revise config.ini, que MySQL esté iniciado y que las credenciales sean correctas.",
+        )
+        sys.exit(1)
+
+    if usuarios_registrados:
+        logger.info("Usuarios encontrados. Abriendo LoginWindow.")
         ventana = LoginWindow()
     else:
-        print("No hay usuarios. Abriendo SetupWindow.")
+        logger.info("No hay usuarios. Abriendo SetupWindow.")
         ventana = SetupWindow(mostrar_login)
 
     ventana.show()

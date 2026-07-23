@@ -118,5 +118,32 @@ class RegistrarAsistenciaSalidaTests(unittest.TestCase):
         self.assertIn("UPDATE asistencias", consultas)
 
 
+class HayUsuariosRegistradosTests(unittest.TestCase):
+    @patch.object(login_controller, "db_cursor")
+    def test_retorna_true_si_hay_usuarios(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[(1,)])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        resultado = login_controller.hay_usuarios_registrados()
+
+        self.assertTrue(resultado)
+
+    @patch.object(login_controller, "db_cursor")
+    def test_retorna_false_si_no_hay_usuarios(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[(0,)])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        resultado = login_controller.hay_usuarios_registrados()
+
+        self.assertFalse(resultado)
+
+    @patch.object(login_controller, "db_cursor")
+    def test_propaga_error_de_db(self, db_cursor):
+        db_cursor.side_effect = RuntimeError("db unavailable")
+
+        with self.assertRaises(RuntimeError):
+            login_controller.hay_usuarios_registrados()
+
+
 if __name__ == "__main__":
     unittest.main()
