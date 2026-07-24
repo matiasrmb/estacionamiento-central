@@ -5,7 +5,8 @@ from fpdf import FPDF
 from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QComboBox, QMessageBox,
-    QGridLayout, QSizePolicy, QFrame, QCheckBox
+    QGridLayout, QSizePolicy, QFrame, QCheckBox,
+    QHBoxLayout, QHeaderView, QTableWidget, QTableWidgetItem
 )
 from PySide6.QtCore import Qt
 
@@ -15,6 +16,10 @@ from controllers.config_controller import (
     actualizar_configuracion,
 )
 from controllers.tarifas_controller import generar_tramos_automaticos
+from controllers.print_jobs_controller import (
+    listar_trabajos_impresion_fallidos,
+    reintentar_trabajo_impresion_fallido,
+)
 from utils.printer_manager import (obtener_impresoras_instaladas, 
                                    obtener_impresora_predeterminada,
                                    cargar_impresora_guardada,
@@ -259,6 +264,48 @@ class ConfiguracionWindow(QWidget):
         layout_impresion.setColumnStretch(1, 1)
 
         layout_impresion_wrapper.addLayout(layout_impresion)
+
+        titulo_fallidos = QLabel("Trabajos de impresión fallidos")
+        titulo_fallidos.setObjectName("EtiquetaFormulario")
+        layout_impresion_wrapper.addWidget(titulo_fallidos)
+
+        self.tabla_trabajos_fallidos = QTableWidget()
+        self.tabla_trabajos_fallidos.setColumnCount(7)
+        self.tabla_trabajos_fallidos.setHorizontalHeaderLabels(
+            ["ID", "Tipo", "Destino", "Patente", "Intentos", "Fecha", "Error"]
+        )
+        self.tabla_trabajos_fallidos.setAlternatingRowColors(True)
+        self.tabla_trabajos_fallidos.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla_trabajos_fallidos.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla_trabajos_fallidos.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tabla_trabajos_fallidos.setMinimumHeight(150)
+        self.tabla_trabajos_fallidos.verticalHeader().setDefaultSectionSize(34)
+        self.tabla_trabajos_fallidos.setStyleSheet("""
+            QTableWidget::item:selected {
+                background-color: #93c5fd;
+                color: #111827;
+            }
+            QTableWidget::item:hover:!selected {
+                background-color: #eff6ff;
+            }
+        """)
+
+        encabezado_fallidos = self.tabla_trabajos_fallidos.horizontalHeader()
+        for columna, ancho in enumerate((55, 80, 115, 90, 75, 135)):
+            encabezado_fallidos.setSectionResizeMode(columna, QHeaderView.Fixed)
+            self.tabla_trabajos_fallidos.setColumnWidth(columna, ancho)
+        encabezado_fallidos.setSectionResizeMode(6, QHeaderView.Stretch)
+        layout_impresion_wrapper.addWidget(self.tabla_trabajos_fallidos)
+
+        acciones_fallidos = QHBoxLayout()
+        self.btn_actualizar_trabajos_fallidos = QPushButton("Actualizar trabajos fallidos")
+        self.btn_actualizar_trabajos_fallidos.clicked.connect(self.actualizar_trabajos_impresion_fallidos)
+        self.btn_reintentar_trabajo_fallido = QPushButton("Reintentar trabajo seleccionado")
+        self.btn_reintentar_trabajo_fallido.clicked.connect(self.reintentar_trabajo_impresion_seleccionado)
+        acciones_fallidos.addWidget(self.btn_actualizar_trabajos_fallidos)
+        acciones_fallidos.addWidget(self.btn_reintentar_trabajo_fallido)
+        acciones_fallidos.addStretch()
+        layout_impresion_wrapper.addLayout(acciones_fallidos)
         layout.addWidget(panel_impresion)
 
         # =========================================================
@@ -296,6 +343,7 @@ class ConfiguracionWindow(QWidget):
 
         self.cargar_impresoras_en_combo()
         self.actualizar_estado_tickets()
+        self.actualizar_trabajos_impresion_fallidos()
         self.setLayout(layout)
 
     def recargar_configuracion(self):
@@ -315,11 +363,76 @@ class ConfiguracionWindow(QWidget):
         self.dias_limpieza_input.setText(self.config.get("dias_conservar_archivos", "30"))
         self.cargar_impresoras_en_combo()
         self.actualizar_estado_tickets()
+        self.actualizar_trabajos_impresion_fallidos()
         QMessageBox.information(self, "Actualizado", "Configuración recargada desde la base de datos.")
 
     def actualizar_estado_tickets(self):
         status = get_ticket_queue_status()
         self.ticket_queue_status_label.setText(format_ticket_queue_status(status))
+
+    def actualizar_trabajos_impresion_fallidos(self):
+        try:
+            trabajos = listar_trabajos_impresion_fallidos()
+        except Exception as e:
+            self.tabla_trabajos_fallidos.setRowCount(0)
+            QMessageBox.warning(self, "Trabajos de impresión", f"No se pudieron cargar los trabajos fallidos:\n{e}")
+            return
+
+        self.tabla_trabajos_fallidos.setRowCount(len(trabajos))
+        for fila, trabajo in enumerate(trabajos):
+            intentos = f"{trabajo['intentos']}/{trabajo['max_intentos']}"
+            valores = [
+                trabajo["id"],
+                trabajo["tipo"],
+                trabajo["destino"] or "-",
+                trabajo["patente"] or "-",
+                intentos,
+                trabajo["updated_at"],
+                trabajo["last_error"] or "-",
+            ]
+            for columna, valor in enumerate(valores):
+                item = QTableWidgetItem(str(valor))
+                if columna == 6:
+                    item.setToolTip(str(valor))
+                self.tabla_trabajos_fallidos.setItem(fila, columna, item)
+
+    def reintentar_trabajo_impresion_seleccionado(self):
+        fila = self.tabla_trabajos_fallidos.currentRow()
+        if fila < 0:
+            QMessageBox.warning(self, "Trabajos de impresión", "Selecciona un trabajo fallido para reintentar.")
+            return
+
+        id_trabajo = int(self.tabla_trabajos_fallidos.item(fila, 0).text())
+        confirmar = QMessageBox.question(
+            self,
+            "Confirmar reintento",
+            f"¿Deseas reintentar el trabajo de impresión #{id_trabajo}?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirmar != QMessageBox.Yes:
+            return
+
+        try:
+            reintentado = reintentar_trabajo_impresion_fallido(id_trabajo)
+        except Exception as e:
+            QMessageBox.critical(self, "Trabajos de impresión", f"No se pudo reintentar el trabajo:\n{e}")
+            return
+
+        if not reintentado:
+            QMessageBox.warning(
+                self,
+                "Trabajos de impresión",
+                "El trabajo ya no está en estado ERROR y no se reintentó.",
+            )
+            self.actualizar_trabajos_impresion_fallidos()
+            return
+
+        self.actualizar_trabajos_impresion_fallidos()
+        QMessageBox.information(
+            self,
+            "Trabajos de impresión",
+            f"El trabajo #{id_trabajo} quedó pendiente para reintento.",
+        )
 
     def cargar_impresoras_en_combo(self):
         """
