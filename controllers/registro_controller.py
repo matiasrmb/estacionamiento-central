@@ -6,8 +6,9 @@ import logging
 from datetime import datetime, timedelta
 
 from utils.db import db_cursor
-from utils.ticket import generar_ticket_ingreso, generar_ticket_salida
+from utils.ticket import generar_ticket_salida
 from utils.ticket_queue import enqueue_ticket_job
+from utils.print_jobs import crear_print_job_ingreso
 from controllers.tarifas_controller import (
     calcular_tarifa,
     calcular_tarifa_con_contexto,
@@ -225,17 +226,13 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
                 INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso, en_espera)
                 VALUES (%s, %s, 0)
             """, (id_vehiculo, fecha_hora))
+            id_ingreso = cursor.lastrowid
+            crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora)
 
     except Exception as e:
         print(f"Error al registrar ingreso: {e}")
         return None
 
-    _enqueue_ticket_safely(
-        f"ticket ingreso {patente}",
-        generar_ticket_ingreso,
-        patente,
-        fecha_hora,
-    )
     return {
         "patente": patente,
         "fecha_hora_ingreso": fecha_hora,

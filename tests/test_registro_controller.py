@@ -1,8 +1,11 @@
+import json
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 from controllers import registro_controller
+from utils import db as db_utils
+from utils.print_jobs import crear_print_job_ingreso, ingreso_idempotency_key
 
 
 class FakeCursor:
@@ -35,6 +38,8 @@ class FakeConnection:
     def __init__(self, cursor):
         self.cursor_instance = cursor
         self.committed = False
+        self.rolled_back = False
+        self.executed_before_rollback = None
         self.closed = False
 
     def cursor(self, *args, **kwargs):
@@ -42,6 +47,10 @@ class FakeConnection:
 
     def commit(self):
         self.committed = True
+
+    def rollback(self):
+        self.executed_before_rollback = list(self.cursor_instance.executed)
+        self.rolled_back = True
 
     def close(self):
         self.closed = True
@@ -56,6 +65,13 @@ class FakeDbCursorContext:
 
     def __exit__(self, exc_type, exc, traceback):
         return False
+
+
+class FailingPrintJobCursor(FakeCursor):
+    def execute(self, query, params=None):
+        super().execute(query, params)
+        if "INSERT INTO print_jobs" in query:
+            raise RuntimeError("print job unavailable")
 
 
 class RegistrarIngresoTests(unittest.TestCase):
@@ -76,36 +92,54 @@ class RegistrarIngresoTests(unittest.TestCase):
         db_cursor.assert_not_called()
         generar_ticket.assert_not_called()
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registra_ingreso_creando_vehiculo_si_no_existe(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         cursor = FakeCursor(fetchone_results=[None])
         db_cursor.return_value = FakeDbCursorContext(cursor)
         obtener_activos.return_value = []
 
-        resultado = registro_controller.registrar_ingreso("ABC123")
+        resultado = registro_controller.registrar_ingreso_detallado("ABC123")
 
-        self.assertTrue(resultado)
+        self.assertIsNotNone(resultado)
         db_cursor.assert_called_once_with(commit=True)
-        generar_ticket.assert_called_once()
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("INSERT INTO vehiculos", consultas)
         self.assertIn("INSERT INTO ingresos", consultas)
+        self.assertIn("INSERT INTO print_jobs", consultas)
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
+        print_job = next(
+            params for query, params in cursor.executed
+            if "INSERT INTO print_jobs" in query
+        )
+        self.assertEqual(print_job[1], "PC_PDF")
+        self.assertEqual(print_job[2], 123)
+        self.assertEqual(print_job[3], "ABC123")
+        self.assertEqual(print_job[5], "PENDIENTE")
+        self.assertEqual(print_job[6], "desktop-ingreso:123:pc-pdf")
+        self.assertEqual(print_job[4], json.dumps({
+            "kind": "TICKET_INGRESO",
+            "id_ingreso": 123,
+            "patente": "ABC123",
+            "hora_ingreso": resultado["fecha_hora_ingreso"].isoformat(timespec="seconds"),
+            "usuario": {"id_usuario": None, "usuario": None, "rol": None},
+            "tarifa": {"monto_preliminar": 0},
+            "meta": {
+                "server_time": resultado["fecha_hora_ingreso"].isoformat(timespec="seconds"),
+                "version": 1,
+            },
+        }, ensure_ascii=False))
+
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registrar_ingreso_detallado_retorna_fecha_de_ingreso(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         cursor = FakeCursor(fetchone_results=[(77,)])
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -115,16 +149,13 @@ class RegistrarIngresoTests(unittest.TestCase):
 
         self.assertEqual(resultado["patente"], "ABC123")
         self.assertIsInstance(resultado["fecha_hora_ingreso"], datetime)
-        generar_ticket.assert_called_once()
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registra_ingreso_usando_vehiculo_existente(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         cursor = FakeCursor(fetchone_results=[(77,)])
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -133,20 +164,17 @@ class RegistrarIngresoTests(unittest.TestCase):
         resultado = registro_controller.registrar_ingreso("ABC123")
 
         self.assertTrue(resultado)
-        generar_ticket.assert_called_once()
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("SELECT id_vehiculo", consultas)
         self.assertNotIn("INSERT INTO vehiculos", consultas)
         self.assertIn("INSERT INTO ingresos", consultas)
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registrar_ingreso_detallado_usa_fecha_hora_personalizada_valida(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         cursor = FakeCursor(fetchone_results=[(77,)])
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -156,26 +184,18 @@ class RegistrarIngresoTests(unittest.TestCase):
         resultado = registro_controller.registrar_ingreso_detallado("ABC123", fecha_personalizada)
 
         self.assertEqual(resultado["fecha_hora_ingreso"], fecha_personalizada)
-        generar_ticket.assert_called_once_with(
-            "ticket ingreso ABC123",
-            registro_controller.generar_ticket_ingreso,
-            "ABC123",
-            fecha_personalizada,
-        )
         insert_ingreso = next(
             params for query, params in cursor.executed
             if "INSERT INTO ingresos" in query
         )
         self.assertEqual(insert_ingreso, (77, fecha_personalizada))
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_registrar_ingreso_retorna_true_con_fecha_hora_personalizada_valida(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         cursor = FakeCursor(fetchone_results=[(77,)])
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -185,33 +205,69 @@ class RegistrarIngresoTests(unittest.TestCase):
         resultado = registro_controller.registrar_ingreso("ABC123", fecha_personalizada)
 
         self.assertTrue(resultado)
-        generar_ticket.assert_called_once_with(
-            "ticket ingreso ABC123",
-            registro_controller.generar_ticket_ingreso,
-            "ABC123",
-            fecha_personalizada,
-        )
 
     @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
-    def test_registrar_ingreso_no_falla_si_no_puede_encolar_ticket(
+    def test_registrar_ingreso_no_encola_ticket_local(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
+        enqueue_ticket_job,
     ):
         cursor = FakeCursor(fetchone_results=[(77,)])
         db_cursor.return_value = FakeDbCursorContext(cursor)
         obtener_activos.return_value = []
-        generar_ticket.side_effect = RuntimeError("queue unavailable")
 
-        with patch.object(registro_controller.logger, "exception") as log_exception:
-            resultado = registro_controller.registrar_ingreso("ABC123")
+        resultado = registro_controller.registrar_ingreso("ABC123")
 
         self.assertTrue(resultado)
-        generar_ticket.assert_called_once()
-        log_exception.assert_called_once()
+        enqueue_ticket_job.assert_not_called()
+
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    def test_registrar_ingreso_hace_rollback_si_falla_el_job_durable(self, obtener_activos):
+        cursor = FailingPrintJobCursor(fetchone_results=[(77,)])
+        connection = FakeConnection(cursor)
+        obtener_activos.return_value = []
+
+        with patch.object(registro_controller, "db_cursor", db_utils.db_cursor), patch.object(
+            db_utils, "get_connection", return_value=connection
+        ):
+            resultado = registro_controller.registrar_ingreso("ABC123")
+
+        self.assertFalse(resultado)
+        self.assertFalse(connection.committed)
+        self.assertTrue(connection.rolled_back)
+
+        queries_before_rollback = [
+            query for query, _ in connection.executed_before_rollback
+        ]
+        ingreso_index = next(
+            index for index, query in enumerate(queries_before_rollback)
+            if "INSERT INTO ingresos" in query
+        )
+        print_job_index = next(
+            index for index, query in enumerate(queries_before_rollback)
+            if "INSERT INTO print_jobs" in query
+        )
+
+        self.assertLess(ingreso_index, print_job_index)
+
+    def test_clave_idempotencia_de_ingreso_es_estable(self):
+        self.assertEqual(ingreso_idempotency_key(123), "desktop-ingreso:123:pc-pdf")
+        self.assertEqual(ingreso_idempotency_key(123), ingreso_idempotency_key(123))
+
+    def test_helper_crea_un_job_durable_de_ingreso(self):
+        cursor = FakeCursor()
+        fecha = datetime(2026, 7, 24, 10, 30)
+
+        crear_print_job_ingreso(cursor, 123, "ABC123", fecha)
+
+        self.assertEqual(len(cursor.executed), 1)
+        query, params = cursor.executed[0]
+        self.assertIn("INSERT INTO print_jobs", query)
+        self.assertEqual(params[:4], ("TICKET_INGRESO", "PC_PDF", 123, "ABC123"))
+        self.assertEqual(params[5:], ("PENDIENTE", "desktop-ingreso:123:pc-pdf"))
 
     @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
