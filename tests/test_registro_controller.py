@@ -476,6 +476,10 @@ class RegistrarSalidaTests(unittest.TestCase):
                 "texto": None,
                 "monto_estacionamiento": 1500,
                 "total_lavados": 0,
+                "modo_cobro": "minuto",
+                "subida_aplicada": False,
+                "monto_extra": 0,
+                "secciones": None,
             },
             "usuario": {"id_usuario": None, "usuario": "admin", "rol": None},
             "meta": {
@@ -576,6 +580,17 @@ class RegistrarSalidaTests(unittest.TestCase):
             1800,
             2000,
             "admin",
+            modo_cobro="personalizado",
+            subida_aplicada=True,
+            monto_extra=500,
+            secciones={
+                "lavado": {
+                    "inicio": fecha_ingreso,
+                    "fin": fecha_salida,
+                    "duracion_minutos": 45,
+                    "monto": 2000,
+                },
+            },
         )
 
         self.assertEqual(len(cursor.executed), 1)
@@ -587,6 +602,17 @@ class RegistrarSalidaTests(unittest.TestCase):
             "texto": "45 minutos",
             "monto_estacionamiento": 1800,
             "total_lavados": 2000,
+            "modo_cobro": "personalizado",
+            "subida_aplicada": True,
+            "monto_extra": 500,
+            "secciones": {
+                "lavado": {
+                    "inicio": "2026-07-24T10:30:00",
+                    "fin": "2026-07-24T11:15:00",
+                    "duracion_minutos": 45,
+                    "monto": 2000,
+                },
+            },
         })
 
     @patch.object(registro_controller, "obtener_configuracion")
@@ -633,6 +659,24 @@ class RegistrarSalidaTests(unittest.TestCase):
             if "INSERT INTO print_jobs" in query
         )
         self.assertEqual(json.loads(print_job[4])["detalle"]["total_lavados"], 9000)
+        detalle = json.loads(print_job[4])["detalle"]
+        self.assertEqual(detalle["modo_cobro"], "minuto")
+        self.assertFalse(detalle["subida_aplicada"])
+        self.assertEqual(detalle["monto_extra"], 0)
+        self.assertEqual(detalle["secciones"], {
+            "lavado": {
+                "inicio": "2026-01-01T09:30:00",
+                "fin": "2026-01-01T10:00:00",
+                "duracion_minutos": 30,
+                "monto": 9000,
+            },
+            "estadia": {
+                "inicio": "2026-01-01T10:00:00",
+                "fin": resultado["fecha_hora_salida"].isoformat(),
+                "duracion_minutos": resultado["minutos"],
+                "monto": 1500,
+            },
+        })
 
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")

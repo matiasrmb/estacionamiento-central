@@ -1,6 +1,18 @@
 """Helpers para crear trabajos durables de impresion."""
 
 import json
+from datetime import date, datetime, time
+
+
+def _json_safe(value):
+    """Convierte valores de dominio anidados al formato del payload durable."""
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 def ingreso_idempotency_key(id_ingreso):
@@ -57,6 +69,10 @@ def crear_print_job_salida(
     tarifa,
     total_lavados,
     usuario,
+    modo_cobro=None,
+    subida_aplicada=False,
+    monto_extra=0,
+    secciones=None,
 ):
     """Inserta el ticket de salida en la transaccion del cierre."""
     hora_ingreso = fecha_hora_ingreso.isoformat(timespec="seconds")
@@ -73,6 +89,10 @@ def crear_print_job_salida(
             "texto": detalle_cobro,
             "monto_estacionamiento": tarifa,
             "total_lavados": total_lavados,
+            "modo_cobro": modo_cobro,
+            "subida_aplicada": subida_aplicada,
+            "monto_extra": monto_extra,
+            "secciones": _json_safe(secciones),
         },
         "usuario": {
             "id_usuario": None,

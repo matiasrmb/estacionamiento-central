@@ -335,6 +335,10 @@ def registrar_salida_detallada(patente, usuario):
                 tarifa,
                 total_lavados,
                 usuario,
+                modo_cobro,
+                subida_aplicada,
+                monto_extra,
+                detalle_secciones,
             )
 
     except Exception as e:
