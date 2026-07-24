@@ -6,9 +6,8 @@ import logging
 from datetime import datetime, timedelta
 
 from utils.db import db_cursor
-from utils.ticket import generar_ticket_salida
 from utils.ticket_queue import enqueue_ticket_job
-from utils.print_jobs import crear_print_job_ingreso
+from utils.print_jobs import crear_print_job_ingreso, crear_print_job_salida
 from controllers.tarifas_controller import (
     calcular_tarifa,
     calcular_tarifa_con_contexto,
@@ -317,28 +316,31 @@ def registrar_salida_detallada(patente, usuario):
                     tarifa_aplicada = %s,
                     usuario = %s
                 WHERE id_ingreso = %s
+                  AND fecha_hora_salida IS NULL
             """, (ahora, total_a_cobrar, usuario, ingreso["id_ingreso"]))
+
+            if cursor.rowcount != 1:
+                print(f"[WARN] No se registró salida para {patente}: el ingreso ya fue cerrado.")
+                return None
+
+            crear_print_job_salida(
+                cursor,
+                ingreso["id_ingreso"],
+                patente,
+                fecha_ingreso,
+                ahora,
+                minutos,
+                total_a_cobrar,
+                detalle_cobro,
+                tarifa,
+                total_lavados,
+                usuario,
+            )
 
     except Exception as e:
         print(f"Error al registrar salida: {e}")
         return None
 
-    _enqueue_ticket_safely(
-        f"ticket salida {patente}",
-        generar_ticket_salida,
-        patente=patente,
-        fecha_hora_ingreso=fecha_ingreso,
-        fecha_hora_salida=ahora,
-        tarifa=total_a_cobrar,
-        subida_aplicada=subida_aplicada,
-        monto_extra=monto_extra,
-        minutos=minutos,
-        modo_cobro=modo_cobro,
-        total_lavados=total_lavados,
-        tarifa_estacionamiento=tarifa,
-        detalle_cobro=detalle_cobro,
-        detalle_secciones=detalle_secciones,
-    )
     return {
         "patente": patente,
         "fecha_hora_ingreso": fecha_ingreso,

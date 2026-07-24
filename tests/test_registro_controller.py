@@ -5,7 +5,12 @@ from unittest.mock import Mock, patch
 
 from controllers import registro_controller
 from utils import db as db_utils
-from utils.print_jobs import crear_print_job_ingreso, ingreso_idempotency_key
+from utils.print_jobs import (
+    crear_print_job_ingreso,
+    crear_print_job_salida,
+    ingreso_idempotency_key,
+    salida_idempotency_key,
+)
 
 
 class FakeCursor:
@@ -424,7 +429,7 @@ class RegistrarSalidaTests(unittest.TestCase):
         obtener_operacion_convertida,
         calcular_tarifa,
         obtener_configuracion,
-        generar_ticket,
+        enqueue_ticket_job,
     ):
         cursor = FakeCursor()
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -442,18 +447,148 @@ class RegistrarSalidaTests(unittest.TestCase):
         calcular_tarifa.return_value = (1500, False, 0)
         obtener_configuracion.return_value = {"modo_cobro": "minuto"}
 
-        resultado = registro_controller.registrar_salida("ABC123", "admin")
+        resultado = registro_controller.registrar_salida_detallada("ABC123", "admin")
 
-        self.assertEqual(resultado, 1500)
+        self.assertEqual(resultado["tarifa"], 1500)
         db_cursor.assert_called_once_with(commit=True)
         calcular_tarifa.assert_called_once()
-        generar_ticket.assert_called_once()
-        self.assertEqual(generar_ticket.call_args.args[0], "ticket salida ABC123")
-        self.assertIs(generar_ticket.call_args.args[1], registro_controller.generar_ticket_salida)
+        enqueue_ticket_job.assert_not_called()
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("UPDATE ingresos", consultas)
+        self.assertIn("fecha_hora_salida IS NULL", consultas)
+        print_job = next(
+            params for query, params in cursor.executed
+            if "INSERT INTO print_jobs" in query
+        )
+        self.assertEqual(
+            print_job[:4], ("TICKET_SALIDA", "PC_PDF", 10, "ABC123")
+        )
+        self.assertEqual(print_job[5:], ("PENDIENTE", "desktop-salida:10:pc-pdf"))
+        self.assertEqual(json.loads(print_job[4]), {
+            "kind": "TICKET_SALIDA",
+            "id_ingreso": 10,
+            "patente": "ABC123",
+            "hora_ingreso": "2026-01-01T10:00:00",
+            "hora_salida": resultado["fecha_hora_salida"].isoformat(timespec="seconds"),
+            "minutos_cobrados": resultado["minutos"],
+            "monto_final": 1500,
+            "detalle": {
+                "texto": None,
+                "monto_estacionamiento": 1500,
+                "total_lavados": 0,
+            },
+            "usuario": {"id_usuario": None, "usuario": "admin", "rol": None},
+            "meta": {
+                "server_time": resultado["fecha_hora_salida"].isoformat(timespec="seconds"),
+                "version": 1,
+            },
+        })
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
+    @patch.object(registro_controller, "obtener_configuracion", return_value={"modo_cobro": "minuto"})
+    @patch.object(registro_controller, "calcular_tarifa", return_value=(1500, False, 0))
+    @patch.object(registro_controller, "calcular_minutos_lavado", return_value=0)
+    @patch.object(registro_controller, "obtener_ingreso_activo_priorizado")
+    def test_salida_hace_rollback_si_falla_el_job_durable(
+        self,
+        obtener_ingreso,
+        calcular_minutos_lavado,
+        calcular_tarifa,
+        obtener_configuracion,
+    ):
+        cursor = FailingPrintJobCursor()
+        connection = FakeConnection(cursor)
+        obtener_ingreso.return_value = {
+            "id_ingreso": 10,
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "patente": "ABC123",
+            "en_lavado": 0,
+        }
+
+        with patch.object(registro_controller, "db_cursor", db_utils.db_cursor), patch.object(
+            db_utils, "get_connection", return_value=connection
+        ):
+            resultado = registro_controller.registrar_salida("ABC123", "admin")
+
+        self.assertIsNone(resultado)
+        self.assertFalse(connection.committed)
+        self.assertTrue(connection.rolled_back)
+        queries_before_rollback = [
+            query for query, _ in connection.executed_before_rollback
+        ]
+        update_index = next(
+            index for index, query in enumerate(queries_before_rollback)
+            if "UPDATE ingresos" in query
+        )
+        print_job_index = next(
+            index for index, query in enumerate(queries_before_rollback)
+            if "INSERT INTO print_jobs" in query
+        )
+        self.assertLess(update_index, print_job_index)
+
+    @patch.object(registro_controller, "obtener_configuracion", return_value={"modo_cobro": "minuto"})
+    @patch.object(registro_controller, "calcular_tarifa", return_value=(1500, False, 0))
+    @patch.object(registro_controller, "calcular_minutos_lavado", return_value=0)
+    @patch.object(registro_controller, "obtener_ingreso_activo_priorizado")
+    @patch.object(registro_controller, "db_cursor")
+    def test_salida_no_crea_job_si_el_ingreso_ya_fue_cerrado(
+        self,
+        db_cursor,
+        obtener_ingreso,
+        calcular_minutos_lavado,
+        calcular_tarifa,
+        obtener_configuracion,
+    ):
+        cursor = FakeCursor()
+        cursor.rowcount = 0
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_ingreso.return_value = {
+            "id_ingreso": 10,
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "patente": "ABC123",
+            "en_lavado": 0,
+        }
+
+        resultado = registro_controller.registrar_salida("ABC123", "admin")
+
+        self.assertIsNone(resultado)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("fecha_hora_salida IS NULL", consultas)
+        self.assertNotIn("INSERT INTO print_jobs", consultas)
+
+    def test_clave_idempotencia_de_salida_es_estable(self):
+        self.assertEqual(salida_idempotency_key(123), "desktop-salida:123:pc-pdf")
+        self.assertEqual(salida_idempotency_key(123), salida_idempotency_key(123))
+
+    def test_helper_crea_un_job_durable_de_salida(self):
+        cursor = FakeCursor()
+        fecha_ingreso = datetime(2026, 7, 24, 10, 30)
+        fecha_salida = datetime(2026, 7, 24, 11, 15)
+
+        crear_print_job_salida(
+            cursor,
+            123,
+            "ABC123",
+            fecha_ingreso,
+            fecha_salida,
+            45,
+            3800,
+            "45 minutos",
+            1800,
+            2000,
+            "admin",
+        )
+
+        self.assertEqual(len(cursor.executed), 1)
+        query, params = cursor.executed[0]
+        self.assertIn("INSERT INTO print_jobs", query)
+        self.assertEqual(params[:4], ("TICKET_SALIDA", "PC_PDF", 123, "ABC123"))
+        self.assertEqual(params[5:], ("PENDIENTE", "desktop-salida:123:pc-pdf"))
+        self.assertEqual(json.loads(params[4])["detalle"], {
+            "texto": "45 minutos",
+            "monto_estacionamiento": 1800,
+            "total_lavados": 2000,
+        })
+
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
@@ -468,7 +603,6 @@ class RegistrarSalidaTests(unittest.TestCase):
         obtener_operacion_convertida,
         calcular_tarifa,
         obtener_configuracion,
-        generar_ticket,
     ):
         cursor = FakeCursor()
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -494,14 +628,12 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertEqual(resultado["tarifa"], 10500)
         self.assertEqual(resultado["tarifa_estacionamiento"], 1500)
         self.assertEqual(resultado["total_lavados"], 9000)
-        detalle = generar_ticket.call_args.kwargs["detalle_secciones"]
-        self.assertEqual(detalle["lavado"]["inicio"], inicio_lavado)
-        self.assertEqual(detalle["lavado"]["fin"], fecha_ingreso)
-        self.assertEqual(detalle["lavado"]["monto"], 9000)
-        self.assertEqual(detalle["estadia"]["inicio"], fecha_ingreso)
-        self.assertEqual(detalle["estadia"]["monto"], 1500)
+        print_job = next(
+            params for query, params in cursor.executed
+            if "INSERT INTO print_jobs" in query
+        )
+        self.assertEqual(json.loads(print_job[4])["detalle"]["total_lavados"], 9000)
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
@@ -518,7 +650,6 @@ class RegistrarSalidaTests(unittest.TestCase):
         obtener_operacion_convertida,
         calcular_tarifa,
         obtener_configuracion,
-        generar_ticket,
     ):
         cursor = FakeCursor()
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -540,9 +671,12 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertEqual(resultado["tarifa"], 9500)
         self.assertEqual(resultado["tarifa_estacionamiento"], 1500)
         self.assertEqual(resultado["total_lavados"], 8000)
-        self.assertIsNone(generar_ticket.call_args.kwargs["detalle_secciones"])
+        print_job = next(
+            params for query, params in cursor.executed
+            if "INSERT INTO print_jobs" in query
+        )
+        self.assertEqual(json.loads(print_job[4])["detalle"]["total_lavados"], 8000)
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "calcular_minutos_lavado")
@@ -555,7 +689,6 @@ class RegistrarSalidaTests(unittest.TestCase):
         calcular_minutos_lavado,
         calcular_tarifa,
         obtener_configuracion,
-        generar_ticket,
     ):
         cursor = FakeCursor()
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -579,9 +712,11 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertIsInstance(resultado["fecha_hora_salida"], datetime)
         self.assertIsInstance(resultado["minutos"], int)
         self.assertEqual(resultado["tarifa"], 1500)
-        generar_ticket.assert_called_once()
+        self.assertIn(
+            "INSERT INTO print_jobs",
+            "\n".join(query for query, _ in cursor.executed),
+        )
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "calcular_minutos_lavado")
@@ -594,7 +729,6 @@ class RegistrarSalidaTests(unittest.TestCase):
         calcular_minutos_lavado,
         calcular_tarifa,
         obtener_configuracion,
-        generar_ticket,
     ):
         fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
         obtener_activos.return_value = [
@@ -613,7 +747,6 @@ class RegistrarSalidaTests(unittest.TestCase):
 
         self.assertIsNone(resultado)
         db_cursor.assert_not_called()
-        generar_ticket.assert_not_called()
 
 
 class FuncionesSimplesDbCursorTests(unittest.TestCase):
