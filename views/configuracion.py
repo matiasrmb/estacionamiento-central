@@ -19,6 +19,7 @@ from controllers.tarifas_controller import generar_tramos_automaticos
 from controllers.print_jobs_controller import (
     listar_trabajos_impresion_fallidos,
     reintentar_trabajo_impresion_fallido,
+    reintentar_trabajo_impresion_revision_manual,
 )
 from utils.printer_manager import (obtener_impresoras_instaladas, 
                                    obtener_impresora_predeterminada,
@@ -270,9 +271,9 @@ class ConfiguracionWindow(QWidget):
         layout_impresion_wrapper.addWidget(titulo_fallidos)
 
         self.tabla_trabajos_fallidos = QTableWidget()
-        self.tabla_trabajos_fallidos.setColumnCount(7)
+        self.tabla_trabajos_fallidos.setColumnCount(8)
         self.tabla_trabajos_fallidos.setHorizontalHeaderLabels(
-            ["ID", "Tipo", "Destino", "Patente", "Intentos", "Fecha", "Error"]
+            ["ID", "Tipo", "Destino", "Patente", "Estado", "Intentos", "Fecha", "Error"]
         )
         self.tabla_trabajos_fallidos.setAlternatingRowColors(True)
         self.tabla_trabajos_fallidos.setSelectionBehavior(QTableWidget.SelectRows)
@@ -291,10 +292,10 @@ class ConfiguracionWindow(QWidget):
         """)
 
         encabezado_fallidos = self.tabla_trabajos_fallidos.horizontalHeader()
-        for columna, ancho in enumerate((55, 80, 115, 90, 75, 135)):
+        for columna, ancho in enumerate((55, 80, 115, 90, 125, 75, 135)):
             encabezado_fallidos.setSectionResizeMode(columna, QHeaderView.Fixed)
             self.tabla_trabajos_fallidos.setColumnWidth(columna, ancho)
-        encabezado_fallidos.setSectionResizeMode(6, QHeaderView.Stretch)
+        encabezado_fallidos.setSectionResizeMode(7, QHeaderView.Stretch)
         layout_impresion_wrapper.addWidget(self.tabla_trabajos_fallidos)
 
         acciones_fallidos = QHBoxLayout()
@@ -386,13 +387,14 @@ class ConfiguracionWindow(QWidget):
                 trabajo["tipo"],
                 trabajo["destino"] or "-",
                 trabajo["patente"] or "-",
+                trabajo["estado"],
                 intentos,
                 trabajo["updated_at"],
                 trabajo["last_error"] or "-",
             ]
             for columna, valor in enumerate(valores):
                 item = QTableWidgetItem(str(valor))
-                if columna == 6:
+                if columna == 7:
                     item.setToolTip(str(valor))
                 self.tabla_trabajos_fallidos.setItem(fila, columna, item)
 
@@ -403,17 +405,29 @@ class ConfiguracionWindow(QWidget):
             return
 
         id_trabajo = int(self.tabla_trabajos_fallidos.item(fila, 0).text())
+        estado = self.tabla_trabajos_fallidos.item(fila, 4).text()
+        if estado == "REVISION_MANUAL":
+            mensaje = (
+                f"El ticket #{id_trabajo} pudo haberse enviado o impreso. "
+                "Verificá físicamente antes de reintentar para evitar un duplicado.\n\n"
+                "¿Deseás dejarlo pendiente para reintento?"
+            )
+        else:
+            mensaje = f"¿Deseas reintentar el trabajo de impresión #{id_trabajo}?"
         confirmar = QMessageBox.question(
             self,
             "Confirmar reintento",
-            f"¿Deseas reintentar el trabajo de impresión #{id_trabajo}?",
+            mensaje,
             QMessageBox.Yes | QMessageBox.No,
         )
         if confirmar != QMessageBox.Yes:
             return
 
         try:
-            reintentado = reintentar_trabajo_impresion_fallido(id_trabajo)
+            if estado == "REVISION_MANUAL":
+                reintentado = reintentar_trabajo_impresion_revision_manual(id_trabajo)
+            else:
+                reintentado = reintentar_trabajo_impresion_fallido(id_trabajo)
         except Exception as e:
             QMessageBox.critical(self, "Trabajos de impresión", f"No se pudo reintentar el trabajo:\n{e}")
             return
@@ -422,7 +436,7 @@ class ConfiguracionWindow(QWidget):
             QMessageBox.warning(
                 self,
                 "Trabajos de impresión",
-                "El trabajo ya no está en estado ERROR y no se reintentó.",
+                f"El trabajo ya no está en estado {estado} y no se reintentó.",
             )
             self.actualizar_trabajos_impresion_fallidos()
             return

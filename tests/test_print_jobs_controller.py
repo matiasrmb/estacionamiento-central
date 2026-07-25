@@ -27,8 +27,11 @@ def fake_db_cursor(cursor):
 
 class PrintJobsControllerTests(unittest.TestCase):
     @patch.object(print_jobs_controller, "db_cursor")
-    def test_lista_solo_trabajos_en_error(self, db_cursor):
-        jobs = [{"id": 8, "estado": "ERROR", "patente": "ABC123"}]
+    def test_lista_trabajos_en_error_y_revision_manual(self, db_cursor):
+        jobs = [
+            {"id": 8, "estado": "ERROR", "patente": "ABC123"},
+            {"id": 9, "estado": "REVISION_MANUAL", "patente": "XYZ789"},
+        ]
         cursor = FakeCursor(fetchall_results=[jobs])
         db_cursor.return_value = fake_db_cursor(cursor)
 
@@ -38,8 +41,9 @@ class PrintJobsControllerTests(unittest.TestCase):
         db_cursor.assert_called_once_with(dictionary=True)
         query, params = cursor.executed[0]
         self.assertIn("FROM print_jobs", query)
-        self.assertIn("WHERE estado = %s", query)
-        self.assertEqual(params, ("ERROR",))
+        self.assertIn("estado IN (%s, %s)", query)
+        self.assertIn("estado", query)
+        self.assertEqual(params, ("ERROR", "REVISION_MANUAL"))
 
     @patch.object(print_jobs_controller, "db_cursor")
     def test_lista_fallidos_no_proyecta_el_payload(self, db_cursor):
@@ -63,7 +67,7 @@ class PrintJobsControllerTests(unittest.TestCase):
         db_cursor.assert_called_once_with(commit=True)
         query, params = cursor.executed[0]
         self.assertIn("estado = %s", query)
-        self.assertIn("intentos = 0", query)
+        self.assertNotIn("intentos = 0", query)
         self.assertIn("locked_at = NULL", query)
         self.assertIn("locked_by = NULL", query)
         self.assertIn("last_error = NULL", query)
@@ -71,6 +75,21 @@ class PrintJobsControllerTests(unittest.TestCase):
         self.assertIn("updated_at = CURRENT_TIMESTAMP", query)
         self.assertIn("WHERE id_print_job = %s AND estado = %s", query)
         self.assertEqual(params, ("PENDIENTE", 8, "ERROR"))
+
+    @patch.object(print_jobs_controller, "db_cursor")
+    def test_reintento_manual_solo_rehabilita_revision_manual(self, db_cursor):
+        cursor = FakeCursor(rowcount=1)
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        result = print_jobs_controller.reintentar_trabajo_impresion_revision_manual(8)
+
+        self.assertTrue(result)
+        query, params = cursor.executed[0]
+        self.assertIn("estado = %s", query)
+        self.assertIn("intentos = 0", query)
+        self.assertIn("next_retry_at = NULL", query)
+        self.assertIn("last_error = NULL", query)
+        self.assertEqual(params, ("PENDIENTE", 8, "REVISION_MANUAL"))
 
     @patch.object(print_jobs_controller, "db_cursor")
     def test_reintento_falla_con_rowcount_cero_por_estado_obsoleto(self, db_cursor):
@@ -83,6 +102,18 @@ class PrintJobsControllerTests(unittest.TestCase):
         query, params = cursor.executed[0]
         self.assertIn("WHERE id_print_job = %s AND estado = %s", query)
         self.assertEqual(params, ("PENDIENTE", 8, "ERROR"))
+
+    @patch.object(print_jobs_controller, "db_cursor")
+    def test_reintento_manual_falla_con_rowcount_cero_por_estado_obsoleto(self, db_cursor):
+        cursor = FakeCursor(rowcount=0)
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        result = print_jobs_controller.reintentar_trabajo_impresion_revision_manual(8)
+
+        self.assertFalse(result)
+        query, params = cursor.executed[0]
+        self.assertIn("WHERE id_print_job = %s AND estado = %s", query)
+        self.assertEqual(params, ("PENDIENTE", 8, "REVISION_MANUAL"))
 
 
 if __name__ == "__main__":
