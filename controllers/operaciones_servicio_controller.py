@@ -8,7 +8,7 @@ from controllers.wash_pricing_controller import (
     ensure_wash_vehicle_type_table,
 )
 from utils.db import db_cursor
-from utils.ticket import generar_ticket_solo_lavado
+from utils.print_jobs import crear_print_job_solo_lavado
 
 
 ESTADO_ACTIVO = "ACTIVO"
@@ -246,11 +246,13 @@ def finalizar_solo_lavado_cobrando(id_operacion_servicio, usuario_fin):
             int(id_operacion_servicio),
         ))
 
-    finalizada["duracion_minutos"] = calcular_duracion_minutos(
-        finalizada.get("fecha_hora_inicio"),
-        finalizada.get("fecha_hora_fin"),
-    )
-    generar_ticket_solo_lavado(finalizada)
+        finalizada["id_operacion_servicio"] = int(id_operacion_servicio)
+        finalizada["duracion_minutos"] = calcular_duracion_minutos(
+            finalizada.get("fecha_hora_inicio"),
+            finalizada.get("fecha_hora_fin"),
+        )
+        crear_print_job_solo_lavado(cursor, finalizada)
+
     return finalizada
 
 

@@ -111,16 +111,14 @@ class SoloLavadoDesktopControllerTests(unittest.TestCase):
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertNotIn("INSERT INTO operaciones_servicio", consultas)
 
-    @patch.object(solo_controller, "generar_ticket_solo_lavado")
     @patch.object(solo_controller, "datetime")
     @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(solo_controller, "db_cursor")
-    def test_finalizar_solo_lavado_cobrando_genera_ticket_y_no_crea_ingreso(
+    def test_finalizar_solo_lavado_cobrando_crea_job_durable_y_no_crea_ingreso(
         self,
         db_cursor,
         _ensure,
         datetime_mock,
-        generar_ticket,
     ):
         inicio = datetime(2026, 7, 1, 10, 0)
         fin = datetime(2026, 7, 1, 10, 30)
@@ -142,9 +140,9 @@ class SoloLavadoDesktopControllerTests(unittest.TestCase):
         self.assertEqual(resultado["estado"], solo_controller.ESTADO_FINALIZADO_COBRADO)
         self.assertEqual(resultado["duracion_minutos"], 30)
         self.assertEqual(resultado["valor_lavado_snapshot"], 9000)
-        generar_ticket.assert_called_once()
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("UPDATE operaciones_servicio", consultas)
+        self.assertIn("INSERT INTO print_jobs", consultas)
         self.assertNotIn("INSERT INTO ingresos", consultas)
 
     @patch.object(solo_controller, "datetime")

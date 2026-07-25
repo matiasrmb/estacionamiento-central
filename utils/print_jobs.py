@@ -23,6 +23,10 @@ def salida_idempotency_key(id_ingreso):
     return f"desktop-salida:{id_ingreso}:pc-pdf"
 
 
+def solo_lavado_idempotency_key(id_operacion_servicio):
+    return f"desktop-solo-lavado:{id_operacion_servicio}:pc-pdf"
+
+
 def crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora_ingreso):
     """Inserta el ticket de ingreso en la transaccion del ingreso."""
     hora_ingreso = fecha_hora_ingreso.isoformat(timespec="seconds")
@@ -115,5 +119,43 @@ def crear_print_job_salida(
             json.dumps(payload, ensure_ascii=False),
             "PENDIENTE",
             salida_idempotency_key(id_ingreso),
+        ),
+    )
+
+
+def crear_print_job_solo_lavado(cursor, operacion):
+    """Inserta el recibo de solo lavado en la transaccion de su cobro."""
+    id_operacion = int(operacion["id_operacion_servicio"])
+    hora_inicio = operacion["fecha_hora_inicio"].isoformat(timespec="seconds")
+    hora_fin = operacion["fecha_hora_fin"].isoformat(timespec="seconds")
+    monto_final = int(operacion["valor_lavado_snapshot"])
+    servicio = str(operacion.get("tipo_vehiculo_lavado_snapshot") or "Lavado")
+    payload = {
+        "kind": "TICKET_SOLO_LAVADO",
+        "id_operacion_servicio": id_operacion,
+        "patente": operacion["patente"],
+        "servicio": servicio,
+        "hora_inicio": hora_inicio,
+        "hora_fin": hora_fin,
+        "minutos": int(operacion.get("duracion_minutos") or 0),
+        "monto_final": monto_final,
+        "total": monto_final,
+        "detalle_texto": f"Lavado {servicio}",
+        "meta": {"server_time": hora_fin, "version": 1},
+    }
+    cursor.execute(
+        """
+        INSERT INTO print_jobs
+            (tipo, destino, id_ingreso, patente, payload_json, estado, idempotency_key)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            "TICKET_SOLO_LAVADO",
+            "PC_PDF",
+            None,
+            operacion["patente"],
+            json.dumps(payload, ensure_ascii=False),
+            "PENDIENTE",
+            solo_lavado_idempotency_key(id_operacion),
         ),
     )
