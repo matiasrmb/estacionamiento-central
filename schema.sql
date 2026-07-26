@@ -187,6 +187,21 @@ CREATE TABLE IF NOT EXISTS print_jobs (
     FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso)
 );
 
+-- Auditoría de reimpresiones solicitadas explícitamente por un operador.
+CREATE TABLE IF NOT EXISTS print_job_reprints (
+    id_reprint INT AUTO_INCREMENT PRIMARY KEY,
+    source_print_job_id INT NOT NULL,
+    new_print_job_id INT NOT NULL,
+    operator_user VARCHAR(50) NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_print_job_reprints_source (source_print_job_id),
+    INDEX idx_print_job_reprints_new (new_print_job_id),
+    INDEX idx_print_job_reprints_created (created_at),
+    FOREIGN KEY (source_print_job_id) REFERENCES print_jobs(id_print_job),
+    FOREIGN KEY (new_print_job_id) REFERENCES print_jobs(id_print_job)
+);
+
 -- Inserción inicial de configuración
 INSERT INTO configuracion (clave, valor) VALUES
 ('modo_cobro', 'minuto'),

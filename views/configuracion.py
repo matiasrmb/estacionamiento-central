@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QComboBox, QMessageBox,
     QGridLayout, QSizePolicy, QFrame, QCheckBox,
-    QHBoxLayout, QHeaderView, QTableWidget, QTableWidgetItem
+    QHBoxLayout, QHeaderView, QInputDialog, QTableWidget, QTableWidgetItem
 )
 from PySide6.QtCore import Qt
 
@@ -18,6 +18,8 @@ from controllers.config_controller import (
 from controllers.tarifas_controller import generar_tramos_automaticos
 from controllers.print_jobs_controller import (
     listar_trabajos_impresion_fallidos,
+    listar_trabajos_impresion_impresos,
+    crear_reimpresion_trabajo_impresion,
     reintentar_trabajo_impresion_fallido,
     reintentar_trabajo_impresion_revision_manual,
 )
@@ -36,9 +38,10 @@ class ConfiguracionWindow(QWidget):
     Permite definir modo de cobro, tarifas base y generar tramos automáticos.
     """
 
-    def __init__(self, on_tramos_actualizados=None):
+    def __init__(self, on_tramos_actualizados=None, usuario=None):
         super().__init__()
         self.on_tramos_actualizados = on_tramos_actualizados
+        self.usuario = usuario
         self.setMinimumSize(900, 600)
         self.init_ui()
 
@@ -307,6 +310,38 @@ class ConfiguracionWindow(QWidget):
         acciones_fallidos.addWidget(self.btn_reintentar_trabajo_fallido)
         acciones_fallidos.addStretch()
         layout_impresion_wrapper.addLayout(acciones_fallidos)
+
+        titulo_impresos = QLabel("Trabajos de impresión ya impresos")
+        titulo_impresos.setObjectName("EtiquetaFormulario")
+        layout_impresion_wrapper.addWidget(titulo_impresos)
+
+        self.tabla_trabajos_impresos = QTableWidget()
+        self.tabla_trabajos_impresos.setColumnCount(6)
+        self.tabla_trabajos_impresos.setHorizontalHeaderLabels(
+            ["ID", "Tipo", "Destino", "Patente", "Estado", "Fecha"]
+        )
+        self.tabla_trabajos_impresos.setAlternatingRowColors(True)
+        self.tabla_trabajos_impresos.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla_trabajos_impresos.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla_trabajos_impresos.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tabla_trabajos_impresos.setMinimumHeight(150)
+        self.tabla_trabajos_impresos.verticalHeader().setDefaultSectionSize(34)
+        encabezado_impresos = self.tabla_trabajos_impresos.horizontalHeader()
+        for columna, ancho in enumerate((55, 110, 115, 100, 95)):
+            encabezado_impresos.setSectionResizeMode(columna, QHeaderView.Fixed)
+            self.tabla_trabajos_impresos.setColumnWidth(columna, ancho)
+        encabezado_impresos.setSectionResizeMode(5, QHeaderView.Stretch)
+        layout_impresion_wrapper.addWidget(self.tabla_trabajos_impresos)
+
+        acciones_impresos = QHBoxLayout()
+        self.btn_actualizar_trabajos_impresos = QPushButton("Actualizar trabajos impresos")
+        self.btn_actualizar_trabajos_impresos.clicked.connect(self.actualizar_trabajos_impresion_impresos)
+        self.btn_reimprimir_trabajo = QPushButton("Reimprimir trabajo seleccionado")
+        self.btn_reimprimir_trabajo.clicked.connect(self.reimprimir_trabajo_impresion_seleccionado)
+        acciones_impresos.addWidget(self.btn_actualizar_trabajos_impresos)
+        acciones_impresos.addWidget(self.btn_reimprimir_trabajo)
+        acciones_impresos.addStretch()
+        layout_impresion_wrapper.addLayout(acciones_impresos)
         layout.addWidget(panel_impresion)
 
         # =========================================================
@@ -345,6 +380,7 @@ class ConfiguracionWindow(QWidget):
         self.cargar_impresoras_en_combo()
         self.actualizar_estado_tickets()
         self.actualizar_trabajos_impresion_fallidos()
+        self.actualizar_trabajos_impresion_impresos()
         self.setLayout(layout)
 
     def recargar_configuracion(self):
@@ -365,6 +401,7 @@ class ConfiguracionWindow(QWidget):
         self.cargar_impresoras_en_combo()
         self.actualizar_estado_tickets()
         self.actualizar_trabajos_impresion_fallidos()
+        self.actualizar_trabajos_impresion_impresos()
         QMessageBox.information(self, "Actualizado", "Configuración recargada desde la base de datos.")
 
     def actualizar_estado_tickets(self):
@@ -446,6 +483,91 @@ class ConfiguracionWindow(QWidget):
             self,
             "Trabajos de impresión",
             f"El trabajo #{id_trabajo} quedó pendiente para reintento.",
+        )
+
+    def actualizar_trabajos_impresion_impresos(self):
+        try:
+            trabajos = listar_trabajos_impresion_impresos()
+        except Exception as e:
+            self.tabla_trabajos_impresos.setRowCount(0)
+            QMessageBox.warning(self, "Trabajos de impresión", f"No se pudieron cargar los trabajos impresos:\n{e}")
+            return
+
+        self.tabla_trabajos_impresos.setRowCount(len(trabajos))
+        for fila, trabajo in enumerate(trabajos):
+            valores = [
+                trabajo["id"],
+                trabajo["tipo"],
+                trabajo["destino"] or "-",
+                trabajo["patente"] or "-",
+                trabajo["estado"],
+                trabajo["updated_at"],
+            ]
+            for columna, valor in enumerate(valores):
+                self.tabla_trabajos_impresos.setItem(fila, columna, QTableWidgetItem(str(valor)))
+
+    def reimprimir_trabajo_impresion_seleccionado(self):
+        fila = self.tabla_trabajos_impresos.currentRow()
+        if fila < 0:
+            QMessageBox.warning(self, "Trabajos de impresión", "Selecciona un trabajo impreso para reimprimir.")
+            return
+
+        id_trabajo = int(self.tabla_trabajos_impresos.item(fila, 0).text())
+        motivo, aceptado = QInputDialog.getText(
+            self,
+            "Motivo de reimpresión",
+            f"Indica el motivo para reimprimir el trabajo #{id_trabajo}:",
+        )
+        motivo = motivo.strip()
+        if not aceptado:
+            return
+        if not motivo:
+            QMessageBox.warning(self, "Motivo obligatorio", "Debes indicar un motivo para reimprimir.")
+            return
+
+        confirmar = QMessageBox.question(
+            self,
+            "Confirmar reimpresión",
+            f"Se creará un nuevo trabajo pendiente para reimprimir el ticket #{id_trabajo}.\n\n"
+            "Verificá físicamente antes de continuar para evitar un duplicado.\n\n"
+            "¿Deseás continuar?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirmar != QMessageBox.Yes:
+            return
+
+        try:
+            resultado = crear_reimpresion_trabajo_impresion(id_trabajo, self.usuario, motivo)
+        except ValueError as e:
+            QMessageBox.warning(self, "Reimpresión", str(e))
+            return
+        except Exception as e:
+            QMessageBox.critical(self, "Reimpresión", f"No se pudo crear la reimpresión:\n{e}")
+            return
+
+        if resultado is False:
+            QMessageBox.warning(
+                self,
+                "Reimpresión",
+                "Ya existe una reimpresión pendiente o en revisión para este ticket.",
+            )
+            self.actualizar_trabajos_impresion_impresos()
+            return
+
+        if resultado is None:
+            QMessageBox.warning(
+                self,
+                "Reimpresión",
+                "El trabajo ya no está en estado IMPRESO y no se creó una reimpresión.",
+            )
+            self.actualizar_trabajos_impresion_impresos()
+            return
+
+        self.actualizar_trabajos_impresion_impresos()
+        QMessageBox.information(
+            self,
+            "Reimpresión creada",
+            f"El nuevo trabajo #{resultado['new_print_job_id']} quedó pendiente de impresión.",
         )
 
     def cargar_impresoras_en_combo(self):
