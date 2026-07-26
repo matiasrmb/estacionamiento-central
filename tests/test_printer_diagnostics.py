@@ -1,6 +1,6 @@
 import unittest
 
-from utils.printer_diagnostics import build_printer_diagnostics, format_ticket_queue_status
+from utils.printer_diagnostics import build_printer_diagnostics
 
 
 class PrinterDiagnosticsTests(unittest.TestCase):
@@ -37,32 +37,6 @@ class PrinterDiagnosticsTests(unittest.TestCase):
         self.assertIn("PRINTER_NAME no coincide", result["summary"])
         self.assertIn("No se promete compatibilidad", result["guidance"])
         self.assertIn("Printer not found", result["details"])
-
-    def test_formats_ticket_queue_status_with_counters(self):
-        result = format_ticket_queue_status({
-            "submitted": 3,
-            "succeeded": 2,
-            "failed": 1,
-            "last_failure_description": None,
-            "last_failure_error": None,
-        })
-
-        self.assertIn("enviados 3", result)
-        self.assertIn("correctos 2", result)
-        self.assertIn("fallidos 1", result)
-
-    def test_formats_ticket_queue_status_with_last_failure(self):
-        result = format_ticket_queue_status({
-            "submitted": 1,
-            "succeeded": 0,
-            "failed": 1,
-            "last_failure_description": "ticket salida ABC123",
-            "last_failure_error": "printer offline",
-        })
-
-        self.assertIn("último fallo: ticket salida ABC123", result)
-        self.assertIn("error: printer offline", result)
-
 
 if __name__ == "__main__":
     unittest.main()

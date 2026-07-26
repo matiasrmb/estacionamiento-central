@@ -69,15 +69,13 @@ class SoloLavadoPrintJobTests(unittest.TestCase):
 
     @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(operaciones_servicio_controller, "db_cursor")
-    @patch.object(operaciones_servicio_controller, "generar_ticket_solo_lavado", create=True)
-    def test_finalizar_cobrando_crea_un_job_durable_sin_ticket_local(self, local_ticket, db_cursor, _ensure):
+    def test_finalizar_cobrando_crea_un_job_durable(self, db_cursor, _ensure):
         cursor = FakeCursor(self.operation)
         db_cursor.return_value = fake_db_cursor(cursor)
 
         result = operaciones_servicio_controller.finalizar_solo_lavado_cobrando(31, "cajero")
 
         db_cursor.assert_called_once_with(dictionary=True, commit=True)
-        local_ticket.assert_not_called()
         jobs = [params for query, params in cursor.executed if "INSERT INTO print_jobs" in query]
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0][:4], ("TICKET_SOLO_LAVADO", "PC_PDF", None, "ABC123"))

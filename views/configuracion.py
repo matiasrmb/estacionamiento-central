@@ -1,4 +1,4 @@
-import os
+import subprocess
 from pathlib import Path
 from fpdf import FPDF
 
@@ -28,9 +28,7 @@ from utils.printer_manager import (obtener_impresoras_instaladas,
                                    cargar_impresora_guardada,
                                    guardar_impresora_tickets,
 )
-from utils.printer_diagnostics import SUPPORTED_PRINT_PATH, format_ticket_queue_status
-from utils.ticket import imprimir_pdf_directamente
-from utils.ticket_queue import get_ticket_queue_status
+from utils.printer_diagnostics import SUPPORTED_PRINT_PATH
 
 class ConfiguracionWindow(QWidget):
     """
@@ -245,25 +243,22 @@ class ConfiguracionWindow(QWidget):
         self.btn_guardar_impresora.setMinimumHeight(38)
         self.btn_guardar_impresora.clicked.connect(self.guardar_impresora_seleccionada)
 
-        self.btn_probar_impresion = QPushButton("Probar impresión")
+        self.btn_probar_impresion = QPushButton("Probar impresión local")
         self.btn_probar_impresion.setMinimumHeight(38)
         self.btn_probar_impresion.clicked.connect(self.probar_impresion_ticket)
 
-        self.ticket_queue_status_label = QLabel("")
-        self.ticket_queue_status_label.setObjectName("SubtituloSeccion")
-        self.ticket_queue_status_label.setWordWrap(True)
-
-        self.btn_actualizar_estado_tickets = QPushButton("Actualizar estado de tickets")
-        self.btn_actualizar_estado_tickets.setMinimumHeight(38)
-        self.btn_actualizar_estado_tickets.clicked.connect(self.actualizar_estado_tickets)
+        self.prueba_local_label = QLabel(
+            "La prueba es local y no crea un trabajo de impresión operativo."
+        )
+        self.prueba_local_label.setObjectName("SubtituloSeccion")
+        self.prueba_local_label.setWordWrap(True)
 
         layout_impresion.addWidget(label_impresora, 0, 0)
         layout_impresion.addWidget(self.impresora_combo, 0, 1)
         layout_impresion.addWidget(self.btn_actualizar_impresoras, 0, 2)
         layout_impresion.addWidget(self.btn_guardar_impresora, 1, 1)
         layout_impresion.addWidget(self.btn_probar_impresion, 1, 2)
-        layout_impresion.addWidget(self.ticket_queue_status_label, 2, 0, 1, 2)
-        layout_impresion.addWidget(self.btn_actualizar_estado_tickets, 2, 2)
+        layout_impresion.addWidget(self.prueba_local_label, 2, 0, 1, 3)
 
         layout_impresion.setColumnStretch(1, 1)
 
@@ -378,7 +373,6 @@ class ConfiguracionWindow(QWidget):
         layout.addStretch()
 
         self.cargar_impresoras_en_combo()
-        self.actualizar_estado_tickets()
         self.actualizar_trabajos_impresion_fallidos()
         self.actualizar_trabajos_impresion_impresos()
         self.setLayout(layout)
@@ -399,14 +393,9 @@ class ConfiguracionWindow(QWidget):
         self.limpieza_activa_check.setChecked(self.config.get("limpieza_automatica_activa", "1") == "1")
         self.dias_limpieza_input.setText(self.config.get("dias_conservar_archivos", "30"))
         self.cargar_impresoras_en_combo()
-        self.actualizar_estado_tickets()
         self.actualizar_trabajos_impresion_fallidos()
         self.actualizar_trabajos_impresion_impresos()
         QMessageBox.information(self, "Actualizado", "Configuración recargada desde la base de datos.")
-
-    def actualizar_estado_tickets(self):
-        status = get_ticket_queue_status()
-        self.ticket_queue_status_label.setText(format_ticket_queue_status(status))
 
     def actualizar_trabajos_impresion_fallidos(self):
         try:
@@ -622,8 +611,10 @@ class ConfiguracionWindow(QWidget):
 
     def probar_impresion_ticket(self):
         """
-        Genera un ticket de prueba sencillo y lo envía a imprimir
-        usando la impresora seleccionada.
+        Genera y envía una prueba local a la impresora seleccionada.
+
+        This intentionally bypasses print_jobs because it is an explicit
+        hardware check, never an operational receipt.
         """
         impresora = self.impresora_combo.currentText().strip()
 
@@ -656,20 +647,37 @@ class ConfiguracionWindow(QWidget):
 
             pdf.output(str(ruta_pdf))
 
-            exito = imprimir_pdf_directamente(str(ruta_pdf), impresora)
+            ruta_sumatra = next(
+                (
+                    ruta
+                    for ruta in (
+                        Path(r"C:\Program Files\SumatraPDF\SumatraPDF.exe"),
+                        Path(r"C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe"),
+                        Path.home() / r"AppData\Local\SumatraPDF\SumatraPDF.exe",
+                    )
+                    if ruta.is_file()
+                ),
+                None,
+            )
+            if not ruta_sumatra:
+                raise FileNotFoundError("No se encontró SumatraPDF en rutas conocidas.")
 
-            if exito:
-                QMessageBox.information(
-                    self,
-                    "Prueba enviada",
-                    f"Se envió un ticket de prueba a:\n{impresora}"
-                )
-            else:
-                QMessageBox.warning(
-                    self,
-                    "Error",
-                    "No se pudo enviar la impresión de prueba."
-                )
+            subprocess.Popen(
+                [
+                    str(ruta_sumatra),
+                    "-print-to", impresora,
+                    "-silent",
+                    "-exit-on-print",
+                    str(ruta_pdf),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            QMessageBox.information(
+                self,
+                "Prueba enviada",
+                f"Se envió un ticket de prueba a:\n{impresora}"
+            )
 
         except Exception as e:
             QMessageBox.critical(

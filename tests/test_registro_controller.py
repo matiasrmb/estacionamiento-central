@@ -80,14 +80,12 @@ class FailingPrintJobCursor(FakeCursor):
 
 
 class RegistrarIngresoTests(unittest.TestCase):
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_si_la_patente_ya_tiene_un_ingreso_activo(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         obtener_activos.return_value = [{"id_ingreso": 1, "patente": "ABC123"}]
 
@@ -95,7 +93,6 @@ class RegistrarIngresoTests(unittest.TestCase):
 
         self.assertFalse(resultado)
         db_cursor.assert_not_called()
-        generar_ticket.assert_not_called()
 
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
@@ -211,24 +208,6 @@ class RegistrarIngresoTests(unittest.TestCase):
 
         self.assertTrue(resultado)
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
-    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
-    @patch.object(registro_controller, "db_cursor")
-    def test_registrar_ingreso_no_encola_ticket_local(
-        self,
-        db_cursor,
-        obtener_activos,
-        enqueue_ticket_job,
-    ):
-        cursor = FakeCursor(fetchone_results=[(77,)])
-        db_cursor.return_value = FakeDbCursorContext(cursor)
-        obtener_activos.return_value = []
-
-        resultado = registro_controller.registrar_ingreso("ABC123")
-
-        self.assertTrue(resultado)
-        enqueue_ticket_job.assert_not_called()
-
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     def test_registrar_ingreso_hace_rollback_si_falla_el_job_durable(self, obtener_activos):
         cursor = FailingPrintJobCursor(fetchone_results=[(77,)])
@@ -274,14 +253,12 @@ class RegistrarIngresoTests(unittest.TestCase):
         self.assertEqual(params[:4], ("TICKET_INGRESO", "PC_PDF", 123, "ABC123"))
         self.assertEqual(params[5:], ("PENDIENTE", "desktop-ingreso:123:pc-pdf"))
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_personalizado_futuro(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         obtener_activos.return_value = []
         fecha_futura = datetime.now() + timedelta(minutes=5)
@@ -290,16 +267,13 @@ class RegistrarIngresoTests(unittest.TestCase):
 
         self.assertIsNone(resultado)
         db_cursor.assert_not_called()
-        generar_ticket.assert_not_called()
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_personalizado_mayor_a_cuatro_horas(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         obtener_activos.return_value = []
         fecha_antigua = datetime.now() - timedelta(hours=4, minutes=1)
@@ -308,16 +282,13 @@ class RegistrarIngresoTests(unittest.TestCase):
 
         self.assertIsNone(resultado)
         db_cursor.assert_not_called()
-        generar_ticket.assert_not_called()
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_personalizado_de_dia_anterior(
         self,
         db_cursor,
         obtener_activos,
-        generar_ticket,
     ):
         obtener_activos.return_value = []
         fecha_anterior = datetime.now() - timedelta(days=1)
@@ -326,7 +297,6 @@ class RegistrarIngresoTests(unittest.TestCase):
 
         self.assertIsNone(resultado)
         db_cursor.assert_not_called()
-        generar_ticket.assert_not_called()
 
 
 class CalcularMinutosEstadiaTests(unittest.TestCase):
@@ -414,7 +384,6 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertIsNone(resultado)
         db_cursor.assert_not_called()
 
-    @patch.object(registro_controller, "enqueue_ticket_job")
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso")
@@ -429,7 +398,6 @@ class RegistrarSalidaTests(unittest.TestCase):
         obtener_operacion_convertida,
         calcular_tarifa,
         obtener_configuracion,
-        enqueue_ticket_job,
     ):
         cursor = FakeCursor()
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -452,7 +420,6 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertEqual(resultado["tarifa"], 1500)
         db_cursor.assert_called_once_with(commit=True)
         calcular_tarifa.assert_called_once()
-        enqueue_ticket_job.assert_not_called()
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("UPDATE ingresos", consultas)
         self.assertIn("fecha_hora_salida IS NULL", consultas)

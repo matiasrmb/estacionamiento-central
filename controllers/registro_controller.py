@@ -2,11 +2,9 @@
 Controlador de operaciones de ingreso, salida y estado de vehículos en el estacionamiento.
 """
 
-import logging
 from datetime import datetime, timedelta
 
 from utils.db import db_cursor
-from utils.ticket_queue import enqueue_ticket_job
 from utils.print_jobs import crear_print_job_ingreso, crear_print_job_salida
 from controllers.tarifas_controller import (
     calcular_tarifa,
@@ -24,16 +22,6 @@ from controllers.lavados_controller import (
 )
 from controllers.operaciones_servicio_controller import obtener_operacion_convertida_por_ingreso
 from utils.slowlog import slow_operation
-
-
-logger = logging.getLogger(__name__)
-
-
-def _enqueue_ticket_safely(description, func, *args, **kwargs):
-    try:
-        enqueue_ticket_job(description, func, *args, **kwargs)
-    except Exception:
-        logger.exception("No se pudo encolar el ticket: %s", description)
 
 
 def calcular_minutos_estadia(fecha_hora_ingreso, fecha_hora_salida=None):
