@@ -9,6 +9,7 @@ from controllers.wash_pricing_controller import (
 )
 from utils.db import db_cursor
 from utils.print_jobs import crear_print_job_solo_lavado
+from controllers.config_controller import obtener_print_jobs_pc_activos
 
 
 ESTADO_ACTIVO = "ACTIVO"
@@ -251,7 +252,8 @@ def finalizar_solo_lavado_cobrando(id_operacion_servicio, usuario_fin):
             finalizada.get("fecha_hora_inicio"),
             finalizada.get("fecha_hora_fin"),
         )
-        crear_print_job_solo_lavado(cursor, finalizada)
+        if obtener_print_jobs_pc_activos(cursor):
+            crear_print_job_solo_lavado(cursor, finalizada)
 
     return finalizada
 

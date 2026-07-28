@@ -253,12 +253,26 @@ class ConfiguracionWindow(QWidget):
         self.prueba_local_label.setObjectName("SubtituloSeccion")
         self.prueba_local_label.setWordWrap(True)
 
+        self.print_jobs_pc_activos_check = QCheckBox(
+            "Crear trabajos de impresión para PC"
+        )
+        self.print_jobs_pc_activos_check.setChecked(
+            self.config.get("pc_print_jobs_activos", "1") == "1"
+        )
+        self.print_jobs_pc_activos_label = QLabel(
+            "Al desactivarlo, las nuevas operaciones no crearán trabajos para el agente de impresión."
+        )
+        self.print_jobs_pc_activos_label.setObjectName("SubtituloSeccion")
+        self.print_jobs_pc_activos_label.setWordWrap(True)
+
         layout_impresion.addWidget(label_impresora, 0, 0)
         layout_impresion.addWidget(self.impresora_combo, 0, 1)
         layout_impresion.addWidget(self.btn_actualizar_impresoras, 0, 2)
         layout_impresion.addWidget(self.btn_guardar_impresora, 1, 1)
         layout_impresion.addWidget(self.btn_probar_impresion, 1, 2)
         layout_impresion.addWidget(self.prueba_local_label, 2, 0, 1, 3)
+        layout_impresion.addWidget(self.print_jobs_pc_activos_check, 3, 0, 1, 3)
+        layout_impresion.addWidget(self.print_jobs_pc_activos_label, 4, 0, 1, 3)
 
         layout_impresion.setColumnStretch(1, 1)
 
@@ -392,6 +406,9 @@ class ConfiguracionWindow(QWidget):
             input_valor.setText(self.config.get(clave, valor_default))
         self.limpieza_activa_check.setChecked(self.config.get("limpieza_automatica_activa", "1") == "1")
         self.dias_limpieza_input.setText(self.config.get("dias_conservar_archivos", "30"))
+        self.print_jobs_pc_activos_check.setChecked(
+            self.config.get("pc_print_jobs_activos", "1") == "1"
+        )
         self.cargar_impresoras_en_combo()
         self.actualizar_trabajos_impresion_fallidos()
         self.actualizar_trabajos_impresion_impresos()
@@ -718,6 +735,10 @@ class ConfiguracionWindow(QWidget):
             actualizar_configuracion(clave, valor)
         actualizar_configuracion("limpieza_automatica_activa", 1 if self.limpieza_activa_check.isChecked() else 0)
         actualizar_configuracion("dias_conservar_archivos", dias_limpieza)
+        actualizar_configuracion(
+            "pc_print_jobs_activos",
+            1 if self.print_jobs_pc_activos_check.isChecked() else 0,
+        )
 
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 

@@ -32,6 +32,13 @@ class FailingPrintJobCursor(FakeCursor):
             raise RuntimeError("print job unavailable")
 
 
+class FailingConfigLookupCursor(FakeCursor):
+    def execute(self, query, params=None):
+        if "FROM configuracion" in query:
+            raise RuntimeError("config no disponible")
+        super().execute(query, params)
+
+
 class FakeConnection:
     def __init__(self, cursor):
         self.cursor_instance = cursor
@@ -67,9 +74,10 @@ class SoloLavadoPrintJobTests(unittest.TestCase):
             "estado": "ACTIVO",
         }
 
+    @patch.object(operaciones_servicio_controller, "obtener_print_jobs_pc_activos", return_value=True)
     @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(operaciones_servicio_controller, "db_cursor")
-    def test_finalizar_cobrando_crea_un_job_durable(self, db_cursor, _ensure):
+    def test_finalizar_cobrando_crea_un_job_durable(self, db_cursor, _ensure, _obtener_print_jobs_pc_activos):
         cursor = FakeCursor(self.operation)
         db_cursor.return_value = fake_db_cursor(cursor)
 
@@ -86,8 +94,9 @@ class SoloLavadoPrintJobTests(unittest.TestCase):
         self.assertEqual(payload["monto_final"], 9000)
         self.assertEqual(result["id_operacion_servicio"], 31)
 
+    @patch.object(operaciones_servicio_controller, "obtener_print_jobs_pc_activos", return_value=True)
     @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
-    def test_job_failure_rolls_back_service_finalization(self, _ensure):
+    def test_job_failure_rolls_back_service_finalization(self, _ensure, _obtener_print_jobs_pc_activos):
         connection = FakeConnection(FailingPrintJobCursor(self.operation))
 
         with patch.object(operaciones_servicio_controller, "db_cursor", db_utils.db_cursor), patch.object(
@@ -98,6 +107,40 @@ class SoloLavadoPrintJobTests(unittest.TestCase):
 
         self.assertFalse(connection.committed)
         self.assertTrue(connection.rolled_back)
+
+    @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
+    def test_finalizar_cobrando_confirma_y_crea_job_si_falla_la_lectura_de_configuracion(
+        self, _ensure
+    ):
+        cursor = FailingConfigLookupCursor(self.operation)
+        connection = FakeConnection(cursor)
+
+        with patch.object(operaciones_servicio_controller, "db_cursor", db_utils.db_cursor), patch.object(
+            db_utils, "get_connection", return_value=connection
+        ):
+            result = operaciones_servicio_controller.finalizar_solo_lavado_cobrando(31, "cajero")
+
+        self.assertEqual(result["estado"], operaciones_servicio_controller.ESTADO_FINALIZADO_COBRADO)
+        self.assertTrue(connection.committed)
+        self.assertFalse(connection.rolled_back)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("UPDATE operaciones_servicio", consultas)
+        self.assertIn("INSERT INTO print_jobs", consultas)
+
+    @patch.object(operaciones_servicio_controller, "obtener_print_jobs_pc_activos", return_value=False)
+    @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
+    @patch.object(operaciones_servicio_controller, "db_cursor")
+    def test_finalizar_cobrando_no_crea_job_cuando_la_impresion_pc_esta_desactivada(
+        self, db_cursor, _ensure, _obtener_print_jobs_pc_activos
+    ):
+        cursor = FakeCursor(self.operation)
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        result = operaciones_servicio_controller.finalizar_solo_lavado_cobrando(31, "cajero")
+
+        self.assertEqual(result["estado"], operaciones_servicio_controller.ESTADO_FINALIZADO_COBRADO)
+        self.assertIn("UPDATE operaciones_servicio", "\n".join(query for query, _ in cursor.executed))
+        self.assertNotIn("INSERT INTO print_jobs", "\n".join(query for query, _ in cursor.executed))
 
     def test_idempotency_key_is_stable(self):
         self.assertEqual(solo_lavado_idempotency_key(31), "desktop-solo-lavado:31:pc-pdf")

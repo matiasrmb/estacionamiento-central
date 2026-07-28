@@ -79,6 +79,14 @@ class FailingPrintJobCursor(FakeCursor):
             raise RuntimeError("print job unavailable")
 
 
+class FailingConfigLookupCursor(FakeCursor):
+    def execute(self, query, params=None):
+        if "FROM configuracion" in query:
+            super().execute(query, params)
+            raise RuntimeError("config no disponible")
+        super().execute(query, params)
+
+
 class FailingPrintJobUnlinkCursor(FakeCursor):
     def execute(self, query, params=None):
         super().execute(query, params)
@@ -122,7 +130,7 @@ class RegistrarIngresoTests(unittest.TestCase):
         resultado = registro_controller.registrar_ingreso_detallado("ABC123")
 
         self.assertIsNotNone(resultado)
-        db_cursor.assert_called_once_with(commit=True)
+        db_cursor.assert_any_call(commit=True)
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("INSERT INTO vehiculos", consultas)
         self.assertIn("INSERT INTO ingresos", consultas)
@@ -149,6 +157,22 @@ class RegistrarIngresoTests(unittest.TestCase):
                 "version": 1,
             },
         }, ensure_ascii=False))
+
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "obtener_print_jobs_pc_activos", return_value=False)
+    @patch.object(registro_controller, "db_cursor")
+    def test_registra_ingreso_sin_crear_job_cuando_la_impresion_pc_esta_desactivada(
+        self, db_cursor, _obtener_print_jobs_pc_activos, obtener_activos
+    ):
+        cursor = FakeCursor(fetchone_results=[(77,)])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_activos.return_value = []
+
+        resultado = registro_controller.registrar_ingreso_detallado("ABC123")
+
+        self.assertIsNotNone(resultado)
+        self.assertIn("INSERT INTO ingresos", "\n".join(query for query, _ in cursor.executed))
+        self.assertNotIn("INSERT INTO print_jobs", "\n".join(query for query, _ in cursor.executed))
 
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
@@ -250,6 +274,26 @@ class RegistrarIngresoTests(unittest.TestCase):
         )
 
         self.assertLess(ingreso_index, print_job_index)
+
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    def test_registrar_ingreso_confirma_y_crea_job_si_falla_la_lectura_de_configuracion(
+        self, obtener_activos
+    ):
+        cursor = FailingConfigLookupCursor(fetchone_results=[(77,)])
+        connection = FakeConnection(cursor)
+        obtener_activos.return_value = []
+
+        with patch.object(registro_controller, "db_cursor", db_utils.db_cursor), patch.object(
+            db_utils, "get_connection", return_value=connection
+        ):
+            resultado = registro_controller.registrar_ingreso("ABC123")
+
+        self.assertTrue(resultado)
+        self.assertTrue(connection.committed)
+        self.assertFalse(connection.rolled_back)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("INSERT INTO ingresos", consultas)
+        self.assertIn("INSERT INTO print_jobs", consultas)
 
     def test_clave_idempotencia_de_ingreso_es_estable(self):
         self.assertEqual(ingreso_idempotency_key(123), "desktop-ingreso:123:pc-pdf")
@@ -468,6 +512,31 @@ class RegistrarSalidaTests(unittest.TestCase):
                 "version": 1,
             },
         })
+
+    @patch.object(registro_controller, "obtener_print_jobs_pc_activos", return_value=False)
+    @patch.object(registro_controller, "obtener_configuracion", return_value={"modo_cobro": "minuto"})
+    @patch.object(registro_controller, "calcular_tarifa", return_value=(1500, False, 0))
+    @patch.object(registro_controller, "calcular_minutos_lavado", return_value=0)
+    @patch.object(registro_controller, "obtener_ingreso_activo_priorizado")
+    @patch.object(registro_controller, "db_cursor")
+    def test_registra_salida_sin_crear_job_cuando_la_impresion_pc_esta_desactivada(
+        self, db_cursor, obtener_ingreso, _calcular_minutos_lavado, _calcular_tarifa,
+        _obtener_configuracion, _obtener_print_jobs_pc_activos
+    ):
+        cursor = FakeCursor()
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_ingreso.return_value = {
+            "id_ingreso": 10,
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "patente": "ABC123",
+            "en_lavado": 0,
+        }
+
+        resultado = registro_controller.registrar_salida_detallada("ABC123", "admin")
+
+        self.assertEqual(resultado["tarifa"], 1500)
+        self.assertIn("UPDATE ingresos", "\n".join(query for query, _ in cursor.executed))
+        self.assertNotIn("INSERT INTO print_jobs", "\n".join(query for query, _ in cursor.executed))
 
     @patch.object(registro_controller, "obtener_configuracion", return_value={"modo_cobro": "minuto"})
     @patch.object(registro_controller, "calcular_tarifa", return_value=(1500, False, 0))
@@ -742,19 +811,27 @@ class RegistrarSalidaTests(unittest.TestCase):
             "\n".join(query for query, _ in cursor.executed),
         )
 
+    @patch.object(registro_controller, "datetime")
+    @patch("controllers.tarifas_controller.obtener_subida_activa", return_value=None)
+    @patch("controllers.tarifas_controller.obtener_configuracion")
     @patch.object(registro_controller, "obtener_configuracion")
-    @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso", return_value=None)
+    @patch.object(registro_controller, "calcular_total_lavados", return_value=0)
     @patch.object(registro_controller, "calcular_minutos_lavado")
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
-    @patch.object(registro_controller, "db_cursor")
-    def test_no_actualiza_salida_si_falla_obtener_configuracion(
+    def test_registra_salida_y_crea_job_si_falla_lectura_del_toggle_pc(
         self,
-        db_cursor,
         obtener_activos,
         calcular_minutos_lavado,
-        calcular_tarifa,
+        calcular_total_lavados,
+        obtener_operacion_convertida,
         obtener_configuracion,
+        obtener_configuracion_tarifa,
+        _obtener_subida_activa,
+        datetime_mock,
     ):
+        cursor = FailingConfigLookupCursor()
+        connection = FakeConnection(cursor)
         fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
         obtener_activos.return_value = [
             {
@@ -765,8 +842,44 @@ class RegistrarSalidaTests(unittest.TestCase):
             }
         ]
         calcular_minutos_lavado.return_value = 0
-        calcular_tarifa.return_value = (1500, False, 0)
-        obtener_configuracion.side_effect = RuntimeError("config no disponible")
+        config_tarifa = {
+            "modo_cobro": "minuto",
+            "tarifa_minima": "300",
+            "valor_minuto": "25",
+        }
+        obtener_configuracion.return_value = config_tarifa
+        obtener_configuracion_tarifa.return_value = config_tarifa
+        datetime_mock.now.return_value = datetime(2026, 1, 1, 10, 30, 0)
+
+        with patch.object(registro_controller, "db_cursor", db_utils.db_cursor), patch.object(
+            db_utils, "get_connection", return_value=connection
+        ):
+            resultado = registro_controller.registrar_salida("ABC123", "admin")
+
+        self.assertEqual(resultado, 1025)
+        self.assertTrue(connection.committed)
+        self.assertFalse(connection.rolled_back)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("UPDATE ingresos", consultas)
+        self.assertIn("FROM configuracion", consultas)
+        self.assertIn("INSERT INTO print_jobs", consultas)
+
+    @patch("controllers.tarifas_controller.obtener_configuracion")
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_no_registra_salida_si_falla_la_configuracion_tarifaria(
+        self,
+        db_cursor,
+        obtener_activos,
+        obtener_configuracion_tarifa,
+    ):
+        obtener_activos.return_value = [{
+            "id_ingreso": 10,
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0, 0),
+            "patente": "ABC123",
+            "en_lavado": 0,
+        }]
+        obtener_configuracion_tarifa.side_effect = RuntimeError("configuracion tarifaria no disponible")
 
         resultado = registro_controller.registrar_salida("ABC123", "admin")
 

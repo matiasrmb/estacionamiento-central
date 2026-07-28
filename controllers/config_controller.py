@@ -15,6 +15,8 @@ LAVADO_CATEGORIAS = [
     ("lavado_minibus", "Mini bus o vehículos grandes", "25000"),
 ]
 
+PC_PRINT_JOBS_ACTIVOS_KEY = "pc_print_jobs_activos"
+
 def obtener_configuracion():
     """
     Obtiene la configuración general del sistema como un diccionario clave-valor.
@@ -67,6 +69,29 @@ def guardar_configuracion_masiva(diccionario_config):
                 """,
                 (clave, str(valor))
             )
+
+
+def print_jobs_pc_activos(configuracion=None):
+    """Indica si las operaciones deben crear trabajos durables para PC."""
+    config = configuracion if configuracion is not None else obtener_configuracion()
+    return config.get(PC_PRINT_JOBS_ACTIVOS_KEY, "1") != "0"
+
+
+def obtener_print_jobs_pc_activos(cursor):
+    """Lee la opción de impresión desde la transacción operativa actual."""
+    try:
+        cursor.execute(
+            "SELECT valor FROM configuracion WHERE clave = %s LIMIT 1",
+            (PC_PRINT_JOBS_ACTIVOS_KEY,),
+        )
+        fila = cursor.fetchone()
+    except Exception:
+        return True
+
+    if not fila:
+        return True
+    valor = fila["valor"] if isinstance(fila, dict) else fila[0]
+    return str(valor) != "0"
 
 
 def obtener_valores_lavado(configuracion=None):

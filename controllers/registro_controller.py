@@ -13,7 +13,10 @@ from controllers.tarifas_controller import (
     describir_detalle_tarifa,
     obtener_contexto_tarifa,
 )
-from controllers.config_controller import obtener_configuracion
+from controllers.config_controller import (
+    obtener_configuracion,
+    obtener_print_jobs_pc_activos,
+)
 from controllers.lavados_controller import (
     asegurar_schema_lavados,
     calcular_minutos_lavado,
@@ -222,7 +225,8 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
                 VALUES (%s, %s, 0)
             """, (id_vehiculo, fecha_hora))
             id_ingreso = cursor.lastrowid
-            crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora)
+            if obtener_print_jobs_pc_activos(cursor):
+                crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora)
 
     except Exception as e:
         print(f"Error al registrar ingreso: {e}")
@@ -297,7 +301,12 @@ def registrar_salida_detallada(patente, usuario):
             )
         total_a_cobrar = tarifa + total_lavados
 
-        config = obtener_configuracion()
+        try:
+            config = obtener_configuracion()
+        except Exception:
+            # The ticket metadata may use the configured payment mode, but a
+            # configuration read must never prevent recording a completed exit.
+            config = {}
         modo_cobro = config.get("modo_cobro", "minuto")
         detalle_cobro = (
             describir_detalle_tarifa(minutos)
@@ -319,23 +328,24 @@ def registrar_salida_detallada(patente, usuario):
                 print(f"[WARN] No se registró salida para {patente}: el ingreso ya fue cerrado.")
                 return None
 
-            crear_print_job_salida(
-                cursor,
-                ingreso["id_ingreso"],
-                patente,
-                fecha_ingreso,
-                ahora,
-                minutos,
-                total_a_cobrar,
-                detalle_cobro,
-                tarifa,
-                total_lavados,
-                usuario,
-                modo_cobro,
-                subida_aplicada,
-                monto_extra,
-                detalle_secciones,
-            )
+            if obtener_print_jobs_pc_activos(cursor):
+                crear_print_job_salida(
+                    cursor,
+                    ingreso["id_ingreso"],
+                    patente,
+                    fecha_ingreso,
+                    ahora,
+                    minutos,
+                    total_a_cobrar,
+                    detalle_cobro,
+                    tarifa,
+                    total_lavados,
+                    usuario,
+                    modo_cobro,
+                    subida_aplicada,
+                    monto_extra,
+                    detalle_secciones,
+                )
 
     except Exception as e:
         print(f"Error al registrar salida: {e}")
