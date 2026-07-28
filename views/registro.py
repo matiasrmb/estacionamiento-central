@@ -263,7 +263,7 @@ class RegistroWindow(QWidget):
             "F6: registrar baño\n"
             "F7: reingresar vehículo\n"
             "F8: alternar espera\n"
-            "F9: eliminar ingreso\n"
+            "F9: eliminar ingreso en espera\n"
             "F10: consultar tarifa\n"
             "F11: ingresar con hora personalizada\n"
             "Ctrl+L: iniciar/finalizar lavado seleccionado"
@@ -1384,7 +1384,7 @@ class RegistroWindow(QWidget):
             self,
             "Confirmar eliminación",
             (
-                f"¿Deseas eliminar el ingreso activo de la patente {patente}?\n\n"
+                f"¿Deseas eliminar el ingreso en espera de la patente {patente}?\n\n"
                 "Este movimiento se respaldará en la tabla de ingresos eliminados."
             ),
             QMessageBox.Yes | QMessageBox.No

@@ -211,6 +211,9 @@ class EdicionIngresosWindow(QWidget):
         )
 
         if confirmacion == QMessageBox.Yes:
-            eliminar_ingreso_con_respaldo(id_ingreso, self.usuario_admin)
-            QMessageBox.information(self, "Eliminado", "Ingreso eliminado correctamente.")
-            self.cargar_datos()
+            exito, mensaje = eliminar_ingreso_con_respaldo(id_ingreso, self.usuario_admin)
+            if exito:
+                QMessageBox.information(self, "Eliminado", mensaje)
+                self.cargar_datos()
+            else:
+                QMessageBox.warning(self, "No se pudo eliminar", mensaje)

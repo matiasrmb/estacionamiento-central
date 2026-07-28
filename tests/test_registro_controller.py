@@ -79,6 +79,13 @@ class FailingPrintJobCursor(FakeCursor):
             raise RuntimeError("print job unavailable")
 
 
+class FailingPrintJobUnlinkCursor(FakeCursor):
+    def execute(self, query, params=None):
+        super().execute(query, params)
+        if "SET id_ingreso = NULL" in query:
+            raise RuntimeError("print_jobs.id_ingreso cannot be null")
+
+
 class RegistrarIngresoTests(unittest.TestCase):
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
@@ -1051,32 +1058,172 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertFalse(resultado)
 
     @patch.object(registro_controller, "db_cursor")
-    def test_eliminar_ingreso_con_respaldo_inserta_respaldo_y_elimina(self, db_cursor):
+    def test_eliminar_ingreso_con_respaldo_desvincula_jobs_respalda_y_elimina(self, db_cursor):
         ingreso = {
             "id_ingreso": 10,
             "patente": "ABC123",
             "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "fecha_hora_salida": None,
+            "en_espera": 1,
         }
-        cursor = FakeCursor(fetchone_results=[ingreso])
+        cursor = FakeCursor(fetchone_results=[ingreso, None])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
-        registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
+        resultado = registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
 
+        self.assertEqual(resultado, (True, "Ingreso en espera eliminado correctamente."))
         db_cursor.assert_called_once_with(dictionary=True, commit=True)
         consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("UPDATE print_jobs", consultas)
+        self.assertIn("estado = 'CANCELADO'", consultas)
         self.assertIn("INSERT INTO ingresos_eliminados", consultas)
         self.assertIn("DELETE FROM ingresos", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_eliminar_ingreso_con_respaldo_bloquea_job_imprimiendo(self, db_cursor):
+        ingreso = {
+            "id_ingreso": 10,
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "fecha_hora_salida": None,
+            "en_espera": 1,
+        }
+        cursor = FakeCursor(
+            fetchone_results=[ingreso],
+            fetchall_results=[[{"id_print_job": 5, "estado": "IMPRIMIENDO"}]],
+        )
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
+
+        self.assertFalse(resultado[0])
+        self.assertIn("imprimiendo", resultado[1])
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("SELECT id_print_job, estado", consultas)
+        self.assertNotIn("estado = 'CANCELADO'", consultas)
+        self.assertNotIn("DELETE FROM ingresos", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_eliminar_ingreso_con_respaldo_cancela_jobs_reintentables_y_preserva_terminales(self, db_cursor):
+        ingreso = {
+            "id_ingreso": 10,
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "fecha_hora_salida": None,
+            "en_espera": 1,
+        }
+        cursor = FakeCursor(fetchone_results=[ingreso, None])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
+
+        self.assertTrue(resultado[0])
+        cancel_query, cancel_params = next(
+            (query, params) for query, params in cursor.executed
+            if "SET estado = 'CANCELADO'" in query
+        )
+        self.assertIn("'PENDIENTE', 'ERROR', 'REVISION_MANUAL'", cancel_query)
+        self.assertEqual(cancel_params, (10,))
+        unlink_query, unlink_params = next(
+            (query, params) for query, params in cursor.executed
+            if "SET id_ingreso = NULL" in query
+        )
+        self.assertNotIn("estado", unlink_query.lower().split("set", 1)[1])
+        self.assertEqual(unlink_params, (10,))
 
     @patch.object(registro_controller, "db_cursor")
     def test_eliminar_ingreso_con_respaldo_no_elimina_si_no_existe_ingreso(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[None])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
-        registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
+        resultado = registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
 
+        self.assertEqual(resultado, (False, "El ingreso ya no existe."))
         consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertNotIn("UPDATE print_jobs", consultas)
         self.assertNotIn("INSERT INTO ingresos_eliminados", consultas)
         self.assertNotIn("DELETE FROM ingresos", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_eliminar_ingreso_con_respaldo_no_elimina_ingreso_normal_activo(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[{
+            "id_ingreso": 10,
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "fecha_hora_salida": None,
+            "en_espera": 0,
+        }])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
+
+        self.assertEqual(resultado, (False, "Solo se pueden eliminar ingresos abiertos en espera."))
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertNotIn("UPDATE print_jobs", consultas)
+        self.assertNotIn("DELETE FROM ingresos", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_eliminar_ingreso_con_respaldo_no_elimina_ingreso_cerrado(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[{
+            "id_ingreso": 10,
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "fecha_hora_salida": datetime(2026, 1, 1, 11, 0),
+            "en_espera": 1,
+        }])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
+
+        self.assertEqual(resultado, (False, "No se puede eliminar un ingreso cerrado."))
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertNotIn("UPDATE print_jobs", consultas)
+        self.assertNotIn("DELETE FROM ingresos", consultas)
+
+    def test_eliminar_ingreso_con_respaldo_revierte_si_no_puede_desvincular_print_jobs(self):
+        cursor = FailingPrintJobUnlinkCursor(fetchone_results=[{
+            "id_ingreso": 10,
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "fecha_hora_salida": None,
+            "en_espera": 1,
+        }])
+        connection = FakeConnection(cursor)
+
+        with patch.object(registro_controller, "db_cursor", db_utils.db_cursor), patch.object(
+            db_utils, "get_connection", return_value=connection
+        ):
+            resultado = registro_controller.eliminar_ingreso_con_respaldo(10, "admin")
+
+        self.assertFalse(resultado[0])
+        self.assertIn("dependencias", resultado[1])
+        self.assertFalse(connection.committed)
+        self.assertTrue(connection.rolled_back)
+        consultas = "\n".join(query for query, _ in connection.executed_before_rollback)
+        self.assertIn("UPDATE print_jobs", consultas)
+        self.assertNotIn("INSERT INTO ingresos_eliminados", consultas)
+        self.assertNotIn("DELETE FROM ingresos", consultas)
+
+    @patch.object(registro_controller, "eliminar_ingreso_con_respaldo")
+    @patch.object(registro_controller, "db_cursor")
+    def test_eliminar_ingreso_activo_por_patente_selecciona_espera_aunque_haya_un_activo_normal(
+        self, db_cursor, eliminar_ingreso
+    ):
+        cursor = FakeCursor(fetchone_results=[{"id_ingreso": 20}])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        eliminar_ingreso.return_value = (
+            False, "Solo se pueden eliminar ingresos abiertos en espera."
+        )
+
+        resultado = registro_controller.eliminar_ingreso_activo_por_patente("ABC123", "admin")
+
+        self.assertEqual(resultado, eliminar_ingreso.return_value)
+        eliminar_ingreso.assert_called_once_with(20, "admin")
+        consulta, params = cursor.executed[0]
+        self.assertIn("i.en_espera = 1", consulta)
+        self.assertIn("i.fecha_hora_salida IS NULL", consulta)
+        self.assertIn("ORDER BY i.fecha_hora_ingreso DESC, i.id_ingreso DESC", consulta)
+        self.assertEqual(params, ("ABC123",))
 
     @patch.object(registro_controller, "db_cursor")
     def test_registrar_uso_bano_inserta_registro(self, db_cursor):

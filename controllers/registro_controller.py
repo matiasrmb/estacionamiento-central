@@ -584,22 +584,66 @@ def obtener_ingresos_editables():
 
 def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
     """
-    Elimina un ingreso y lo respalda previamente en la tabla ingresos_eliminados.
+    Elimina con respaldo únicamente un ingreso abierto marcado en espera.
+
+    Los trabajos de impresión vinculados se conservan. Los reintentables se
+    cancelan y todos se desvinculan del ingreso antes de eliminarlo para
+    respetar su clave foránea.
 
     Args:
         id_ingreso (int): ID del ingreso a eliminar.
         usuario (str): Usuario que realiza la eliminación.
-    """
-    with db_cursor(dictionary=True, commit=True) as cursor:
-        cursor.execute("""
-            SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso
-            FROM ingresos i
-            JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
-            WHERE i.id_ingreso = %s
-        """, (id_ingreso,))
-        ingreso = cursor.fetchone()
 
-        if ingreso:
+    Returns:
+        tuple[bool, str]: Resultado y mensaje para mostrar al operador.
+    """
+    try:
+        with db_cursor(dictionary=True, commit=True) as cursor:
+            cursor.execute("""
+                SELECT i.id_ingreso, v.patente, i.fecha_hora_ingreso,
+                       i.fecha_hora_salida, i.en_espera
+                FROM ingresos i
+                JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+                WHERE i.id_ingreso = %s
+                FOR UPDATE
+            """, (id_ingreso,))
+            ingreso = cursor.fetchone()
+
+            if not ingreso:
+                return False, "El ingreso ya no existe."
+
+            if ingreso["fecha_hora_salida"] is not None:
+                return False, "No se puede eliminar un ingreso cerrado."
+
+            if not ingreso["en_espera"]:
+                return False, "Solo se pueden eliminar ingresos abiertos en espera."
+
+            cursor.execute("""
+                SELECT id_print_job, estado
+                FROM print_jobs
+                WHERE id_ingreso = %s
+                FOR UPDATE
+            """, (id_ingreso,))
+            jobs = cursor.fetchall()
+            if any(job["estado"] == "IMPRIMIENDO" for job in jobs):
+                return False, (
+                    "No se puede eliminar el ingreso mientras se está imprimiendo "
+                    "un ticket asociado."
+                )
+
+            cursor.execute("""
+                UPDATE print_jobs
+                SET estado = 'CANCELADO'
+                WHERE id_ingreso = %s
+                  AND estado IN ('PENDIENTE', 'ERROR', 'REVISION_MANUAL')
+            """, (id_ingreso,))
+
+            cursor.execute("""
+                UPDATE print_jobs
+                SET id_ingreso = NULL
+                WHERE id_ingreso = %s
+            """, (id_ingreso,))
+
             cursor.execute("""
                 INSERT INTO ingresos_eliminados (
                     id_ingreso_original,
@@ -616,6 +660,14 @@ def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
             ))
 
             cursor.execute("DELETE FROM ingresos WHERE id_ingreso = %s", (id_ingreso,))
+        return True, "Ingreso en espera eliminado correctamente."
+
+    except Exception as e:
+        print(f"Error al eliminar ingreso en espera: {e}")
+        return False, (
+            "No se pudo eliminar el ingreso en espera porque tiene dependencias "
+            "que impiden conservar su historial."
+        )
 
 
 def marcar_ingreso_en_espera(patente):
@@ -832,11 +884,10 @@ def obtener_patentes_existentes():
 
 def eliminar_ingreso_activo_por_patente(patente, usuario):
     """
-    Elimina con respaldo el ingreso activo priorizado de una patente.
+    Elimina con respaldo el ingreso abierto en espera más reciente de una patente.
 
-    Se prioriza:
-    1. ingreso activo normal
-    2. ingreso activo en espera
+    No usa el selector de ingresos activos general, ya que ese selector prioriza
+    ingresos normales para las operaciones de salida.
 
     Args:
         patente (str): Patente del vehículo.
@@ -846,15 +897,25 @@ def eliminar_ingreso_activo_por_patente(patente, usuario):
         tuple[bool, str]: Resultado y mensaje.
     """
     try:
-        ingreso = obtener_ingreso_activo_priorizado(patente, "eliminar ingreso")
+        with db_cursor(dictionary=True) as cursor:
+            cursor.execute("""
+                SELECT i.id_ingreso
+                FROM ingresos i
+                JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
+                WHERE v.patente = %s
+                  AND i.fecha_hora_salida IS NULL
+                  AND i.en_espera = 1
+                ORDER BY i.fecha_hora_ingreso DESC, i.id_ingreso DESC
+                LIMIT 1
+            """, (patente,))
+            ingreso = cursor.fetchone()
 
         if not ingreso:
-            return False, "No hay un ingreso activo para esta patente."
+            return False, "No hay un ingreso abierto en espera para esta patente."
 
         id_ingreso = ingreso["id_ingreso"]
 
-        eliminar_ingreso_con_respaldo(id_ingreso, usuario)
-        return True, f"Ingreso activo de {patente} eliminado con respaldo."
+        return eliminar_ingreso_con_respaldo(id_ingreso, usuario)
 
     except Exception as e:
         print(f"Error al eliminar ingreso activo por patente: {e}")
