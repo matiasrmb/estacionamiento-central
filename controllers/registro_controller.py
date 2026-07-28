@@ -3,6 +3,7 @@ Controlador de operaciones de ingreso, salida y estado de vehículos en el estac
 """
 
 from datetime import datetime, timedelta
+import json
 
 from utils.db import db_cursor
 from utils.print_jobs import crear_print_job_ingreso, crear_print_job_salida
@@ -179,11 +180,6 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
         dict | None: Datos del ingreso registrado o None si falló.
     """
     try:
-        activos = obtener_ingresos_activos_por_patente(patente)
-        if activos:
-            print(f"[WARN] No se registró ingreso para {patente}: ya existe un ingreso activo.")
-            return None
-
         es_ingreso_personalizado = fecha_hora_ingreso is not None
         if es_ingreso_personalizado:
             es_valida, mensaje = validar_fecha_hora_ingreso_personalizada(fecha_hora_ingreso)
@@ -193,7 +189,7 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
 
         with db_cursor(commit=True) as cursor:
             cursor.execute(
-                "SELECT id_vehiculo FROM vehiculos WHERE patente = %s LIMIT 1",
+                "SELECT id_vehiculo FROM vehiculos WHERE patente = %s FOR UPDATE",
                 (patente,)
             )
             row = cursor.fetchone()
@@ -206,6 +202,18 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
                     (patente,)
                 )
                 id_vehiculo = cursor.lastrowid
+
+            # This vehicle lock also serializes a registration with a salida reversal.
+            cursor.execute("""
+                SELECT id_ingreso
+                FROM ingresos
+                WHERE id_vehiculo = %s
+                  AND fecha_hora_salida IS NULL
+                FOR UPDATE
+            """, (id_vehiculo,))
+            if cursor.fetchone():
+                print(f"[WARN] No se registró ingreso para {patente}: ya existe un ingreso activo.")
+                return None
 
             fecha_hora = fecha_hora_ingreso if es_ingreso_personalizado else datetime.now()
 
@@ -759,67 +767,118 @@ def revertir_en_espera(id_ingreso):
         return False
 
 
-def reingresar_vehiculo_cerrado(id_ingreso_original):
-    """
-    Reingresa un vehículo que ya fue cerrado, manteniendo la hora original y la tarifa acumulada.
-    Marca el ingreso original como 'reingresado'.
+def reingresar_vehiculo_cerrado(
+    id_ingreso,
+    usuario_reversion,
+    confirma_sin_cobro=False,
+    motivo="",
+    confirma_ticket_impreso=False,
+):
+    """Revierte una salida sin cobro sobre el mismo ingreso, con auditoría inmutable."""
+    motivo = motivo.strip()
+    if not confirma_sin_cobro:
+        return False, "Debes confirmar que no se cobró dinero antes de revertir la salida."
+    if not motivo:
+        return False, "Debes indicar el motivo de la reversión de salida."
 
-    Args:
-        id_ingreso_original (int): ID del ingreso cerrado original.
-
-    Returns:
-        bool: True si fue exitoso, False en caso contrario.
-    """
     try:
         with db_cursor(dictionary=True, commit=True) as cursor:
             cursor.execute("""
-                SELECT id_vehiculo, fecha_hora_ingreso, tarifa_aplicada
-                FROM ingresos
-                WHERE id_ingreso = %s
-                  AND fecha_hora_salida IS NOT NULL
-                  AND reingresado = 0
-            """, (id_ingreso_original,))
+                SELECT i.id_ingreso, i.id_vehiculo, v.patente,
+                       i.fecha_hora_ingreso, i.fecha_hora_salida,
+                       i.tarifa_aplicada, i.usuario, i.cerrado
+                FROM ingresos i
+                JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
+                WHERE i.id_ingreso = %s
+                FOR UPDATE
+            """, (id_ingreso,))
             ingreso = cursor.fetchone()
 
-            if not ingreso:
-                return False
+            if not ingreso or ingreso["fecha_hora_salida"] is None:
+                return False, "El ingreso no tiene una salida reversible."
+            if ingreso["cerrado"]:
+                return False, "No se puede revertir una salida incluida en un cierre diario."
 
-            # Evitar duplicar un activo si ya existe uno abierto para esa patente
             cursor.execute("""
-                SELECT COUNT(*) AS total
+                SELECT id_vehiculo
+                FROM vehiculos
+                WHERE id_vehiculo = %s
+                FOR UPDATE
+            """, (ingreso["id_vehiculo"],))
+
+            cursor.execute("""
+                SELECT id_ingreso
                 FROM ingresos
                 WHERE id_vehiculo = %s
                   AND fecha_hora_salida IS NULL
+                FOR UPDATE
             """, (ingreso["id_vehiculo"],))
-            activos = cursor.fetchone()
-
-            if activos and activos["total"] > 0:
-                print(
-                    "[WARN] No se pudo reingresar vehículo: ya existe un ingreso activo "
-                    f"para id_vehiculo={ingreso['id_vehiculo']}."
-                )
-                return False
+            if cursor.fetchone():
+                return False, "No se puede revertir: el vehículo ya tiene un ingreso activo."
 
             cursor.execute("""
-                INSERT INTO ingresos (id_vehiculo, fecha_hora_ingreso, tarifa_aplicada, en_espera)
-                VALUES (%s, %s, %s, 0)
-            """, (
-                ingreso["id_vehiculo"],
-                ingreso["fecha_hora_ingreso"],
-                ingreso["tarifa_aplicada"]
-            ))
+                SELECT id_print_job, estado
+                FROM print_jobs
+                WHERE id_ingreso = %s
+                  AND tipo = 'TICKET_SALIDA'
+                FOR UPDATE
+            """, (id_ingreso,))
+            jobs_salida = cursor.fetchall()
+            if any(job["estado"] == "IMPRIMIENDO" for job in jobs_salida):
+                return False, "No se puede revertir mientras se imprime un ticket de salida."
+            if any(job["estado"] == "IMPRESO" for job in jobs_salida) and not confirma_ticket_impreso:
+                return False, (
+                    "El ticket de salida ya fue impreso; se requiere confirmación explícita "
+                    "de su entrega antes de revertir."
+                )
 
+            resumen_tickets = json.dumps(
+                [{"id_print_job": job["id_print_job"], "estado": job["estado"]} for job in jobs_salida],
+                ensure_ascii=True,
+            )
+            cursor.execute("""
+                UPDATE print_jobs
+                SET estado = 'CANCELADO'
+                WHERE id_ingreso = %s
+                  AND tipo = 'TICKET_SALIDA'
+                  AND estado IN ('PENDIENTE', 'ERROR', 'REVISION_MANUAL')
+            """, (id_ingreso,))
+            cursor.execute("""
+                INSERT INTO reversiones_salida (
+                    id_ingreso, patente, fecha_hora_ingreso, fecha_hora_salida_original,
+                    tarifa_aplicada_original, usuario_salida_original, usuario_reversion,
+                    motivo, ticket_estado_resumen, ticket_impreso_confirmado
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                id_ingreso,
+                ingreso["patente"],
+                ingreso["fecha_hora_ingreso"],
+                ingreso["fecha_hora_salida"],
+                ingreso["tarifa_aplicada"],
+                ingreso["usuario"],
+                usuario_reversion,
+                motivo,
+                resumen_tickets,
+                confirma_ticket_impreso,
+            ))
             cursor.execute("""
                 UPDATE ingresos
-                SET reingresado = 1
+                SET fecha_hora_salida = NULL,
+                    tarifa_aplicada = NULL,
+                    usuario = NULL
                 WHERE id_ingreso = %s
-            """, (id_ingreso_original,))
+                  AND fecha_hora_salida IS NOT NULL
+                  AND cerrado = 0
+            """, (id_ingreso,))
+            if cursor.rowcount != 1:
+                raise RuntimeError("La salida cambió antes de poder revertirse.")
 
-        return True
+        return True, "Salida revertida; el vehículo conserva su hora de ingreso original."
 
     except Exception as e:
-        print(f"Error al reingresar vehículo cerrado: {e}")
-        return False
+        print(f"Error al revertir salida: {e}")
+        return False, "No se pudo revertir la salida; no se aplicaron cambios."
 
 
 def alternar_estado_espera(patente):

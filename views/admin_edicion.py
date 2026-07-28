@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHBoxLayout,
-    QMessageBox, QGroupBox, QHeaderView, QSizePolicy
+    QMessageBox, QGroupBox, QHeaderView, QSizePolicy, QInputDialog
 )
 from PySide6.QtCore import Qt
 
@@ -183,11 +183,41 @@ class EdicionIngresosWindow(QWidget):
             return
 
         id_ingreso = int(self.tabla.item(fila, 0).text())
-        if reingresar_vehiculo_cerrado(id_ingreso):
-            QMessageBox.information(self, "Éxito", "Vehículo reingresado correctamente.")
+        confirmar = QMessageBox.question(
+            self,
+            "Revertir salida",
+            "Confirma que no se cobró dinero y que desea revertir la salida?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirmar != QMessageBox.Yes:
+            return
+
+        motivo, aceptado = QInputDialog.getText(
+            self, "Motivo de reversión", "Indica el motivo de la reversión de salida:"
+        )
+        if not aceptado:
+            return
+
+        exito, mensaje = reingresar_vehiculo_cerrado(
+            id_ingreso, self.usuario_admin, True, motivo
+        )
+        if not exito and "ticket de salida ya fue impreso" in mensaje:
+            confirmar_ticket = QMessageBox.question(
+                self,
+                "Ticket de salida impreso",
+                "Confirma que reconoce que el ticket de salida fue impreso y entregado?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if confirmar_ticket == QMessageBox.Yes:
+                exito, mensaje = reingresar_vehiculo_cerrado(
+                    id_ingreso, self.usuario_admin, True, motivo, True
+                )
+
+        if exito:
+            QMessageBox.information(self, "Éxito", mensaje)
             self.cargar_datos()
         else:
-            QMessageBox.critical(self, "Error", "No se pudo reingresar el vehículo.")
+            QMessageBox.warning(self, "No se pudo revertir", mensaje)
 
     def eliminar_ingreso(self):
         fila = self.tabla.currentRow()

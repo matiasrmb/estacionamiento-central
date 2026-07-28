@@ -86,20 +86,27 @@ class FailingPrintJobUnlinkCursor(FakeCursor):
             raise RuntimeError("print_jobs.id_ingreso cannot be null")
 
 
+class FailingSalidaReversalAuditCursor(FakeCursor):
+    def execute(self, query, params=None):
+        super().execute(query, params)
+        if "INSERT INTO reversiones_salida" in query:
+            raise RuntimeError("reversion audit unavailable")
+
+
 class RegistrarIngresoTests(unittest.TestCase):
-    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
-    def test_no_registra_ingreso_si_la_patente_ya_tiene_un_ingreso_activo(
-        self,
-        db_cursor,
-        obtener_activos,
-    ):
-        obtener_activos.return_value = [{"id_ingreso": 1, "patente": "ABC123"}]
+    def test_no_registra_ingreso_si_la_patente_ya_tiene_un_ingreso_activo(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[(77,), {"id_ingreso": 1}])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
 
         resultado = registro_controller.registrar_ingreso("ABC123")
 
         self.assertFalse(resultado)
-        db_cursor.assert_not_called()
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("FROM vehiculos WHERE patente = %s FOR UPDATE", consultas)
+        self.assertIn("fecha_hora_salida IS NULL", consultas)
+        self.assertIn("FOR UPDATE", consultas)
+        self.assertNotIn("INSERT INTO ingresos", consultas)
 
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
@@ -809,53 +816,169 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         marcar_en_espera.assert_called_once_with("ABC123")
         revertir_en_espera.assert_not_called()
 
+    def _ingreso_cerrado_reversible(self, cerrado=0):
+        return {
+            "id_ingreso": 10,
+            "id_vehiculo": 7,
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "fecha_hora_salida": datetime(2026, 1, 1, 11, 0),
+            "tarifa_aplicada": 1500,
+            "usuario": "operador-salida",
+            "cerrado": cerrado,
+        }
+
     @patch.object(registro_controller, "db_cursor")
-    def test_reingresar_vehiculo_cerrado_retorna_false_si_no_existe_ingreso(self, db_cursor):
-        cursor = FakeCursor(fetchone_results=[None])
+    def test_reingresar_vehiculo_cerrado_exige_confirmacion_y_motivo(self, db_cursor):
+        sin_confirmacion = registro_controller.reingresar_vehiculo_cerrado(10, "admin")
+        sin_motivo = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True, " ")
+
+        self.assertFalse(sin_confirmacion[0])
+        self.assertIn("confirmar", sin_confirmacion[1])
+        self.assertFalse(sin_motivo[0])
+        self.assertIn("motivo", sin_motivo[1])
+        db_cursor.assert_not_called()
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_reingresar_vehiculo_cerrado_revierte_el_mismo_ingreso_y_audita(self, db_cursor):
+        ingreso = self._ingreso_cerrado_reversible()
+        cursor = FakeCursor(fetchone_results=[ingreso, None], fetchall_results=[[]])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
-        resultado = registro_controller.reingresar_vehiculo_cerrado(10)
+        resultado = registro_controller.reingresar_vehiculo_cerrado(
+            10, "operador-reversion", True, "Cliente decidió permanecer."
+        )
 
-        self.assertFalse(resultado)
+        self.assertEqual(resultado[0], True)
         db_cursor.assert_called_once_with(dictionary=True, commit=True)
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertNotIn("INSERT INTO ingresos", consultas)
-        self.assertNotIn("UPDATE ingresos", consultas)
+        self.assertIn("INSERT INTO reversiones_salida", consultas)
+        self.assertNotIn("CREATE TABLE", consultas)
+        self.assertNotIn("ALTER TABLE", consultas)
+        self.assertTrue(all(
+            query.lstrip().upper().startswith(("SELECT", "UPDATE", "INSERT"))
+            for query, _ in cursor.executed
+        ))
+        self.assertIn("fecha_hora_salida = NULL", consultas)
+        self.assertIn("tarifa_aplicada = NULL", consultas)
+        self.assertIn("FROM vehiculos", consultas)
+        self.assertNotIn("SET reingresado = 1", consultas)
+        update_params = next(params for query, params in cursor.executed if "fecha_hora_salida = NULL" in query)
+        self.assertEqual(update_params, (10,))
+        audit_params = next(params for query, params in cursor.executed if "INSERT INTO reversiones_salida" in query)
+        self.assertEqual(audit_params[:7], (
+            10, "ABC123", ingreso["fecha_hora_ingreso"], ingreso["fecha_hora_salida"],
+            1500, "operador-salida", "operador-reversion",
+        ))
 
     @patch.object(registro_controller, "db_cursor")
-    def test_reingresar_vehiculo_cerrado_retorna_false_si_ya_tiene_activo(self, db_cursor):
-        ingreso = {
-            "id_vehiculo": 7,
-            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
-            "tarifa_aplicada": 1500,
-        }
-        cursor = FakeCursor(fetchone_results=[ingreso, {"total": 1}])
+    def test_reingresar_vehiculo_cerrado_rechaza_si_el_cierre_diario_ya_lo_incluyo(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[self._ingreso_cerrado_reversible(cerrado=1)])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
-        resultado = registro_controller.reingresar_vehiculo_cerrado(10)
+        resultado = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True, "Sin cobro.")
 
-        self.assertFalse(resultado)
+        self.assertFalse(resultado[0])
+        self.assertIn("cierre diario", resultado[1])
         consultas = "\n".join(query for query, _ in cursor.executed)
-        self.assertNotIn("INSERT INTO ingresos", consultas)
-        self.assertNotIn("UPDATE ingresos", consultas)
+        self.assertNotIn("INSERT INTO reversiones_salida", consultas)
 
     @patch.object(registro_controller, "db_cursor")
-    def test_reingresar_vehiculo_cerrado_inserta_nuevo_ingreso_y_marca_original(self, db_cursor):
-        ingreso = {
-            "id_vehiculo": 7,
-            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
-            "tarifa_aplicada": 1500,
-        }
-        cursor = FakeCursor(fetchone_results=[ingreso, {"total": 0}])
+    def test_reingresar_vehiculo_cerrado_rechaza_si_ya_existe_un_ingreso_activo(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[self._ingreso_cerrado_reversible(), {"id_ingreso": 12}])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
-        resultado = registro_controller.reingresar_vehiculo_cerrado(10)
+        resultado = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True, "Sin cobro.")
 
-        self.assertTrue(resultado)
-        db_cursor.assert_called_once_with(dictionary=True, commit=True)
+        self.assertFalse(resultado[0])
+        self.assertIn("ingreso activo", resultado[1])
         consultas = "\n".join(query for query, _ in cursor.executed)
-        self.assertIn("INSERT INTO ingresos", consultas)
-        self.assertIn("SET reingresado = 1", consultas)
+        self.assertNotIn("INSERT INTO reversiones_salida", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_reingresar_vehiculo_cerrado_cancela_solo_jobs_salida_reintentables(self, db_cursor):
+        jobs = [
+            {"id_print_job": 1, "estado": "PENDIENTE"},
+            {"id_print_job": 2, "estado": "ERROR"},
+            {"id_print_job": 3, "estado": "REVISION_MANUAL"},
+        ]
+        cursor = FakeCursor(fetchone_results=[self._ingreso_cerrado_reversible(), None], fetchall_results=[jobs])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True, "Sin cobro.")
+
+        self.assertTrue(resultado[0])
+        cancel_query, cancel_params = next(
+            (query, params) for query, params in cursor.executed if "SET estado = 'CANCELADO'" in query
+        )
+        self.assertIn("tipo = 'TICKET_SALIDA'", cancel_query)
+        self.assertIn("'PENDIENTE', 'ERROR', 'REVISION_MANUAL'", cancel_query)
+        self.assertEqual(cancel_params, (10,))
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_reingresar_vehiculo_cerrado_bloquea_ticket_salida_imprimiendo(self, db_cursor):
+        cursor = FakeCursor(
+            fetchone_results=[self._ingreso_cerrado_reversible(), None],
+            fetchall_results=[[{"id_print_job": 5, "estado": "IMPRIMIENDO"}]],
+        )
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True, "Sin cobro.")
+
+        self.assertFalse(resultado[0])
+        self.assertIn("imprime", resultado[1])
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertNotIn("SET estado = 'CANCELADO'", consultas)
+        self.assertNotIn("INSERT INTO reversiones_salida", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_reingresar_vehiculo_cerrado_exige_confirmacion_para_ticket_impreso(self, db_cursor):
+        jobs = [{"id_print_job": 5, "estado": "IMPRESO"}]
+        cursor = FakeCursor(fetchone_results=[self._ingreso_cerrado_reversible(), None], fetchall_results=[jobs])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True, "Sin cobro.")
+
+        self.assertFalse(resultado[0])
+        self.assertIn("confirmación explícita", resultado[1])
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertNotIn("INSERT INTO reversiones_salida", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_reingresar_vehiculo_cerrado_audita_confirmacion_de_ticket_impreso(self, db_cursor):
+        jobs = [{"id_print_job": 5, "estado": "IMPRESO"}]
+        cursor = FakeCursor(fetchone_results=[self._ingreso_cerrado_reversible(), None], fetchall_results=[jobs])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.reingresar_vehiculo_cerrado(
+            10, "admin", True, "Sin cobro.", True
+        )
+
+        self.assertTrue(resultado[0])
+        audit_params = next(params for query, params in cursor.executed if "INSERT INTO reversiones_salida" in query)
+        self.assertTrue(audit_params[-1])
+        self.assertIn('"estado": "IMPRESO"', audit_params[-2])
+
+    def test_reingresar_vehiculo_cerrado_hace_rollback_si_falla_la_auditoria(self):
+        cursor = FailingSalidaReversalAuditCursor(
+            fetchone_results=[self._ingreso_cerrado_reversible(), None], fetchall_results=[[]]
+        )
+        connection = FakeConnection(cursor)
+
+        with patch.object(registro_controller, "db_cursor", db_utils.db_cursor), patch.object(
+            db_utils, "get_connection", return_value=connection
+        ):
+            resultado = registro_controller.reingresar_vehiculo_cerrado(
+                10, "admin", True, "Sin cobro."
+            )
+
+        self.assertFalse(resultado[0])
+        self.assertFalse(connection.committed)
+        self.assertTrue(connection.rolled_back)
+        consultas = "\n".join(query for query, _ in connection.executed_before_rollback)
+        self.assertIn("INSERT INTO reversiones_salida", consultas)
+        self.assertNotIn("fecha_hora_salida = NULL", consultas)
 
     @patch.object(registro_controller, "db_cursor")
     def test_obtener_ingresos_editables_combina_en_espera_y_cerrados(self, db_cursor):

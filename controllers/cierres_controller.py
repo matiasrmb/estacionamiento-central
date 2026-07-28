@@ -30,6 +30,7 @@ def realizar_cierre_diario(usuario):
             SELECT id_ingreso, fecha_hora_ingreso, fecha_hora_salida, tarifa_aplicada
             FROM ingresos
             WHERE fecha_hora_salida IS NOT NULL AND cerrado = FALSE
+            FOR UPDATE
         """)
         registros = cursor.fetchall()
 
@@ -80,6 +81,8 @@ def realizar_cierre_diario(usuario):
             cursor.execute(f"""
                 UPDATE ingresos SET cerrado = TRUE
                 WHERE id_ingreso IN ({formato})
+                  AND fecha_hora_salida IS NOT NULL
+                  AND cerrado = FALSE
             """, ids)
 
     datos_pdf = {

@@ -88,6 +88,8 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("INSERT INTO cierres_diarios", consultas)
         self.assertIn("UPDATE ingresos SET cerrado = TRUE", consultas)
+        self.assertIn("WHERE fecha_hora_salida IS NOT NULL AND cerrado = FALSE\n            FOR UPDATE", consultas)
+        self.assertIn("AND fecha_hora_salida IS NOT NULL", consultas)
 
     @patch.object(cierres_controller, "generar_pdf_cierre")
     @patch.object(cierres_controller, "db_cursor")

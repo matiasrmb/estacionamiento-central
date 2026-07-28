@@ -187,6 +187,25 @@ CREATE TABLE IF NOT EXISTS print_jobs (
     FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso)
 );
 
+-- Auditoría inmutable de salidas revertidas sin cobro.
+CREATE TABLE IF NOT EXISTS reversiones_salida (
+    id_reversion INT AUTO_INCREMENT PRIMARY KEY,
+    id_ingreso INT NOT NULL,
+    patente VARCHAR(10) NOT NULL,
+    fecha_hora_ingreso DATETIME NOT NULL,
+    fecha_hora_salida_original DATETIME NOT NULL,
+    tarifa_aplicada_original DECIMAL(10,2) DEFAULT NULL,
+    usuario_salida_original VARCHAR(50) DEFAULT NULL,
+    usuario_reversion VARCHAR(50) NOT NULL,
+    fecha_reversion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    motivo VARCHAR(500) NOT NULL,
+    ticket_estado_resumen TEXT NOT NULL,
+    ticket_impreso_confirmado TINYINT(1) NOT NULL DEFAULT 0,
+    INDEX idx_reversiones_salida_ingreso (id_ingreso),
+    INDEX idx_reversiones_salida_fecha (fecha_reversion),
+    FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso)
+);
+
 -- Auditoría de reimpresiones solicitadas explícitamente por un operador.
 CREATE TABLE IF NOT EXISTS print_job_reprints (
     id_reprint INT AUTO_INCREMENT PRIMARY KEY,

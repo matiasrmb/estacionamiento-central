@@ -1320,18 +1320,43 @@ class RegistroWindow(QWidget):
             return
 
         confirmar = QMessageBox.question(
-            self, "Confirmar reingreso",
-            f"¿Deseas reingresar a {patente} manteniendo su hora original?",
+            self, "Revertir salida",
+            (
+                f"¿Confirma que NO se cobró dinero a {patente} y desea revertir su salida?\n\n"
+                "El vehículo conservará su hora de ingreso original."
+            ),
             QMessageBox.Yes | QMessageBox.No
         )
 
-        if confirmar == QMessageBox.Yes:
-            exito = reingresar_vehiculo_cerrado(ingreso["id_ingreso"])
-            if exito:
-                QMessageBox.information(self, "Reingresado", "Vehículo reingresado con éxito.")
-                self.actualizar_tabla_activos()
-            else:
-                QMessageBox.critical(self, "Error", "No se pudo reingresar el vehículo.")
+        if confirmar != QMessageBox.Yes:
+            return
+
+        motivo, aceptado = QInputDialog.getText(
+            self, "Motivo de reversión", "Indica el motivo de la reversión de salida:"
+        )
+        if not aceptado:
+            return
+
+        exito, mensaje = reingresar_vehiculo_cerrado(
+            ingreso["id_ingreso"], self.usuario, True, motivo
+        )
+        if not exito and "ticket de salida ya fue impreso" in mensaje:
+            confirmar_ticket = QMessageBox.question(
+                self,
+                "Ticket de salida impreso",
+                "Confirma que reconoce que el ticket de salida fue impreso y entregado?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if confirmar_ticket == QMessageBox.Yes:
+                exito, mensaje = reingresar_vehiculo_cerrado(
+                    ingreso["id_ingreso"], self.usuario, True, motivo, True
+                )
+
+        if exito:
+            QMessageBox.information(self, "Salida revertida", mensaje)
+            self.actualizar_tabla_activos()
+        else:
+            QMessageBox.warning(self, "No se pudo revertir", mensaje)
 
     def consultar_tarifa_actual(self):
         patente = self.input_patente.text().strip().upper()
