@@ -79,6 +79,17 @@ class FailingPrintJobCursor(FakeCursor):
             raise RuntimeError("print job unavailable")
 
 
+class UniqueSalidaPrintJobCursor(FakeCursor):
+    def __init__(self, existing_key):
+        super().__init__(fetchall_results=[[(existing_key,)]])
+        self.existing_key = existing_key
+
+    def execute(self, query, params=None):
+        super().execute(query, params)
+        if "INSERT INTO print_jobs" in query and params[-1] == self.existing_key:
+            raise RuntimeError("Duplicate entry for key 'print_jobs.uq_idempotency'")
+
+
 class FailingConfigLookupCursor(FakeCursor):
     def execute(self, query, params=None):
         if "FROM configuracion" in query:
@@ -633,6 +644,13 @@ class RegistrarSalidaTests(unittest.TestCase):
         self.assertEqual(salida_idempotency_key(123), "desktop-salida:123:pc-pdf")
         self.assertEqual(salida_idempotency_key(123), salida_idempotency_key(123))
 
+    def test_clave_idempotencia_de_salida_reingresada_es_distinta_y_estable(self):
+        self.assertEqual(
+            salida_idempotency_key(123, 1),
+            "desktop-salida:123:pc-pdf:reingreso:1",
+        )
+        self.assertEqual(salida_idempotency_key(123, 1), salida_idempotency_key(123, 1))
+
     def test_helper_crea_un_job_durable_de_salida(self):
         cursor = FakeCursor()
         fecha_ingreso = datetime(2026, 7, 24, 10, 30)
@@ -684,6 +702,40 @@ class RegistrarSalidaTests(unittest.TestCase):
                 },
             },
         })
+
+    @patch.object(registro_controller, "obtener_configuracion", return_value={"modo_cobro": "minuto"})
+    @patch.object(registro_controller, "calcular_tarifa", return_value=(1500, False, 0))
+    @patch.object(registro_controller, "calcular_minutos_lavado", return_value=0)
+    @patch.object(registro_controller, "obtener_ingreso_activo_priorizado")
+    @patch.object(registro_controller, "db_cursor")
+    def test_salida_reingresada_usa_nueva_clave_si_el_job_anterior_fue_cancelado(
+        self,
+        db_cursor,
+        obtener_ingreso,
+        _calcular_minutos_lavado,
+        _calcular_tarifa,
+        _obtener_configuracion,
+    ):
+        cursor = UniqueSalidaPrintJobCursor("desktop-salida:10:pc-pdf")
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_ingreso.return_value = {
+            "id_ingreso": 10,
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "patente": "ABC123",
+            "en_lavado": 0,
+        }
+
+        resultado = registro_controller.registrar_salida_detallada("ABC123", "admin")
+
+        self.assertEqual(resultado["tarifa"], 1500)
+        print_job = next(
+            params for query, params in cursor.executed if "INSERT INTO print_jobs" in query
+        )
+        self.assertEqual(print_job[-1], "desktop-salida:10:pc-pdf:reingreso:1")
+        consulta_claves = next(
+            query for query, _ in cursor.executed if "SELECT idempotency_key" in query
+        )
+        self.assertIn("FOR UPDATE", consulta_claves)
 
     @patch.object(registro_controller, "obtener_configuracion")
     @patch.object(registro_controller, "calcular_tarifa")

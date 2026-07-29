@@ -19,8 +19,11 @@ def ingreso_idempotency_key(id_ingreso):
     return f"desktop-ingreso:{id_ingreso}:pc-pdf"
 
 
-def salida_idempotency_key(id_ingreso):
-    return f"desktop-salida:{id_ingreso}:pc-pdf"
+def salida_idempotency_key(id_ingreso, secuencia_reingreso=0):
+    base = f"desktop-salida:{id_ingreso}:pc-pdf"
+    if secuencia_reingreso:
+        return f"{base}:reingreso:{secuencia_reingreso}"
+    return base
 
 
 def solo_lavado_idempotency_key(id_operacion_servicio):
@@ -77,6 +80,7 @@ def crear_print_job_salida(
     subida_aplicada=False,
     monto_extra=0,
     secciones=None,
+    idempotency_key=None,
 ):
     """Inserta el ticket de salida en la transaccion del cierre."""
     hora_ingreso = fecha_hora_ingreso.isoformat(timespec="seconds")
@@ -118,7 +122,7 @@ def crear_print_job_salida(
             patente,
             json.dumps(payload, ensure_ascii=False),
             "PENDIENTE",
-            salida_idempotency_key(id_ingreso),
+            idempotency_key or salida_idempotency_key(id_ingreso),
         ),
     )
 

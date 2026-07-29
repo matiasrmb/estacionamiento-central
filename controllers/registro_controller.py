@@ -6,7 +6,11 @@ from datetime import datetime, timedelta
 import json
 
 from utils.db import db_cursor
-from utils.print_jobs import crear_print_job_ingreso, crear_print_job_salida
+from utils.print_jobs import (
+    crear_print_job_ingreso,
+    crear_print_job_salida,
+    salida_idempotency_key,
+)
 from controllers.tarifas_controller import (
     calcular_tarifa,
     calcular_tarifa_con_contexto,
@@ -329,6 +333,21 @@ def registrar_salida_detallada(patente, usuario):
                 return None
 
             if obtener_print_jobs_pc_activos(cursor):
+                cursor.execute("""
+                    SELECT idempotency_key
+                    FROM print_jobs
+                    WHERE id_ingreso = %s
+                      AND tipo = 'TICKET_SALIDA'
+                    FOR UPDATE
+                """, (ingreso["id_ingreso"],))
+                claves_existentes = {job[0] for job in cursor.fetchall()}
+                secuencia_reingreso = 0
+                clave_idempotencia = salida_idempotency_key(ingreso["id_ingreso"])
+                while clave_idempotencia in claves_existentes:
+                    secuencia_reingreso += 1
+                    clave_idempotencia = salida_idempotency_key(
+                        ingreso["id_ingreso"], secuencia_reingreso
+                    )
                 crear_print_job_salida(
                     cursor,
                     ingreso["id_ingreso"],
@@ -345,6 +364,7 @@ def registrar_salida_detallada(patente, usuario):
                     subida_aplicada,
                     monto_extra,
                     detalle_secciones,
+                    clave_idempotencia,
                 )
 
     except Exception as e:

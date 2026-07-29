@@ -282,6 +282,14 @@ QCheckBox#OpcionImpresionPC {
 QCheckBox#OpcionImpresionPC::indicator {
     width: 18px;
     height: 18px;
+    background-color: #ffffff;
+    border: 2px solid #1e3a8a;
+    border-radius: 3px;
+}
+
+QCheckBox#OpcionImpresionPC::indicator:checked {
+    background-color: #1e3a8a;
+    border: 2px solid #0f172a;
 }
 
 /* Panel de acceso/login/setup */
