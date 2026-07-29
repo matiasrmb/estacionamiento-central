@@ -56,6 +56,36 @@ class ConfiguracionWindow(QWidget):
         self.config = obtener_configuracion()
 
         # =========================================================
+        # IMPRESIÓN OPERATIVA EN ESTA PC
+        # =========================================================
+        panel_print_jobs_pc = QFrame()
+        panel_print_jobs_pc.setObjectName("PanelImpresionPC")
+        layout_print_jobs_pc = QVBoxLayout(panel_print_jobs_pc)
+        layout_print_jobs_pc.setContentsMargins(14, 14, 14, 14)
+        layout_print_jobs_pc.setSpacing(6)
+
+        titulo_print_jobs_pc = QLabel("Impresión operativa en esta PC")
+        titulo_print_jobs_pc.setObjectName("EtiquetaFormulario")
+        layout_print_jobs_pc.addWidget(titulo_print_jobs_pc)
+
+        self.print_jobs_pc_activos_check = QCheckBox(
+            "Crear trabajos de impresión para PC"
+        )
+        self.print_jobs_pc_activos_check.setObjectName("OpcionImpresionPC")
+        self.print_jobs_pc_activos_check.setChecked(
+            self.config.get("pc_print_jobs_activos", "1") == "1"
+        )
+        layout_print_jobs_pc.addWidget(self.print_jobs_pc_activos_check)
+
+        self.print_jobs_pc_activos_label = QLabel(
+            "Al desactivarlo, las nuevas operaciones no crearán trabajos para el agente de impresión."
+        )
+        self.print_jobs_pc_activos_label.setObjectName("SubtituloSeccion")
+        self.print_jobs_pc_activos_label.setWordWrap(True)
+        layout_print_jobs_pc.addWidget(self.print_jobs_pc_activos_label)
+        layout.addWidget(panel_print_jobs_pc)
+
+        # =========================================================
         # CONFIGURACIÓN GENERAL
         # =========================================================
         panel_general = QFrame()
@@ -103,18 +133,6 @@ class ConfiguracionWindow(QWidget):
         self.bano_input.setMinimumHeight(38)
         self.bano_input.returnPressed.connect(self.guardar)
 
-        self.print_jobs_pc_activos_check = QCheckBox(
-            "Crear trabajos de impresión para PC"
-        )
-        self.print_jobs_pc_activos_check.setChecked(
-            self.config.get("pc_print_jobs_activos", "1") == "1"
-        )
-        self.print_jobs_pc_activos_label = QLabel(
-            "Al desactivarlo, las nuevas operaciones no crearán trabajos para el agente de impresión."
-        )
-        self.print_jobs_pc_activos_label.setObjectName("SubtituloSeccion")
-        self.print_jobs_pc_activos_label.setWordWrap(True)
-
         layout_general.addWidget(label_modo, 0, 0)
         layout_general.addWidget(self.modo_combo, 0, 1)
         layout_general.addWidget(label_minima, 1, 0)
@@ -125,8 +143,6 @@ class ConfiguracionWindow(QWidget):
         layout_general.addWidget(self.hora_input, 3, 1)
         layout_general.addWidget(label_bano, 4, 0)
         layout_general.addWidget(self.bano_input, 4, 1)
-        layout_general.addWidget(self.print_jobs_pc_activos_check, 5, 0, 1, 2)
-        layout_general.addWidget(self.print_jobs_pc_activos_label, 6, 0, 1, 2)
 
         layout_general.setColumnStretch(1, 1)
 

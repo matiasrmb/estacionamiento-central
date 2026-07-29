@@ -101,6 +101,26 @@ class FailingSalidaReversalAuditCursor(FakeCursor):
             raise RuntimeError("reversion audit unavailable")
 
 
+class VehicleLockResultCursor(FakeCursor):
+    """Fails like mysql-connector if the vehicle lock result is not consumed."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.vehicle_lock_result_pending = False
+
+    def execute(self, query, params=None):
+        if self.vehicle_lock_result_pending:
+            raise RuntimeError("Unread result found")
+        super().execute(query, params)
+        if "FROM vehiculos" in query and "WHERE id_vehiculo = %s" in query:
+            self.vehicle_lock_result_pending = True
+
+    def fetchone(self):
+        result = super().fetchone()
+        self.vehicle_lock_result_pending = False
+        return result
+
+
 class RegistrarIngresoTests(unittest.TestCase):
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_si_la_patente_ya_tiene_un_ingreso_activo(self, db_cursor):
@@ -1017,7 +1037,7 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
 
     @patch.object(registro_controller, "db_cursor")
     def test_reingresar_vehiculo_cerrado_rechaza_si_ya_existe_un_ingreso_activo(self, db_cursor):
-        cursor = FakeCursor(fetchone_results=[self._ingreso_cerrado_reversible(), {"id_ingreso": 12}])
+        cursor = FakeCursor(fetchone_results=[self._ingreso_cerrado_reversible(), None, {"id_ingreso": 12}])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
         resultado = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True, "Sin cobro.")
@@ -1026,6 +1046,22 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertIn("ingreso activo", resultado[1])
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertNotIn("INSERT INTO reversiones_salida", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_reingresar_vehiculo_cerrado_consumes_vehicle_lock_result_before_next_query(self, db_cursor):
+        cursor = VehicleLockResultCursor(
+            fetchone_results=[self._ingreso_cerrado_reversible(), (7,), None],
+            fetchall_results=[[]],
+        )
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True)
+
+        self.assertTrue(resultado[0])
+        self.assertTrue(any(
+            "WHERE id_vehiculo = %s" in query
+            for query, _ in cursor.executed
+        ))
 
     @patch.object(registro_controller, "db_cursor")
     def test_reingresar_vehiculo_cerrado_cancela_solo_jobs_salida_reintentables(self, db_cursor):

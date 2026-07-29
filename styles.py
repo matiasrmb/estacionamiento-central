@@ -265,6 +265,25 @@ QFrame#PanelFormulario {
     border-radius: 12px;
 }
 
+QFrame#PanelImpresionPC {
+    background-color: #eff6ff;
+    border: 1px solid #93c5fd;
+    border-radius: 12px;
+}
+
+QCheckBox#OpcionImpresionPC {
+    color: #1e3a8a;
+    font-size: 14px;
+    font-weight: 700;
+    spacing: 8px;
+    padding: 4px 0;
+}
+
+QCheckBox#OpcionImpresionPC::indicator {
+    width: 18px;
+    height: 18px;
+}
+
 /* Panel de acceso/login/setup */
 QFrame#CardAcceso {
     background-color: #ffffff;

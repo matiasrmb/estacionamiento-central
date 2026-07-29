@@ -813,6 +813,7 @@ def reingresar_vehiculo_cerrado(
                 WHERE id_vehiculo = %s
                 FOR UPDATE
             """, (ingreso["id_vehiculo"],))
+            cursor.fetchone()
 
             cursor.execute("""
                 SELECT id_ingreso

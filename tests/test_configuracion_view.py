@@ -1,23 +1,42 @@
 import unittest
-from pathlib import Path
+import os
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication
 from views.configuracion import ConfiguracionWindow
 
 
 class ConfiguracionViewTests(unittest.TestCase):
-    def test_toggle_de_trabajos_pc_esta_en_configuracion_general_visible(self):
-        source = Path(__file__).resolve().parents[1].joinpath(
-            "views", "configuracion.py"
-        ).read_text(encoding="utf-8")
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
 
-        checkbox = "layout_general.addWidget(self.print_jobs_pc_activos_check, 5, 0, 1, 2)"
-        label = "layout_general.addWidget(self.print_jobs_pc_activos_label, 6, 0, 1, 2)"
+    @patch("views.configuracion.listar_trabajos_impresion_impresos", return_value=[])
+    @patch("views.configuracion.listar_trabajos_impresion_fallidos", return_value=[])
+    @patch("views.configuracion.obtener_impresoras_instaladas", return_value=[])
+    @patch("views.configuracion.obtener_configuracion", return_value={"pc_print_jobs_activos": "1"})
+    def test_toggle_de_trabajos_pc_esta_visible_en_el_inicio_de_configuracion(
+        self,
+        _obtener_configuracion,
+        _obtener_impresoras,
+        _trabajos_fallidos,
+        _trabajos_impresos,
+    ):
+        vista = ConfiguracionWindow()
+        vista.show()
+        self.app.processEvents()
 
-        self.assertIn(checkbox, source)
-        self.assertIn(label, source)
-        self.assertNotIn("layout_impresion.addWidget(self.print_jobs_pc_activos_check", source)
+        checkbox = vista.print_jobs_pc_activos_check
+        self.assertTrue(checkbox.isVisible())
+        self.assertEqual(checkbox.parentWidget().objectName(), "PanelImpresionPC")
+        self.assertLess(
+            vista.layout().indexOf(checkbox.parentWidget()),
+            vista.layout().indexOf(vista.modo_combo.parentWidget()),
+        )
+        vista.close()
 
     @patch("views.configuracion.QMessageBox.information")
     @patch("views.configuracion.actualizar_configuracion")
