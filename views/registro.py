@@ -1331,14 +1331,8 @@ class RegistroWindow(QWidget):
         if confirmar != QMessageBox.Yes:
             return
 
-        motivo, aceptado = QInputDialog.getText(
-            self, "Motivo de reversión", "Indica el motivo de la reversión de salida:"
-        )
-        if not aceptado:
-            return
-
         exito, mensaje = reingresar_vehiculo_cerrado(
-            ingreso["id_ingreso"], self.usuario, True, motivo
+            ingreso["id_ingreso"], self.usuario, True
         )
         if not exito and "ticket de salida ya fue impreso" in mensaje:
             confirmar_ticket = QMessageBox.question(
@@ -1349,7 +1343,8 @@ class RegistroWindow(QWidget):
             )
             if confirmar_ticket == QMessageBox.Yes:
                 exito, mensaje = reingresar_vehiculo_cerrado(
-                    ingreso["id_ingreso"], self.usuario, True, motivo, True
+                    ingreso["id_ingreso"], self.usuario, True,
+                    confirma_ticket_impreso=True,
                 )
 
         if exito:

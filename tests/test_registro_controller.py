@@ -942,25 +942,20 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         }
 
     @patch.object(registro_controller, "db_cursor")
-    def test_reingresar_vehiculo_cerrado_exige_confirmacion_y_motivo(self, db_cursor):
+    def test_reingresar_vehiculo_cerrado_exige_confirmacion_pero_no_motivo(self, db_cursor):
         sin_confirmacion = registro_controller.reingresar_vehiculo_cerrado(10, "admin")
-        sin_motivo = registro_controller.reingresar_vehiculo_cerrado(10, "admin", True, " ")
 
         self.assertFalse(sin_confirmacion[0])
         self.assertIn("confirmar", sin_confirmacion[1])
-        self.assertFalse(sin_motivo[0])
-        self.assertIn("motivo", sin_motivo[1])
         db_cursor.assert_not_called()
 
     @patch.object(registro_controller, "db_cursor")
-    def test_reingresar_vehiculo_cerrado_revierte_el_mismo_ingreso_y_audita(self, db_cursor):
+    def test_reingresar_vehiculo_cerrado_revierte_el_mismo_ingreso_y_audita_sin_motivo(self, db_cursor):
         ingreso = self._ingreso_cerrado_reversible()
         cursor = FakeCursor(fetchone_results=[ingreso, None], fetchall_results=[[]])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
-        resultado = registro_controller.reingresar_vehiculo_cerrado(
-            10, "operador-reversion", True, "Cliente decidió permanecer."
-        )
+        resultado = registro_controller.reingresar_vehiculo_cerrado(10, "operador-reversion", True)
 
         self.assertEqual(resultado[0], True)
         db_cursor.assert_called_once_with(dictionary=True, commit=True)
@@ -984,6 +979,29 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
             10, "ABC123", ingreso["fecha_hora_ingreso"], ingreso["fecha_hora_salida"],
             1500, "operador-salida", "operador-reversion",
         ))
+        self.assertEqual(audit_params[7], "No informado")
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_reingresar_vehiculo_cerrado_usa_motivo_por_defecto_si_es_vacio_o_espacios(self, db_cursor):
+        for motivo in ("", "   "):
+            with self.subTest(motivo=repr(motivo)):
+                cursor = FakeCursor(
+                    fetchone_results=[self._ingreso_cerrado_reversible(), None],
+                    fetchall_results=[[]],
+                )
+                db_cursor.return_value = FakeDbCursorContext(cursor)
+
+                resultado = registro_controller.reingresar_vehiculo_cerrado(
+                    10, "operador-reversion", True, motivo
+                )
+
+                self.assertTrue(resultado[0])
+                audit_params = next(
+                    params
+                    for query, params in cursor.executed
+                    if "INSERT INTO reversiones_salida" in query
+                )
+                self.assertEqual(audit_params[7], "No informado")
 
     @patch.object(registro_controller, "db_cursor")
     def test_reingresar_vehiculo_cerrado_rechaza_si_el_cierre_diario_ya_lo_incluyo(self, db_cursor):
@@ -1073,7 +1091,7 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertTrue(audit_params[-1])
         self.assertIn('"estado": "IMPRESO"', audit_params[-2])
 
-    def test_reingresar_vehiculo_cerrado_hace_rollback_si_falla_la_auditoria(self):
+    def test_reingresar_vehiculo_cerrado_continua_si_falla_la_auditoria(self):
         cursor = FailingSalidaReversalAuditCursor(
             fetchone_results=[self._ingreso_cerrado_reversible(), None], fetchall_results=[[]]
         )
@@ -1086,12 +1104,12 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
                 10, "admin", True, "Sin cobro."
             )
 
-        self.assertFalse(resultado[0])
-        self.assertFalse(connection.committed)
-        self.assertTrue(connection.rolled_back)
-        consultas = "\n".join(query for query, _ in connection.executed_before_rollback)
+        self.assertTrue(resultado[0])
+        self.assertTrue(connection.committed)
+        self.assertFalse(connection.rolled_back)
+        consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("INSERT INTO reversiones_salida", consultas)
-        self.assertNotIn("fecha_hora_salida = NULL", consultas)
+        self.assertIn("fecha_hora_salida = NULL", consultas)
 
     @patch.object(registro_controller, "db_cursor")
     def test_obtener_ingresos_editables_combina_en_espera_y_cerrados(self, db_cursor):

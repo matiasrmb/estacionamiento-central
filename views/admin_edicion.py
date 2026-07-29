@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHBoxLayout,
-    QMessageBox, QGroupBox, QHeaderView, QSizePolicy, QInputDialog
+    QMessageBox, QGroupBox, QHeaderView, QSizePolicy
 )
 from PySide6.QtCore import Qt
 
@@ -192,14 +192,8 @@ class EdicionIngresosWindow(QWidget):
         if confirmar != QMessageBox.Yes:
             return
 
-        motivo, aceptado = QInputDialog.getText(
-            self, "Motivo de reversión", "Indica el motivo de la reversión de salida:"
-        )
-        if not aceptado:
-            return
-
         exito, mensaje = reingresar_vehiculo_cerrado(
-            id_ingreso, self.usuario_admin, True, motivo
+            id_ingreso, self.usuario_admin, True
         )
         if not exito and "ticket de salida ya fue impreso" in mensaje:
             confirmar_ticket = QMessageBox.question(
@@ -210,7 +204,7 @@ class EdicionIngresosWindow(QWidget):
             )
             if confirmar_ticket == QMessageBox.Yes:
                 exito, mensaje = reingresar_vehiculo_cerrado(
-                    id_ingreso, self.usuario_admin, True, motivo, True
+                    id_ingreso, self.usuario_admin, True, confirma_ticket_impreso=True
                 )
 
         if exito:

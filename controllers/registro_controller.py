@@ -785,11 +785,9 @@ def reingresar_vehiculo_cerrado(
     confirma_ticket_impreso=False,
 ):
     """Revierte una salida sin cobro sobre el mismo ingreso, con auditoría inmutable."""
-    motivo = motivo.strip()
+    motivo = str(motivo or "").strip() or "No informado"
     if not confirma_sin_cobro:
         return False, "Debes confirmar que no se cobró dinero antes de revertir la salida."
-    if not motivo:
-        return False, "Debes indicar el motivo de la reversión de salida."
 
     try:
         with db_cursor(dictionary=True, commit=True) as cursor:
@@ -854,25 +852,6 @@ def reingresar_vehiculo_cerrado(
                   AND estado IN ('PENDIENTE', 'ERROR', 'REVISION_MANUAL')
             """, (id_ingreso,))
             cursor.execute("""
-                INSERT INTO reversiones_salida (
-                    id_ingreso, patente, fecha_hora_ingreso, fecha_hora_salida_original,
-                    tarifa_aplicada_original, usuario_salida_original, usuario_reversion,
-                    motivo, ticket_estado_resumen, ticket_impreso_confirmado
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                id_ingreso,
-                ingreso["patente"],
-                ingreso["fecha_hora_ingreso"],
-                ingreso["fecha_hora_salida"],
-                ingreso["tarifa_aplicada"],
-                ingreso["usuario"],
-                usuario_reversion,
-                motivo,
-                resumen_tickets,
-                confirma_ticket_impreso,
-            ))
-            cursor.execute("""
                 UPDATE ingresos
                 SET fecha_hora_salida = NULL,
                     tarifa_aplicada = NULL,
@@ -883,6 +862,30 @@ def reingresar_vehiculo_cerrado(
             """, (id_ingreso,))
             if cursor.rowcount != 1:
                 raise RuntimeError("La salida cambió antes de poder revertirse.")
+
+            try:
+                cursor.execute("""
+                    INSERT INTO reversiones_salida (
+                        id_ingreso, patente, fecha_hora_ingreso, fecha_hora_salida_original,
+                        tarifa_aplicada_original, usuario_salida_original, usuario_reversion,
+                        motivo, ticket_estado_resumen, ticket_impreso_confirmado
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    id_ingreso,
+                    ingreso["patente"],
+                    ingreso["fecha_hora_ingreso"],
+                    ingreso["fecha_hora_salida"],
+                    ingreso["tarifa_aplicada"],
+                    ingreso["usuario"],
+                    usuario_reversion,
+                    motivo,
+                    resumen_tickets,
+                    confirma_ticket_impreso,
+                ))
+            except Exception as exc:
+                # Existing Desktop databases may not have received the audit-table migration.
+                print(f"[WARN] Salida revertida sin auditoría: {exc}")
 
         return True, "Salida revertida; el vehículo conserva su hora de ingreso original."
 
