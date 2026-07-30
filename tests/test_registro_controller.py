@@ -144,8 +144,8 @@ class RegistrarIngresoTests(unittest.TestCase):
 
         self.assertEqual(opcion, {
             "monto_snapshot": 5000,
-            "hora_inicio_snapshot": "22:00",
-            "hora_fin_snapshot": "08:00",
+            "hora_inicio_snapshot": "19:30",
+            "hora_fin_snapshot": "09:30",
         })
         self.assertIsNone(registro_controller.obtener_opcion_noches({"noches_activo": "0"}, datetime(2026, 1, 1, 23, 0)))
 
@@ -159,8 +159,8 @@ class RegistrarIngresoTests(unittest.TestCase):
 
         opcion = registro_controller.obtener_opcion_noches(configuracion, datetime(2026, 1, 1, 12, 0))
 
-        self.assertEqual(opcion["hora_inicio_snapshot"], "22:00")
-        self.assertEqual(opcion["hora_fin_snapshot"], "08:00")
+        self.assertEqual(opcion["hora_inicio_snapshot"], "19:30")
+        self.assertEqual(opcion["hora_fin_snapshot"], "09:30")
 
     def test_obtener_opcion_noches_rechaza_inactiva_o_sin_valor(self):
         configuracion = {
@@ -191,7 +191,7 @@ class RegistrarIngresoTests(unittest.TestCase):
         cobro_params = next(
             params for query, params in cursor.executed if "INSERT INTO cobros_noches" in query
         )
-        self.assertEqual(cobro_params[:4], (123, 5000, "22:00", "08:00"))
+        self.assertEqual(cobro_params[:4], (123, 5000, "19:30", "09:30"))
         self.assertEqual(cobro_params[-1], "operador")
         print_job = next(params for query, params in cursor.executed if "INSERT INTO print_jobs" in query)
         self.assertEqual(json.loads(print_job[4])["noches"]["monto_snapshot"], 5000)
@@ -582,8 +582,78 @@ class BuscarEstadoVehiculoTests(unittest.TestCase):
 
 
 class PreviewSalidaTests(unittest.TestCase):
+    def test_modo_noche_factura_solo_minutos_fuera_de_la_gracia(self):
+        for ingreso, salida, esperado in (
+            (datetime(2026, 7, 30, 19, 0), datetime(2026, 7, 31, 10, 0), {"antes": 0, "despues": 0, "total": 0}),
+            (datetime(2026, 7, 30, 18, 40), datetime(2026, 7, 31, 9, 30), {"antes": 20, "despues": 0, "total": 20}),
+            (datetime(2026, 7, 30, 19, 30), datetime(2026, 7, 31, 10, 20), {"antes": 0, "despues": 20, "total": 20}),
+        ):
+            with self.subTest(ingreso=ingreso, salida=salida):
+                self.assertEqual(registro_controller.calcular_minutos_fuera_modo_noche(ingreso, salida), esperado)
+
+    def test_lavado_que_cruza_inicio_de_gracia_descuenta_solo_el_solapamiento_cobrable(self):
+        ingreso = datetime(2026, 7, 30, 18, 40)
+        salida = datetime(2026, 7, 31, 9, 30)
+        intervalos = registro_controller.descontar_intervalos(
+            registro_controller.calcular_intervalos_fuera_modo_noche(ingreso, salida),
+            [(datetime(2026, 7, 30, 18, 45), datetime(2026, 7, 30, 19, 15))],
+        )
+
+        self.assertEqual(intervalos, [(ingreso, datetime(2026, 7, 30, 18, 45))])
+        self.assertEqual(sum(
+            registro_controller.calcular_minutos_estadia(inicio, fin)
+            for inicio, fin in intervalos
+        ), 5)
+
+    def test_salida_exacta_a_las_diez_no_tiene_extra_nocturno(self):
+        ingreso = datetime(2026, 7, 30, 19, 30)
+        salida = datetime(2026, 7, 31, 10, 0)
+
+        self.assertEqual(
+            registro_controller.calcular_intervalos_fuera_modo_noche(ingreso, salida), []
+        )
+
+    def test_lavado_que_cruza_fin_de_gracia_descuenta_solo_diez_minutos_cobrables(self):
+        ingreso = datetime(2026, 7, 30, 19, 30)
+        salida = datetime(2026, 7, 31, 10, 20)
+        intervalos = registro_controller.descontar_intervalos(
+            registro_controller.calcular_intervalos_fuera_modo_noche(ingreso, salida),
+            [(datetime(2026, 7, 31, 9, 50), datetime(2026, 7, 31, 10, 10))],
+        )
+
+        self.assertEqual(intervalos, [(datetime(2026, 7, 31, 10, 10), salida)])
+        self.assertEqual(sum(
+            registro_controller.calcular_minutos_estadia(inicio, fin)
+            for inicio, fin in intervalos
+        ), 10)
+
+    def test_recargo_en_gracia_no_se_aplica_y_recargo_en_extra_si(self):
+        intervalo_extra = [(datetime(2026, 7, 31, 10, 0), datetime(2026, 7, 31, 10, 20))]
+        contexto = {
+            "config": {"modo_cobro": "minuto", "tarifa_minima": "0", "valor_minuto": "0"},
+            "tramos": [],
+        }
+
+        contexto["subida"] = {
+            "hora_inicio": "09:00:00", "hora_fin": "10:00:00", "monto_adicional": 100,
+        }
+        tarifa, subida, extra = registro_controller.calcular_tarifa_por_intervalos(
+            intervalo_extra, contexto
+        )
+        self.assertEqual((tarifa, subida, extra), (0, False, 0))
+
+        contexto["subida"] = {
+            "hora_inicio": "10:00:00", "hora_fin": "10:10:00", "monto_adicional": 100,
+        }
+        tarifa, subida, extra = registro_controller.calcular_tarifa_por_intervalos(
+            intervalo_extra, contexto
+        )
+        self.assertEqual((tarifa, subida, extra), (1000, True, 1000))
+
     @patch.object(registro_controller, "calcular_total_lavados", return_value=2500)
     @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso", return_value=None)
+    @patch.object(registro_controller, "obtener_intervalos_lavado")
+    @patch.object(registro_controller, "calcular_tarifa_por_intervalos", return_value=(1800, False, 0))
     @patch.object(registro_controller, "calcular_tarifa", return_value=(1800, False, 0))
     @patch.object(registro_controller, "calcular_minutos_lavado", return_value=10)
     @patch.object(registro_controller, "obtener_ingreso_activo_priorizado")
@@ -592,6 +662,8 @@ class PreviewSalidaTests(unittest.TestCase):
         obtener_ingreso,
         calcular_minutos_lavado,
         calcular_tarifa,
+        calcular_tarifa_por_intervalos,
+        obtener_intervalos_lavado,
         obtener_operacion_convertida,
         calcular_total_lavados,
     ):
@@ -609,6 +681,7 @@ class PreviewSalidaTests(unittest.TestCase):
                 "hora_fin_snapshot": "08:00",
             }],
         }
+        obtener_intervalos_lavado.return_value = [(fecha_ingreso, fecha_ingreso + timedelta(minutes=10))]
 
         resultado = registro_controller.obtener_preview_salida_por_patente(
             "XX0011", fecha_consulta
@@ -622,7 +695,7 @@ class PreviewSalidaTests(unittest.TestCase):
         self.assertEqual(resultado["tarifa"], 4300)
         self.assertEqual(resultado["total_noches_prepagadas"], 5000)
         self.assertEqual(resultado["tarifa"], 4300)
-        calcular_tarifa.assert_called_once_with(50, fecha_ingreso, fecha_consulta, devolver_flag=True)
+        calcular_tarifa_por_intervalos.assert_called_once()
 
     @patch.object(registro_controller, "calcular_tarifa")
     @patch.object(registro_controller, "obtener_ingreso_activo_priorizado")
@@ -637,13 +710,14 @@ class PreviewSalidaTests(unittest.TestCase):
 
 class RegistrarSalidaTests(unittest.TestCase):
     @patch.object(registro_controller, "obtener_configuracion", return_value={"modo_cobro": "minuto"})
+    @patch.object(registro_controller, "calcular_tarifa_por_intervalos", return_value=(1500, False, 0))
     @patch.object(registro_controller, "calcular_tarifa", return_value=(1500, False, 0))
     @patch.object(registro_controller, "calcular_minutos_lavado", return_value=0)
     @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso", return_value=None)
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_salida_informa_noches_prepagadas_sin_sumarlas_a_tarifa_aplicada(
-        self, db_cursor, obtener_ingresos, _operacion, _minutos, _tarifa, _configuracion
+        self, db_cursor, obtener_ingresos, _operacion, _minutos, _tarifa, _tarifa_intervalos, _configuracion
     ):
         cursor = FakeCursor()
         db_cursor.return_value = FakeDbCursorContext(cursor)

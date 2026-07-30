@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS pagos_mensuales (
     FOREIGN KEY (id_cierre) REFERENCES cierres_diarios(id_cierre)
 );
 
--- Cobros de noches prepagados, adicionales e independientes de la estadía.
+-- Cobros prepagados del modo Noche; cubren la estadía dentro de su ventana de gracia.
 CREATE TABLE IF NOT EXISTS cobros_noches (
     id_cobro_noche INT AUTO_INCREMENT PRIMARY KEY,
     id_ingreso INT NOT NULL,
@@ -307,8 +307,8 @@ INSERT INTO configuracion (clave, valor) VALUES
 ('dias_conservar_archivos', '30'),
 ('ultima_limpieza_archivos', ''),
 ('noches_activo', '0'),
-('noches_hora_inicio', '22:00'),
-('noches_hora_fin', '08:00'),
+('noches_hora_inicio', '19:30'),
+('noches_hora_fin', '09:30'),
 ('noches_valor', '0')
 ON DUPLICATE KEY UPDATE valor = VALUES(valor);
 

@@ -163,7 +163,7 @@ class ConfiguracionWindow(QWidget):
         layout_noches_wrapper.addWidget(titulo_noches)
 
         descripcion_noches = QLabel(
-            "Configura el valor adicional prepagado para Noches."
+            "Configura el valor prepagado del modo Noche (19:30 a 09:30; gracia 19:00 a 10:00)."
         )
         descripcion_noches.setObjectName("SubtituloSeccion")
         descripcion_noches.setWordWrap(True)
@@ -180,7 +180,7 @@ class ConfiguracionWindow(QWidget):
         self.noches_valor_input.returnPressed.connect(self.guardar)
 
         layout_noches.addWidget(self.noches_activo_check, 0, 0, 1, 2)
-        layout_noches.addWidget(QLabel("Valor adicional (CLP)"), 1, 0)
+        layout_noches.addWidget(QLabel("Valor modo Noche (CLP)"), 1, 0)
         layout_noches.addWidget(self.noches_valor_input, 1, 1)
         layout_noches.setColumnStretch(1, 1)
         layout_noches_wrapper.addLayout(layout_noches)

@@ -208,6 +208,20 @@ def calcular_minutos_lavado(id_ingreso, fecha_hora_salida=None):
     return total
 
 
+def obtener_intervalos_lavado(id_ingreso, fecha_hora_salida=None):
+    """Retorna los intervalos de lavado acotados al momento de cálculo."""
+    fin_calculo = fecha_hora_salida or datetime.now()
+    intervalos = []
+
+    for lavado in obtener_lavados_por_ingreso(id_ingreso):
+        inicio = lavado["fecha_hora_inicio"]
+        fin = min(lavado["fecha_hora_fin"] or fin_calculo, fin_calculo)
+        if fin > inicio:
+            intervalos.append((inicio, fin))
+
+    return intervalos
+
+
 def calcular_total_lavados(id_ingreso):
     """
     Calcula el total monetario de lavados asociados a un ingreso.

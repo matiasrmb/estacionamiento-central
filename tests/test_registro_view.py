@@ -135,8 +135,8 @@ class RegistroViewPreviewIngresoTests(unittest.TestCase):
             "Consulta de salida: 14:45",
             "Tiempo facturable: 330 min",
             "Estacionamiento: $2500",
-            "Noches ya pagadas: $5000",
-            "Referencia Noches: 22:00 a 08:00",
+            "Noche pagada: $5000",
+            "Ventana Noche: 22:00 a 08:00",
             "A COBRAR AHORA: $2500",
             "El importe se recalcula al registrar la salida.",
         ]))

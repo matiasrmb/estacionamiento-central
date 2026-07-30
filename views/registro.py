@@ -181,7 +181,7 @@ class RegistroWindow(QWidget):
         self.boton_ingreso_personalizado.setMinimumHeight(32)
         self.boton_ingreso_personalizado.clicked.connect(self.registrar_ingreso_con_hora_personalizada)
 
-        self.boton_ingreso_noches = QPushButton("Registrar ingreso con Noches")
+        self.boton_ingreso_noches = QPushButton("Registrar ingreso en modo Noche")
         self.boton_ingreso_noches.setEnabled(False)
         self.boton_ingreso_noches.setMinimumHeight(32)
         self.boton_ingreso_noches.clicked.connect(self.registrar_ingreso_con_noches)
@@ -534,10 +534,12 @@ class RegistroWindow(QWidget):
         if preview["total_lavados"]:
             lineas.append(f"Lavados: ${preview['total_lavados']:.0f}")
         for cobro in preview.get("noches_prepagadas", []):
-            lineas.append(f"Noches ya pagadas: ${cobro['monto_snapshot']:.0f}")
-            lineas.append(
-                f"Referencia Noches: {cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']}"
-            )
+            lineas.append(f"Noche pagada: ${cobro['monto_snapshot']:.0f}")
+            lineas.append(f"Ventana Noche: {cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']}")
+        if preview.get("minutos_extra_antes_noche"):
+            lineas.append(f"Extra antes de noche: {preview['minutos_extra_antes_noche']} min")
+        if preview.get("minutos_extra_despues_noche"):
+            lineas.append(f"Extra después de noche: {preview['minutos_extra_despues_noche']} min")
         lineas.extend([
             f"A COBRAR AHORA: ${preview['tarifa']:.0f}",
             "El importe se recalcula al registrar la salida.",
@@ -811,9 +813,9 @@ class RegistroWindow(QWidget):
 
         confirmacion = QMessageBox.question(
             self,
-            "Confirmar ingreso con Noches",
-            f"Registrar ingreso para {patente} con Noches prepagadas por ${opcion['monto_snapshot']}\n"
-            f"Horario de referencia: {opcion['hora_inicio_snapshot']} a {opcion['hora_fin_snapshot']}",
+            "Confirmar ingreso en modo Noche",
+            f"Registrar ingreso para {patente} en modo Noche por ${opcion['monto_snapshot']}\n"
+            f"Ventana base: {opcion['hora_inicio_snapshot']} a {opcion['hora_fin_snapshot']} (gracia 19:00 a 10:00)",
             QMessageBox.Yes | QMessageBox.No,
         )
         if confirmacion != QMessageBox.Yes:
@@ -825,10 +827,10 @@ class RegistroWindow(QWidget):
             QMessageBox.information(
                 self,
                 "Ingreso registrado",
-                "Vehículo ingresado con Noches prepagadas.\n\n"
+                "Vehículo ingresado en modo Noche.\n\n"
                 f"Patente: {ingreso['patente']}\n"
                 f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}\n"
-                f"Noches: ${cobro['monto_snapshot']} ({cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']})",
+                f"Noche pagada: ${cobro['monto_snapshot']} ({cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']})",
             )
             self.actualizar_lista_patentes()
             self.reset()
@@ -860,7 +862,8 @@ class RegistroWindow(QWidget):
                 f"Ingreso: {formatear_fecha_hora(salida['fecha_hora_ingreso'])}\n"
                 f"Salida: {formatear_fecha_hora(salida['fecha_hora_salida'])}\n"
                 f"Tiempo cobrado: {salida['minutos']} min\n"
-                f"Total: ${salida['tarifa']:.0f}"
+                f"Noches ya pagadas: ${salida['total_noches_prepagadas']:.0f}\n"
+                f"A cobrar ahora: ${salida['tarifa']:.0f}"
             )
             self.actualizar_lista_patentes()
             self.reset()
