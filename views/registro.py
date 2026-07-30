@@ -14,7 +14,7 @@ from controllers.registro_controller import (
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
     registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual,
-    obtener_patentes_turno_actual_para_f4,
+    obtener_patentes_turno_actual_para_f4, ordenar_patentes_turno_para_f4,
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from controllers.config_controller import obtener_configuracion
@@ -69,6 +69,7 @@ class RegistroWindow(QWidget):
         self.indice_patente_f3 = -1
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
+        self.busqueda_f4 = ""
 
         self.setMinimumSize(1000, 650)
         self.init_ui()
@@ -123,6 +124,7 @@ class RegistroWindow(QWidget):
         self.input_patente.setMaxLength(8)
         self.input_patente.setMinimumHeight(42)
         self.input_patente.textChanged.connect(self.normalizar_patente)
+        self.input_patente.textEdited.connect(self.reiniciar_busqueda_f4)
         self.input_patente.returnPressed.connect(self.buscar_vehiculo)
 
         patentes = obtener_patentes_existentes()
@@ -585,18 +587,15 @@ class RegistroWindow(QWidget):
             QMessageBox.critical(self, "Error", f"No se pudieron consultar las patentes del turno:\n{e}")
             return
 
+        patentes = ordenar_patentes_turno_para_f4(patentes, self.busqueda_f4)
         if not patentes:
             self.actualizar_estilo_info("neutro")
-            self.info_label.setText("No hay patentes abiertas ni cerradas en el turno actual.")
+            self.info_label.setText("No hay patentes del turno que coincidan con la búsqueda.")
             return
 
         if patentes != self.patentes_f4:
-            patente_actual = self.input_patente.text().strip().upper()
             self.patentes_f4 = patentes
-            self.indice_patente_f4 = next(
-                (i for i, row in enumerate(patentes) if row["patente"] == patente_actual),
-                -1,
-            )
+            self.indice_patente_f4 = -1
 
         self.indice_patente_f4 = (self.indice_patente_f4 + 1) % len(self.patentes_f4)
         seleccion = self.patentes_f4[self.indice_patente_f4]
@@ -768,6 +767,7 @@ class RegistroWindow(QWidget):
         self.indice_patente_f3 = -1
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
+        self.busqueda_f4 = ""
         self.boton_ingreso.setEnabled(False)
         self.boton_ingreso_personalizado.setEnabled(False)
         self.boton_salida.setEnabled(False)
@@ -1449,6 +1449,11 @@ class RegistroWindow(QWidget):
             self.input_patente.setText(texto_mayus)
             self.input_patente.setCursorPosition(cursor_pos)
             self.input_patente.blockSignals(False)
+
+    def reiniciar_busqueda_f4(self, texto):
+        self.busqueda_f4 = texto
+        self.patentes_f4 = []
+        self.indice_patente_f4 = -1
 
     def validar_patente(self, patente: str) -> tuple[bool, str]:
         if not patente:

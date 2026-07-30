@@ -406,6 +406,62 @@ class CalcularMinutosEstadiaTests(unittest.TestCase):
         self.assertEqual(minutos, 0)
 
 
+class OrdenarPatentesTurnoParaF4Tests(unittest.TestCase):
+    def setUp(self):
+        self.filas = [
+            {"id_ingreso": 3, "patente": "ZZZ999", "fecha_hora_ingreso": datetime(2026, 1, 1, 9, 0)},
+            {"id_ingreso": 2, "patente": "AB-CD12", "fecha_hora_ingreso": datetime(2026, 1, 1, 11, 0)},
+            {"id_ingreso": 1, "patente": "ABCD12", "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0)},
+            {"id_ingreso": 4, "patente": "XXABCD12", "fecha_hora_ingreso": datetime(2026, 1, 1, 8, 0)},
+        ]
+
+    def test_orden_vacio_es_alfabetico(self):
+        resultado = registro_controller.ordenar_patentes_turno_para_f4(self.filas, "  ")
+
+        self.assertEqual([fila["patente"] for fila in resultado], ["AB-CD12", "ABCD12", "XXABCD12", "ZZZ999"])
+
+    def test_prioriza_exacta_luego_prefijo_y_contiene(self):
+        exacta = registro_controller.ordenar_patentes_turno_para_f4(self.filas, "ab cd12")
+        prefijo = registro_controller.ordenar_patentes_turno_para_f4(self.filas, "abc")
+        contiene = registro_controller.ordenar_patentes_turno_para_f4(self.filas, "xab")
+
+        self.assertEqual([fila["id_ingreso"] for fila in exacta], [1, 2, 4])
+        self.assertEqual([fila["id_ingreso"] for fila in prefijo], [1, 2, 4])
+        self.assertEqual([fila["id_ingreso"] for fila in contiene], [4])
+
+    def test_ordena_globalmente_por_distancia_antes_que_contiene(self):
+        filas = [
+            {"id_ingreso": 1, "patente": "XABC123Y", "fecha_hora_ingreso": datetime(2026, 1, 1, 8, 0)},
+            {"id_ingreso": 2, "patente": "ABC124", "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0)},
+        ]
+
+        resultado = registro_controller.ordenar_patentes_turno_para_f4(filas, "ABC123")
+
+        self.assertEqual([fila["id_ingreso"] for fila in resultado], [2, 1])
+
+    def test_orden_de_coincidencias_usa_movimiento_mas_antiguo(self):
+        filas = [
+            {"id_ingreso": 3, "patente": "ABC123", "fecha_hora_ingreso": datetime(2026, 1, 1, 12, 0)},
+            {"id_ingreso": 2, "patente": "ABC124", "fecha_hora_ingreso": datetime(2026, 1, 1, 9, 0)},
+            {"id_ingreso": 1, "patente": "ABC125", "fecha_hora_ingreso": datetime(2026, 1, 1, 8, 0), "fecha_hora_salida": datetime(2026, 1, 1, 10, 0)},
+        ]
+
+        resultado = registro_controller.ordenar_patentes_turno_para_f4(filas, "ABC")
+
+        self.assertEqual([fila["id_ingreso"] for fila in resultado], [2, 1, 3])
+
+    def test_desempata_por_id_despues_del_movimiento(self):
+        fecha = datetime(2026, 1, 1, 9, 0)
+        filas = [
+            {"id_ingreso": 2, "patente": "ABC123", "fecha_hora_ingreso": fecha},
+            {"id_ingreso": 1, "patente": "ABC124", "fecha_hora_ingreso": fecha},
+        ]
+
+        resultado = registro_controller.ordenar_patentes_turno_para_f4(filas, "ABC")
+
+        self.assertEqual([fila["id_ingreso"] for fila in resultado], [1, 2])
+
+
 class ObtenerIngresoActivoPriorizadoTests(unittest.TestCase):
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     def test_retorna_none_si_no_hay_ingresos_activos(self, obtener_activos):

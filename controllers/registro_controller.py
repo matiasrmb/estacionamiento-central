@@ -495,6 +495,88 @@ def obtener_patentes_cerradas_turno_actual():
         return cursor.fetchall()
 
 
+def normalizar_patente_busqueda(valor):
+    """Normaliza una patente para comparar búsquedas sin separadores."""
+    return "".join(caracter for caracter in str(valor or "").upper() if caracter.isalnum())
+
+
+def _distancia_edicion(origen, destino):
+    anterior = list(range(len(destino) + 1))
+    for indice_origen, caracter_origen in enumerate(origen, start=1):
+        actual = [indice_origen]
+        for indice_destino, caracter_destino in enumerate(destino, start=1):
+            actual.append(min(
+                anterior[indice_destino] + 1,
+                actual[indice_destino - 1] + 1,
+                anterior[indice_destino - 1] + (caracter_origen != caracter_destino),
+            ))
+        anterior = actual
+    return anterior[-1]
+
+
+def _fecha_orden_f4(fila):
+    fecha = fila.get("fecha_hora_salida") if fila.get("fecha_hora_salida") else fila.get("fecha_hora_ingreso")
+    if isinstance(fecha, datetime):
+        return fecha
+    if isinstance(fecha, str):
+        for formato in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(fecha, formato)
+            except ValueError:
+                continue
+    return datetime.max
+
+
+def _puntaje_similitud_f4(consulta, patente):
+    distancia = _distancia_edicion(consulta, patente)
+    longitud = max(len(consulta), len(patente))
+    if patente == consulta:
+        coincidencia_directa = 0
+    elif patente.startswith(consulta):
+        coincidencia_directa = 1
+    elif consulta in patente:
+        coincidencia_directa = 2
+    else:
+        coincidencia_directa = 3
+
+    # La distancia manda; prefijo y contiene solo resuelven similitudes empatadas.
+    return (
+        patente != consulta,
+        distancia,
+        distancia / longitud,
+        coincidencia_directa,
+    )
+
+
+def ordenar_patentes_turno_para_f4(filas, consulta):
+    """Filtra y ordena candidatos F4 por coincidencia y antigüedad del movimiento."""
+    consulta_normalizada = normalizar_patente_busqueda(consulta)
+    if not consulta_normalizada:
+        return sorted(
+            filas,
+            key=lambda fila: (str(fila.get("patente") or "").upper(), fila.get("id_ingreso", 0)),
+        )
+
+    distancia_maxima = max(1, len(consulta_normalizada) // 4)
+    candidatos = []
+    for fila in filas:
+        patente = normalizar_patente_busqueda(fila.get("patente"))
+        distancia = _distancia_edicion(consulta_normalizada, patente)
+        if consulta_normalizada in patente or distancia <= distancia_maxima:
+            candidatos.append((fila, _puntaje_similitud_f4(consulta_normalizada, patente)))
+
+    return [
+        fila for fila, _ in sorted(
+            candidatos,
+            key=lambda candidato: (
+                candidato[1],
+                _fecha_orden_f4(candidato[0]),
+                candidato[0].get("id_ingreso", 0),
+            ),
+        )
+    ]
+
+
 def obtener_patentes_turno_actual_para_f4():
     """
     Obtiene patentes abiertas y cerradas del turno actual para navegación rápida.

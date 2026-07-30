@@ -1,6 +1,10 @@
+import os
 import unittest
 from unittest.mock import Mock, patch
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication, QLineEdit
 from views.admin_edicion import EdicionIngresosWindow
 from views.registro import QMessageBox, RegistroWindow
 
@@ -29,6 +33,54 @@ class RegistroViewReingresoTests(unittest.TestCase):
         pedir_motivo.assert_not_called()
         reingresar.assert_called_once_with(42, "operador", True)
         vista.actualizar_tabla_activos.assert_called_once_with()
+
+
+class RegistroViewF4Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_f4_conserva_el_ciclo_despues_de_seleccionar_una_patente(self):
+        vista = Mock()
+        vista.busqueda_f4 = "AB"
+        vista.patentes_f4 = []
+        vista.indice_patente_f4 = -1
+        vista.input_patente.text.return_value = "AB"
+        filas = [
+            {"id_ingreso": 1, "patente": "ABC123", "estado": "ABIERTO", "fecha_hora_ingreso": "2026-01-01 09:00:00", "fecha_hora_salida": None},
+            {"id_ingreso": 2, "patente": "ABD123", "estado": "ABIERTO", "fecha_hora_ingreso": "2026-01-01 10:00:00", "fecha_hora_salida": None},
+        ]
+        vista.formatear_fecha_hora_info.side_effect = lambda valor: str(valor or "-")
+
+        with patch("views.registro.obtener_patentes_turno_actual_para_f4", return_value=filas), \
+             patch("views.registro.ordenar_patentes_turno_para_f4", return_value=filas):
+            RegistroWindow.seleccionar_siguiente_patente_turno(vista)
+            RegistroWindow.seleccionar_siguiente_patente_turno(vista)
+
+        self.assertEqual(vista.input_patente.setText.call_args_list[0].args[0], "ABC123")
+        self.assertEqual(vista.input_patente.setText.call_args_list[1].args[0], "ABD123")
+
+    def test_solo_edicion_humana_reinicia_la_sesion_f4(self):
+        vista = type("SesionF4", (), {})()
+        vista.busqueda_f4 = "AB"
+        vista.patentes_f4 = ["candidato"]
+        vista.indice_patente_f4 = 1
+        input_patente = QLineEdit()
+        input_patente.textEdited.connect(
+            lambda texto: RegistroWindow.reiniciar_busqueda_f4(vista, texto)
+        )
+
+        input_patente.setText("ABC123")
+
+        self.assertEqual(vista.busqueda_f4, "AB")
+        self.assertEqual(vista.patentes_f4, ["candidato"])
+        self.assertEqual(vista.indice_patente_f4, 1)
+
+        input_patente.textEdited.emit("ABC124")
+
+        self.assertEqual(vista.busqueda_f4, "ABC124")
+        self.assertEqual(vista.patentes_f4, [])
+        self.assertEqual(vista.indice_patente_f4, -1)
 
 
 class EdicionIngresosViewReingresoTests(unittest.TestCase):
