@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS vehiculos (
     tipo_cliente ENUM('ocasional', 'mensual') NOT NULL DEFAULT 'ocasional',
     activo TINYINT(1) DEFAULT 1,
     tarifa_mensual DECIMAL(10,2) DEFAULT NULL,
-    dia_vencimiento TINYINT UNSIGNED NOT NULL DEFAULT 1
+    dia_vencimiento TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    telefono VARCHAR(30) DEFAULT NULL
 );
 
 -- Tabla de ingresos

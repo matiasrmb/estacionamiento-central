@@ -33,6 +33,7 @@ def asegurar_schema_mensuales():
             cursor,
             "ALTER TABLE vehiculos ADD COLUMN dia_vencimiento TINYINT UNSIGNED NOT NULL DEFAULT 1",
         )
+        _ejecutar_schema(cursor, "ALTER TABLE vehiculos ADD COLUMN telefono VARCHAR(30) NULL")
         _ejecutar_schema(cursor, "ALTER TABLE cierres_diarios ADD COLUMN total_mensualidades INT NOT NULL DEFAULT 0")
         _ejecutar_schema(cursor, "ALTER TABLE cierres_diarios ADD COLUMN total_mensualidades_monto INT NOT NULL DEFAULT 0")
         _ejecutar_schema(cursor, """
@@ -87,7 +88,7 @@ def obtener_mensuales(ahora=None):
     asegurar_schema_mensuales()
     periodo = _periodo_actual(ahora)
     query = """
-        SELECT v.id_vehiculo, v.patente, v.tarifa_mensual, v.dia_vencimiento,
+        SELECT v.id_vehiculo, v.patente, v.tarifa_mensual, v.dia_vencimiento, v.telefono,
                %s AS periodo, p.id_pago_mensual, p.fecha_pago, p.monto_snapshot,
                p.metodo_pago, p.observacion,
                CASE
@@ -107,12 +108,15 @@ def obtener_mensuales(ahora=None):
 
     return resultados
 
-def agregar_mensual(patente):
+def agregar_mensual(patente, tarifa_mensual=None, dia_vencimiento=None, telefono=None):
     """
     Agrega o actualiza una patente como cliente mensual.
 
     Args:
         patente (str): Patente del vehículo.
+        tarifa_mensual (int | None): Valor mensual opcional.
+        dia_vencimiento (int | None): Día de vencimiento opcional.
+        telefono (str | None): Teléfono de contacto opcional.
 
     Returns:
         bool: True si la operación fue exitosa.
@@ -123,14 +127,25 @@ def agregar_mensual(patente):
         existente = cursor.fetchone()
 
         if existente:
-            cursor.execute(
-                "UPDATE vehiculos SET tipo_cliente = 'mensual', activo = 1 WHERE patente = %s",
-                (patente,)
-            )
+            if tarifa_mensual is None and dia_vencimiento is None and telefono is None:
+                cursor.execute(
+                    "UPDATE vehiculos SET tipo_cliente = 'mensual', activo = 1 WHERE patente = %s",
+                    (patente,)
+                )
+            else:
+                cursor.execute(
+                    """UPDATE vehiculos
+                       SET tipo_cliente = 'mensual', activo = 1, tarifa_mensual = %s,
+                           dia_vencimiento = %s, telefono = %s
+                       WHERE patente = %s""",
+                    (tarifa_mensual, dia_vencimiento, telefono, patente),
+                )
         else:
             cursor.execute(
-                "INSERT INTO vehiculos (patente, tipo_cliente, activo) VALUES (%s, 'mensual', 1)",
-                (patente,)
+                """INSERT INTO vehiculos
+                   (patente, tipo_cliente, activo, tarifa_mensual, dia_vencimiento, telefono)
+                   VALUES (%s, 'mensual', 1, %s, %s, %s)""",
+                (patente, tarifa_mensual, dia_vencimiento or 1, telefono),
             )
 
     return True
@@ -153,27 +168,31 @@ def eliminar_mensual(id_vehiculo):
 
     return True
 
-def actualizar_tarifa(id_vehiculo, nueva_tarifa, dia_vencimiento=None):
+def actualizar_tarifa(id_vehiculo, nueva_tarifa, dia_vencimiento=None, telefono=None):
     """
     Modifica la tarifa mensual asociada a un cliente.
 
     Args:
         id_vehiculo (int): ID del vehículo.
         nueva_tarifa (int): Nuevo valor de la tarifa mensual.
+        dia_vencimiento (int | None): Nuevo día de vencimiento.
+        telefono (str | None): Nuevo teléfono de contacto.
 
     Returns:
         bool: True si la operación fue exitosa.
     """
     with db_cursor(commit=True) as cursor:
-        if dia_vencimiento is None:
+        if dia_vencimiento is None and telefono is None:
             cursor.execute(
                 "UPDATE vehiculos SET tarifa_mensual = %s WHERE id_vehiculo = %s",
                 (nueva_tarifa, id_vehiculo)
             )
         else:
             cursor.execute(
-                "UPDATE vehiculos SET tarifa_mensual = %s, dia_vencimiento = %s WHERE id_vehiculo = %s",
-                (nueva_tarifa, dia_vencimiento, id_vehiculo)
+                """UPDATE vehiculos
+                   SET tarifa_mensual = %s, dia_vencimiento = %s, telefono = %s
+                   WHERE id_vehiculo = %s""",
+                (nueva_tarifa, dia_vencimiento, telefono, id_vehiculo)
             )
 
     return True

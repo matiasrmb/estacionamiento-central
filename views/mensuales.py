@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QHBoxLayout,
-    QInputDialog, QSizePolicy, QFrame
+    QSizePolicy, QFrame, QFormLayout, QSpinBox, QDialog, QDialogButtonBox
 )
 from PySide6.QtCore import Qt
 from functools import partial
@@ -30,7 +30,7 @@ class MensualesWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        subtitulo = QLabel("Administra patentes con plan mensual y sus tarifas asociadas.")
+        subtitulo = QLabel("Administra clientes mensuales, su vencimiento, teléfono y pagos.")
         subtitulo.setObjectName("SubtituloSeccion")
         subtitulo.setWordWrap(True)
         layout.addWidget(subtitulo)
@@ -56,6 +56,23 @@ class MensualesWindow(QWidget):
         self.patente_input.setMinimumHeight(38)
         self.patente_input.returnPressed.connect(self.agregar_mensual)
 
+        self.tarifa_input = QSpinBox()
+        self.tarifa_input.setRange(1, 99999999)
+        self.tarifa_input.setValue(1)
+        self.tarifa_input.setPrefix("$ ")
+        self.tarifa_input.setMinimumHeight(38)
+
+        self.vencimiento_input = QSpinBox()
+        self.vencimiento_input.setRange(1, 31)
+        self.vencimiento_input.setValue(1)
+        self.vencimiento_input.setPrefix("Día ")
+        self.vencimiento_input.setMinimumHeight(38)
+
+        self.telefono_input = QLineEdit()
+        self.telefono_input.setPlaceholderText("Teléfono")
+        self.telefono_input.setMinimumHeight(38)
+        self.telefono_input.returnPressed.connect(self.agregar_mensual)
+
         self.btn_agregar = QPushButton("Agregar")
         self.btn_agregar.setMinimumHeight(38)
         self.btn_agregar.clicked.connect(self.agregar_mensual)
@@ -66,6 +83,9 @@ class MensualesWindow(QWidget):
         self.btn_actualizar.clicked.connect(self.cargar_mensuales)
 
         form_layout.addWidget(self.patente_input, 3)
+        form_layout.addWidget(self.tarifa_input, 2)
+        form_layout.addWidget(self.vencimiento_input, 1)
+        form_layout.addWidget(self.telefono_input, 2)
         form_layout.addWidget(self.btn_agregar, 1)
         form_layout.addWidget(self.btn_actualizar, 1)
 
@@ -76,9 +96,9 @@ class MensualesWindow(QWidget):
         # TABLA
         # =========================================================
         self.tabla = QTableWidget()
-        self.tabla.setColumnCount(6)
+        self.tabla.setColumnCount(8)
         self.tabla.setHorizontalHeaderLabels([
-            "ID", "Patente", "Tarifa mensual", "Vencimiento", "Estado", "Acciones"
+            "ID", "Patente", "Teléfono", "Tarifa mensual", "Vencimiento", "Estado", "Pago", "Acciones"
         ])
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
@@ -91,7 +111,9 @@ class MensualesWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(7, QHeaderView.Stretch)
 
         layout.addWidget(self.tabla, 1)
 
@@ -107,24 +129,32 @@ class MensualesWindow(QWidget):
 
             item_id = QTableWidgetItem(str(row["id_vehiculo"]))
             item_patente = QTableWidgetItem(row["patente"])
+            item_telefono = QTableWidgetItem(row.get("telefono") or "-")
             item_tarifa = QTableWidgetItem(str(row.get("tarifa_mensual") or "0"))
             item_vencimiento = QTableWidgetItem(f"Día {row.get('dia_vencimiento') or 1}")
             estado = row.get("estado_pago") or "pendiente"
             item_estado = QTableWidgetItem(estado.capitalize())
+            fecha_pago = row.get("fecha_pago")
+            pago_texto = fecha_pago.strftime("%d/%m/%Y") if hasattr(fecha_pago, "strftime") else str(fecha_pago or "Sin pago")
+            item_pago = QTableWidgetItem(pago_texto)
 
             item_id.setTextAlignment(Qt.AlignCenter)
             item_patente.setTextAlignment(Qt.AlignCenter)
+            item_telefono.setTextAlignment(Qt.AlignCenter)
             item_tarifa.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             item_vencimiento.setTextAlignment(Qt.AlignCenter)
             item_estado.setTextAlignment(Qt.AlignCenter)
+            item_pago.setTextAlignment(Qt.AlignCenter)
 
             self.tabla.setItem(i, 0, item_id)
             self.tabla.setItem(i, 1, item_patente)
-            self.tabla.setItem(i, 2, item_tarifa)
-            self.tabla.setItem(i, 3, item_vencimiento)
-            self.tabla.setItem(i, 4, item_estado)
+            self.tabla.setItem(i, 2, item_telefono)
+            self.tabla.setItem(i, 3, item_tarifa)
+            self.tabla.setItem(i, 4, item_vencimiento)
+            self.tabla.setItem(i, 5, item_estado)
+            self.tabla.setItem(i, 6, item_pago)
 
-            btn_tarifa = QPushButton("Editar tarifa")
+            btn_tarifa = QPushButton("Editar")
             btn_tarifa.setObjectName("BotonTabla")
             btn_tarifa.setMinimumHeight(34)
             btn_tarifa.clicked.connect(partial(self.editar_tarifa, row))
@@ -150,18 +180,24 @@ class MensualesWindow(QWidget):
             acciones_widget = QWidget()
             acciones_widget.setLayout(acciones_layout)
 
-            self.tabla.setCellWidget(i, 5, acciones_widget)
+            self.tabla.setCellWidget(i, 7, acciones_widget)
 
     def agregar_mensual(self):
         patente = self.patente_input.text().strip().upper()
+        tarifa_mensual = self.tarifa_input.value()
+        dia_vencimiento = self.vencimiento_input.value()
+        telefono = self.telefono_input.text().strip()
         if not patente:
             QMessageBox.warning(self, "Atención", "Debes ingresar una patente.")
             return
 
-        exito = agregar_mensual(patente)
+        exito = agregar_mensual(patente, tarifa_mensual, dia_vencimiento, telefono)
         if exito:
             QMessageBox.information(self, "Éxito", f"Cliente mensual {patente} agregado.")
             self.patente_input.clear()
+            self.tarifa_input.setValue(1)
+            self.vencimiento_input.setValue(1)
+            self.telefono_input.clear()
             self.cargar_mensuales()
         else:
             QMessageBox.critical(self, "Error", "No se pudo registrar o ya existe.")
@@ -178,26 +214,29 @@ class MensualesWindow(QWidget):
             self.cargar_mensuales()
 
     def editar_tarifa(self, row):
-        nueva_tarifa, ok = QInputDialog.getDouble(
-            self,
-            "Editar tarifa",
-            "Ingresa nueva tarifa mensual:",
-            value=float(row.get("tarifa_mensual") or 0),
-            decimals=0
-        )
-        if not ok:
-            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Editar cliente mensual")
+        layout = QFormLayout(dialog)
 
-        nuevo_dia, ok = QInputDialog.getInt(
-            self,
-            "Editar vencimiento",
-            "Día de vencimiento (1 a 31):",
-            value=int(row.get("dia_vencimiento") or 1),
-            min=1,
-            max=31,
-        )
-        if ok:
-            actualizar_tarifa(row["id_vehiculo"], nueva_tarifa, nuevo_dia)
+        tarifa = QSpinBox(dialog)
+        tarifa.setRange(1, 99999999)
+        tarifa.setValue(int(row.get("tarifa_mensual") or 1))
+        tarifa.setPrefix("$ ")
+        vencimiento = QSpinBox(dialog)
+        vencimiento.setRange(1, 31)
+        vencimiento.setValue(int(row.get("dia_vencimiento") or 1))
+        telefono = QLineEdit(row.get("telefono") or "", dialog)
+
+        layout.addRow("Tarifa mensual:", tarifa)
+        layout.addRow("Día de vencimiento:", vencimiento)
+        layout.addRow("Teléfono:", telefono)
+        botones = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, dialog)
+        botones.accepted.connect(dialog.accept)
+        botones.rejected.connect(dialog.reject)
+        layout.addRow(botones)
+
+        if dialog.exec() == QDialog.Accepted:
+            actualizar_tarifa(row["id_vehiculo"], tarifa.value(), vencimiento.value(), telefono.text().strip())
             self.cargar_mensuales()
 
     def registrar_pago(self, id_vehiculo, patente):

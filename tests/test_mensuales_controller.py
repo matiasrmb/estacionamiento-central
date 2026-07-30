@@ -35,7 +35,7 @@ class MensualesControllerTests(unittest.TestCase):
     @patch.object(mensuales_controller, "db_cursor")
     @patch.object(mensuales_controller, "asegurar_schema_mensuales")
     def test_obtener_mensuales_retorna_clientes_activos(self, asegurar_schema, db_cursor):
-        mensuales = [{"id_vehiculo": 1, "patente": "ABC123", "tarifa_mensual": 50000}]
+        mensuales = [{"id_vehiculo": 1, "patente": "ABC123", "tarifa_mensual": 50000, "dia_vencimiento": 10, "telefono": "1122334455"}]
         cursor = FakeCursor(fetchall_results=[mensuales])
         db_cursor.return_value = fake_db_cursor(cursor)
 
@@ -71,6 +71,17 @@ class MensualesControllerTests(unittest.TestCase):
         self.assertIn("INSERT INTO vehiculos", consultas)
 
     @patch.object(mensuales_controller, "db_cursor")
+    def test_agregar_mensual_guarda_tarifa_vencimiento_y_telefono(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[None])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        mensuales_controller.agregar_mensual("ABC123", 50000, 10, "1122334455")
+
+        query, params = cursor.executed[-1]
+        self.assertIn("tarifa_mensual, dia_vencimiento, telefono", query)
+        self.assertEqual(params, ("ABC123", 50000, 10, "1122334455"))
+
+    @patch.object(mensuales_controller, "db_cursor")
     def test_eliminar_mensual_desactiva_vehiculo(self, db_cursor):
         cursor = FakeCursor()
         db_cursor.return_value = fake_db_cursor(cursor)
@@ -91,6 +102,17 @@ class MensualesControllerTests(unittest.TestCase):
         self.assertTrue(resultado)
         db_cursor.assert_called_once_with(commit=True)
         self.assertIn("UPDATE vehiculos SET tarifa_mensual", cursor.executed[0][0])
+
+    @patch.object(mensuales_controller, "db_cursor")
+    def test_actualizar_tarifa_actualiza_vencimiento_y_telefono(self, db_cursor):
+        cursor = FakeCursor()
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        mensuales_controller.actualizar_tarifa(1, 50000, 10, "1122334455")
+
+        query, params = cursor.executed[0]
+        self.assertIn("dia_vencimiento = %s, telefono = %s", query)
+        self.assertEqual(params, (50000, 10, "1122334455", 1))
 
     def test_fecha_vencimiento_ajusta_los_dias_que_no_existen_en_el_mes(self):
         self.assertEqual(
