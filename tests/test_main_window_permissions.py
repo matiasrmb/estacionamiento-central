@@ -24,7 +24,7 @@ class MainWindowPermissionsTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_operador_ve_y_navega_a_gastos_sin_acceso_a_modulos_administrativos(self):
+    def test_operador_ve_y_navega_a_mensuales_y_gastos_sin_acceso_a_modulos_administrativos(self):
         with (
             patch("views.main_window.DashboardWindow", _ViewStub),
             patch("views.main_window.RegistroWindow", _ViewStub),
@@ -41,13 +41,17 @@ class MainWindowPermissionsTests(unittest.TestCase):
 
         sidebar_labels = [text for _, text, _ in window.sidebar_buttons_data]
         self.assertIn("Gastos operacionales", sidebar_labels)
+        self.assertIn("Clientes mensuales", sidebar_labels)
         self.assertNotIn("Reportes", sidebar_labels)
-        self.assertNotIn("Clientes mensuales", sidebar_labels)
         self.assertNotIn("Configuración", sidebar_labels)
         self.assertNotIn("Tarifas personalizadas", sidebar_labels)
         self.assertNotIn("Edición de ingresos", sidebar_labels)
         self.assertNotIn("Gestión de usuarios", sidebar_labels)
         self.assertNotIn("Asistencias", sidebar_labels)
+
+        window.btn_mensuales.click()
+        self.assertEqual(window.label_modulo.text(), "Clientes mensuales")
+        self.assertIs(window.stack.currentWidget(), window.mensuales_page)
 
         with patch.object(window.gastos_view, "cargar_gastos") as cargar_gastos:
             window.btn_gastos.click()

@@ -157,7 +157,6 @@ class MainWindow(QWidget):
         if self.rol == "administrador":
             self.sidebar_buttons_data.extend([
                 (self.btn_reportes, "Reportes", "reportes.svg"),
-                (self.btn_mensuales, "Clientes mensuales", "mensuales.svg"),
                 (self.btn_config, "Configuración", "configuracion.svg"),
                 (self.btn_tarifas, "Tarifas personalizadas", "tarifas.svg"),
                 (self.btn_edicion, "Edición de ingresos", "edicion.svg"),
@@ -166,6 +165,9 @@ class MainWindow(QWidget):
             ])
 
         if self.rol in {"administrador", "operador"}:
+            self.sidebar_buttons_data.append(
+                (self.btn_mensuales, "Clientes mensuales", "mensuales.svg")
+            )
             self.sidebar_buttons_data.append(
                 (self.btn_gastos, "Gastos operacionales", "reportes.svg")
             )
@@ -264,7 +266,6 @@ class MainWindow(QWidget):
 
         if self.rol == "administrador":
             self.btn_reportes.clicked.connect(self.mostrar_reportes)
-            self.btn_mensuales.clicked.connect(self.mostrar_mensuales)
             self.btn_config.clicked.connect(self.mostrar_configuracion)
             self.btn_tarifas.clicked.connect(self.mostrar_tarifas)
             self.btn_edicion.clicked.connect(self.mostrar_edicion)
@@ -272,6 +273,7 @@ class MainWindow(QWidget):
             self.btn_asistencias.clicked.connect(self.mostrar_asistencias)
 
         if self.rol in {"administrador", "operador"}:
+            self.btn_mensuales.clicked.connect(self.mostrar_mensuales)
             self.btn_gastos.clicked.connect(self.mostrar_gastos)
 
         self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion)
