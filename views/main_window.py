@@ -161,10 +161,14 @@ class MainWindow(QWidget):
                 (self.btn_config, "Configuración", "configuracion.svg"),
                 (self.btn_tarifas, "Tarifas personalizadas", "tarifas.svg"),
                 (self.btn_edicion, "Edición de ingresos", "edicion.svg"),
-                (self.btn_gastos, "Gastos operacionales", "reportes.svg"),
                 (self.btn_usuarios, "Gestión de usuarios", "usuarios.svg"),
                 (self.btn_asistencias, "Asistencias", "asistencias.svg"),
             ])
+
+        if self.rol in {"administrador", "operador"}:
+            self.sidebar_buttons_data.append(
+                (self.btn_gastos, "Gastos operacionales", "reportes.svg")
+            )
 
         for btn, texto, icono in self.sidebar_buttons_data:
             self.configurar_boton_sidebar(btn, texto, icono)
@@ -266,6 +270,8 @@ class MainWindow(QWidget):
             self.btn_edicion.clicked.connect(self.mostrar_edicion)
             self.btn_usuarios.clicked.connect(self.mostrar_usuarios)
             self.btn_asistencias.clicked.connect(self.mostrar_asistencias)
+
+        if self.rol in {"administrador", "operador"}:
             self.btn_gastos.clicked.connect(self.mostrar_gastos)
 
         self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion)
