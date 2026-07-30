@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS vehiculos (
     patente VARCHAR(10) NOT NULL UNIQUE,
     tipo_cliente ENUM('ocasional', 'mensual') NOT NULL DEFAULT 'ocasional',
     activo TINYINT(1) DEFAULT 1,
-    tarifa_mensual DECIMAL(10,2) DEFAULT NULL
+    tarifa_mensual DECIMAL(10,2) DEFAULT NULL,
+    dia_vencimiento TINYINT UNSIGNED NOT NULL DEFAULT 1
 );
 
 -- Tabla de ingresos
@@ -136,10 +137,32 @@ CREATE TABLE IF NOT EXISTS cierres_diarios (
     total_banos_monto INT DEFAULT 0,
     total_lavados_solos INT NOT NULL DEFAULT 0,
     total_lavados_solos_monto INT NOT NULL DEFAULT 0,
+    total_mensualidades INT NOT NULL DEFAULT 0,
+    total_mensualidades_monto INT NOT NULL DEFAULT 0,
     total_general INT NOT NULL DEFAULT 0,
     total_gastos INT NOT NULL DEFAULT 0,
     total_neto INT NOT NULL DEFAULT 0,
     usuario VARCHAR(50) NOT NULL
+);
+
+-- Cobros mensuales inmutables, una vez por vehículo y período.
+CREATE TABLE IF NOT EXISTS pagos_mensuales (
+    id_pago_mensual INT AUTO_INCREMENT PRIMARY KEY,
+    id_vehiculo INT NOT NULL,
+    periodo DATE NOT NULL,
+    fecha_pago DATETIME NOT NULL,
+    monto_snapshot INT NOT NULL,
+    dia_vencimiento_snapshot TINYINT UNSIGNED NOT NULL,
+    usuario VARCHAR(50) NOT NULL,
+    metodo_pago VARCHAR(50) NULL,
+    observacion VARCHAR(500) NULL,
+    id_cierre INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_pagos_mensuales_vehiculo_periodo (id_vehiculo, periodo),
+    INDEX idx_pagos_mensuales_cierre (id_cierre),
+    INDEX idx_pagos_mensuales_fecha_pago (fecha_pago),
+    FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo),
+    FOREIGN KEY (id_cierre) REFERENCES cierres_diarios(id_cierre)
 );
 
 -- Tabla de usos de baño

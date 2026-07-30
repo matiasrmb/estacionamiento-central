@@ -216,7 +216,7 @@ class MainWindow(QWidget):
         )
 
         self.reportes_view = ReportesWindow()
-        self.mensuales_view = MensualesWindow()
+        self.mensuales_view = MensualesWindow(self.usuario)
         self.config_view = ConfiguracionWindow(
             on_tramos_actualizados=self.refrescar_tarifas_personalizadas,
             usuario=self.usuario,

@@ -64,9 +64,31 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
                     "tarifa_aplicada": b["monto"]
                 })
 
+        pagos_query = """
+            SELECT v.patente, p.periodo, p.fecha_pago, p.monto_snapshot
+            FROM pagos_mensuales p
+            JOIN vehiculos v ON p.id_vehiculo = v.id_vehiculo
+            WHERE DATE(p.fecha_pago) BETWEEN %s AND %s
+        """
+        pagos_params = [fecha_inicio, fecha_fin]
+        if patente:
+            pagos_query += " AND v.patente = %s"
+            pagos_params.append(patente)
+        pagos_query += " ORDER BY p.fecha_pago"
+        cursor.execute(pagos_query, tuple(pagos_params))
+        for pago in cursor.fetchall():
+            resultados.append({
+                "tipo": "mensualidad",
+                "patente": f"[MENSUAL] {pago['patente']}",
+                "fecha_hora_ingreso": pago["fecha_pago"],
+                "fecha_hora_salida": pago["fecha_pago"],
+                "minutos": 0,
+                "tarifa_aplicada": pago["monto_snapshot"],
+            })
+
     return resultados
 
-def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
+def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, patente=""):
     """
     Exporta los resultados de los reportes a un archivo PDF con formato estandarizado.
 
@@ -86,28 +108,46 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
     monto_banos = 0
     total_lavados = 0
     monto_lavados = 0
+    total_mensualidades = 0
+    monto_mensualidades = 0
 
-    if incluir_banos and fecha_inicio and fecha_fin:
+    if fecha_inicio and fecha_fin:
         with db_cursor(dictionary=True) as cursor:
-            cursor.execute("""
-                SELECT COUNT(*) AS cantidad, SUM(monto) AS total
-                FROM usos_bano
-                WHERE DATE(fecha_hora) BETWEEN %s AND %s
-            """, (fecha_inicio, fecha_fin))
-            resultado = cursor.fetchone()
-            total_banos = resultado["cantidad"] or 0
-            monto_banos = resultado["total"] or 0
+            if incluir_banos:
+                cursor.execute("""
+                    SELECT COUNT(*) AS cantidad, SUM(monto) AS total
+                    FROM usos_bano
+                    WHERE DATE(fecha_hora) BETWEEN %s AND %s
+                """, (fecha_inicio, fecha_fin))
+                resultado = cursor.fetchone()
+                total_banos = resultado["cantidad"] or 0
+                monto_banos = resultado["total"] or 0
 
-            cursor.execute("""
-                SELECT COUNT(*) AS cantidad, SUM(valor_lavado) AS total
-                FROM lavados
-                WHERE estado = 'finalizado'
-                  AND fecha_hora_fin IS NOT NULL
-                  AND DATE(fecha_hora_fin) BETWEEN %s AND %s
-            """, (fecha_inicio, fecha_fin))
-            resultado_lavados = cursor.fetchone()
-            total_lavados = resultado_lavados["cantidad"] or 0
-            monto_lavados = resultado_lavados["total"] or 0
+                cursor.execute("""
+                    SELECT COUNT(*) AS cantidad, SUM(valor_lavado) AS total
+                    FROM lavados
+                    WHERE estado = 'finalizado'
+                      AND fecha_hora_fin IS NOT NULL
+                      AND DATE(fecha_hora_fin) BETWEEN %s AND %s
+                """, (fecha_inicio, fecha_fin))
+                resultado_lavados = cursor.fetchone()
+                total_lavados = resultado_lavados["cantidad"] or 0
+                monto_lavados = resultado_lavados["total"] or 0
+
+            pagos_query = """
+                SELECT COUNT(*) AS cantidad, SUM(p.monto_snapshot) AS total
+                FROM pagos_mensuales p
+                JOIN vehiculos v ON p.id_vehiculo = v.id_vehiculo
+                WHERE DATE(p.fecha_pago) BETWEEN %s AND %s
+            """
+            pagos_params = [fecha_inicio, fecha_fin]
+            if patente:
+                pagos_query += " AND v.patente = %s"
+                pagos_params.append(patente)
+            cursor.execute(pagos_query, tuple(pagos_params))
+            resultado_mensualidades = cursor.fetchone()
+            total_mensualidades = resultado_mensualidades["cantidad"] or 0
+            monto_mensualidades = resultado_mensualidades["total"] or 0
 
     for row in datos:
         ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
@@ -121,6 +161,10 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, f"Total recaudado: ${total:.0f}", ln=True)
 
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(0, 8, f"Mensualidades cobradas: {total_mensualidades}", ln=True)
+    pdf.cell(0, 8, f"Total recaudado por mensualidades: ${monto_mensualidades:.0f}", ln=True)
+
     if incluir_banos:
         pdf.set_font("Arial", "", 11)
         pdf.cell(0, 8, f"Baños registrados: {total_banos}", ln=True)
@@ -128,7 +172,7 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False):
         pdf.cell(0, 8, f"Lavados registrados: {total_lavados}", ln=True)
         pdf.cell(0, 8, f"Total recaudado por lavados: ${monto_lavados:.0f}", ln=True)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Total general (vehículos + baños): ${total:.0f}", ln=True)
+        pdf.cell(0, 10, f"Total general (vehículos + baños + mensualidades): ${total:.0f}", ln=True)
         pdf.set_font("Arial", "", 9)
         pdf.cell(0, 6, "Nota: los lavados ya están incluidos en el importe de cada vehículo.", ln=True)
 

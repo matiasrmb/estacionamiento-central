@@ -257,6 +257,7 @@ class ReportesWindow(QWidget):
                 fecha_inicio=fecha_inicio,
                 fecha_fin=fecha_fin,
                 incluir_banos=not bool(patente),
+                patente=patente,
             )
         else:
             QMessageBox.information(self, "Aviso", "Primero realiza una búsqueda para poder exportar.")

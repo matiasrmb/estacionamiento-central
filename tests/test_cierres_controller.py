@@ -39,6 +39,10 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS gastos_operacion", schema)
         self.assertIn("total_gastos INT NOT NULL DEFAULT 0", schema)
         self.assertIn("total_neto INT NOT NULL DEFAULT 0", schema)
+        self.assertIn("total_mensualidades INT NOT NULL DEFAULT 0", schema)
+        self.assertIn("total_mensualidades_monto INT NOT NULL DEFAULT 0", schema)
+        self.assertIn("CREATE TABLE IF NOT EXISTS pagos_mensuales", schema)
+        self.assertIn("UNIQUE KEY uq_pagos_mensuales_vehiculo_periodo", schema)
         self.assertIn("id_cierre INT NULL", schema)
 
     @patch.object(cierres_controller, "asegurar_schema_cierres")
@@ -136,6 +140,31 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         consultas = "\n".join(query for query, _ in cursor.executed)
         self.assertIn("FROM gastos_operacion\n            WHERE id_cierre IS NULL", consultas)
         self.assertNotIn("UPDATE gastos_operacion SET id_cierre", consultas)
+
+    @patch.object(cierres_controller, "asegurar_schema_cierres")
+    @patch.object(cierres_controller, "generar_pdf_cierre")
+    @patch.object(cierres_controller, "db_cursor")
+    def test_cierre_solo_con_mensualidad_incluye_y_vincula_el_pago(
+        self, db_cursor, generar_pdf, asegurar_schema
+    ):
+        cursor = FakeCursor(
+            fetchall_results=[[], [], [], [], [{"id_pago_mensual": 11, "monto_snapshot": 50000}]],
+            fetchone_results=[None],
+            lastrowid=100,
+        )
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
+
+        self.assertTrue(exito)
+        self.assertIn("$50000", mensaje)
+        datos_pdf = generar_pdf.call_args.args[1]
+        self.assertEqual(datos_pdf["Mensualidades cobradas"], 1)
+        self.assertEqual(datos_pdf["Total recaudado mensualidades"], "$50000")
+        self.assertEqual(datos_pdf["Total general bruto"], "$50000")
+        self.assertEqual(datos_pdf["Total neto del día"], "$50000")
+        update = next((params for query, params in cursor.executed if "UPDATE pagos_mensuales" in query), None)
+        self.assertEqual(update, [100, 11])
 
 
 if __name__ == "__main__":

@@ -43,6 +43,20 @@ class AccountingReportContractsTests(unittest.TestCase):
         self.assertEqual(summary["total_gastos"], 450)
         self.assertEqual(summary["total_neto"], 850)
 
+    def test_monthly_payments_are_included_in_gross_and_net_totals(self):
+        summary = build_accounting_summary(
+            parking_movements=[{"tarifa_aplicada": 1000}],
+            bathroom_uses=[],
+            wash_only_operations=[],
+            expenses=[{"monto": 300}],
+            monthly_payments=[{"monto_snapshot": 50000}],
+        )
+
+        self.assertEqual(summary["total_mensualidades"], 1)
+        self.assertEqual(summary["total_mensualidades_monto"], 50000)
+        self.assertEqual(summary["total_general"], 51000)
+        self.assertEqual(summary["total_neto"], 50700)
+
     def test_wash_then_stay_defers_wash_revenue_until_parking_exit(self):
         summary = build_accounting_summary(
             parking_movements=[{"tarifa_aplicada": 10000}],
@@ -70,6 +84,18 @@ class AccountingReportContractsTests(unittest.TestCase):
         self.assertEqual(totals["total_lavados_solos"], 1)
         self.assertEqual(totals["total_lavados_solos_monto"], 8000)
         self.assertEqual(totals["total_general"], 18000)
+
+    def test_report_totals_include_monthly_payments_separately(self):
+        totals = build_report_totals(
+            items=[{"tipo": "vehiculo", "tarifa_aplicada": 1200}],
+            wash_only_operations=[],
+            monthly_payments=[{"monto_snapshot": 50000}],
+        )
+
+        self.assertEqual(totals["total_recaudado"], 1200)
+        self.assertEqual(totals["total_mensualidades"], 1)
+        self.assertEqual(totals["total_mensualidades_monto"], 50000)
+        self.assertEqual(totals["total_general"], 51200)
 
 
 if __name__ == "__main__":

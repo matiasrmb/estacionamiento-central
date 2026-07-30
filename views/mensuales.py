@@ -9,7 +9,7 @@ from functools import partial
 
 from controllers.mensuales_controller import (
     obtener_mensuales, agregar_mensual,
-    actualizar_tarifa, eliminar_mensual
+    actualizar_tarifa, eliminar_mensual, registrar_pago_mensual
 )
 
 
@@ -19,8 +19,9 @@ class MensualesWindow(QWidget):
     Permite registrar patentes, editar tarifas y eliminar clientes.
     """
 
-    def __init__(self):
+    def __init__(self, usuario=None):
         super().__init__()
+        self.usuario = usuario or "sistema"
         self.setMinimumSize(900, 600)
         self.init_ui()
 
@@ -75,8 +76,10 @@ class MensualesWindow(QWidget):
         # TABLA
         # =========================================================
         self.tabla = QTableWidget()
-        self.tabla.setColumnCount(4)
-        self.tabla.setHorizontalHeaderLabels(["ID", "Patente", "Tarifa Mensual", "Acciones"])
+        self.tabla.setColumnCount(6)
+        self.tabla.setHorizontalHeaderLabels([
+            "ID", "Patente", "Tarifa mensual", "Vencimiento", "Estado", "Acciones"
+        ])
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
@@ -86,7 +89,9 @@ class MensualesWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
 
         layout.addWidget(self.tabla, 1)
 
@@ -103,19 +108,32 @@ class MensualesWindow(QWidget):
             item_id = QTableWidgetItem(str(row["id_vehiculo"]))
             item_patente = QTableWidgetItem(row["patente"])
             item_tarifa = QTableWidgetItem(str(row.get("tarifa_mensual") or "0"))
+            item_vencimiento = QTableWidgetItem(f"Día {row.get('dia_vencimiento') or 1}")
+            estado = row.get("estado_pago") or "pendiente"
+            item_estado = QTableWidgetItem(estado.capitalize())
 
             item_id.setTextAlignment(Qt.AlignCenter)
             item_patente.setTextAlignment(Qt.AlignCenter)
             item_tarifa.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            item_vencimiento.setTextAlignment(Qt.AlignCenter)
+            item_estado.setTextAlignment(Qt.AlignCenter)
 
             self.tabla.setItem(i, 0, item_id)
             self.tabla.setItem(i, 1, item_patente)
             self.tabla.setItem(i, 2, item_tarifa)
+            self.tabla.setItem(i, 3, item_vencimiento)
+            self.tabla.setItem(i, 4, item_estado)
 
             btn_tarifa = QPushButton("Editar tarifa")
             btn_tarifa.setObjectName("BotonTabla")
             btn_tarifa.setMinimumHeight(34)
-            btn_tarifa.clicked.connect(partial(self.editar_tarifa, row["id_vehiculo"]))
+            btn_tarifa.clicked.connect(partial(self.editar_tarifa, row))
+
+            btn_pago = QPushButton("Registrar pago")
+            btn_pago.setObjectName("BotonTabla")
+            btn_pago.setMinimumHeight(34)
+            btn_pago.setEnabled(estado != "pagado")
+            btn_pago.clicked.connect(partial(self.registrar_pago, row["id_vehiculo"], row["patente"]))
 
             btn_eliminar = QPushButton("Eliminar")
             btn_eliminar.setObjectName("BotonTablaPeligro")
@@ -126,12 +144,13 @@ class MensualesWindow(QWidget):
             acciones_layout.setContentsMargins(6, 4, 6, 4)
             acciones_layout.setSpacing(6)
             acciones_layout.addWidget(btn_tarifa)
+            acciones_layout.addWidget(btn_pago)
             acciones_layout.addWidget(btn_eliminar)
 
             acciones_widget = QWidget()
             acciones_widget.setLayout(acciones_layout)
 
-            self.tabla.setCellWidget(i, 3, acciones_widget)
+            self.tabla.setCellWidget(i, 5, acciones_widget)
 
     def agregar_mensual(self):
         patente = self.patente_input.text().strip().upper()
@@ -158,13 +177,42 @@ class MensualesWindow(QWidget):
             eliminar_mensual(id_vehiculo)
             self.cargar_mensuales()
 
-    def editar_tarifa(self, id_vehiculo):
+    def editar_tarifa(self, row):
         nueva_tarifa, ok = QInputDialog.getDouble(
             self,
             "Editar tarifa",
             "Ingresa nueva tarifa mensual:",
+            value=float(row.get("tarifa_mensual") or 0),
             decimals=0
         )
+        if not ok:
+            return
+
+        nuevo_dia, ok = QInputDialog.getInt(
+            self,
+            "Editar vencimiento",
+            "Día de vencimiento (1 a 31):",
+            value=int(row.get("dia_vencimiento") or 1),
+            min=1,
+            max=31,
+        )
         if ok:
-            actualizar_tarifa(id_vehiculo, nueva_tarifa)
+            actualizar_tarifa(row["id_vehiculo"], nueva_tarifa, nuevo_dia)
             self.cargar_mensuales()
+
+    def registrar_pago(self, id_vehiculo, patente):
+        confirm = QMessageBox.question(
+            self,
+            "Confirmar pago",
+            f"¿Confirmas que recibiste el pago mensual de {patente}?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        exito, mensaje = registrar_pago_mensual(id_vehiculo, self.usuario)
+        if exito:
+            QMessageBox.information(self, "Pago registrado", mensaje)
+            self.cargar_mensuales()
+        else:
+            QMessageBox.warning(self, "No se registró el pago", mensaje)

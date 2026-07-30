@@ -9,6 +9,7 @@ from datetime import datetime
 import mysql.connector
 
 from controllers.operaciones_servicio_controller import asegurar_schema_operaciones_servicio
+from controllers.mensuales_controller import asegurar_schema_mensuales
 from utils.db import db_cursor
 from utils.pdf import generar_pdf_cierre
 
@@ -33,6 +34,7 @@ def asegurar_schema_cierres():
 
     # Mantiene operativos los cierres en instalaciones anteriores a Solo lavado.
     asegurar_schema_operaciones_servicio()
+    asegurar_schema_mensuales()
     with db_cursor(commit=True) as cursor:
         _ejecutar_schema(cursor, """
             CREATE TABLE IF NOT EXISTS gastos_operacion (
@@ -136,10 +138,22 @@ def realizar_cierre_diario(usuario):
         gastos = cursor.fetchall()
         total_gastos = sum(int(gasto.get("monto") or 0) for gasto in gastos)
 
-        if not registros and not banos and not lavados_solos and not gastos:
+        cursor.execute("""
+            SELECT id_pago_mensual, monto_snapshot
+            FROM pagos_mensuales
+            WHERE id_cierre IS NULL
+            FOR UPDATE
+        """)
+        mensualidades = cursor.fetchall()
+        total_mensualidades = len(mensualidades)
+        total_mensualidades_monto = sum(
+            int(pago.get("monto_snapshot") or 0) for pago in mensualidades
+        )
+
+        if not registros and not banos and not lavados_solos and not gastos and not mensualidades:
             return False, "No hay registros para cerrar hoy."
 
-        total_general = total_recaudado + total_banos_monto + total_lavados_solos_monto
+        total_general = total_recaudado + total_banos_monto + total_lavados_solos_monto + total_mensualidades_monto
         total_neto = total_general - total_gastos
 
         # Insertar el resumen en la tabla cierres
@@ -147,16 +161,17 @@ def realizar_cierre_diario(usuario):
             INSERT INTO cierres_diarios (
                 fecha_inicio, fecha_cierre, total_recaudado,
                 total_ingresos, total_salidas, total_banos,
-                total_banos_monto, total_lavados_solos,
-                total_lavados_solos_monto, total_general, total_gastos,
+                total_banos_monto, total_lavados_solos, total_lavados_solos_monto,
+                total_mensualidades, total_mensualidades_monto, total_general, total_gastos,
                 total_neto, usuario
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (fecha_inicio, fecha_cierre, total_recaudado,
                total_ingresos, total_salidas, total_banos,
-               total_banos_monto, total_lavados_solos,
-               total_lavados_solos_monto, total_general, total_gastos,
-               total_neto, usuario))
+                total_banos_monto, total_lavados_solos,
+                total_lavados_solos_monto, total_mensualidades, total_mensualidades_monto,
+                total_general, total_gastos,
+                total_neto, usuario))
         id_cierre = cursor.lastrowid
 
         # Marcar ingresos como cerrados
@@ -194,6 +209,14 @@ def realizar_cierre_diario(usuario):
                 [id_cierre, *ids_gastos],
             )
 
+        ids_mensualidades = [pago["id_pago_mensual"] for pago in mensualidades]
+        if ids_mensualidades:
+            formato = ",".join(["%s"] * len(ids_mensualidades))
+            cursor.execute(
+                f"UPDATE pagos_mensuales SET id_cierre = %s WHERE id_pago_mensual IN ({formato}) AND id_cierre IS NULL",
+                [id_cierre, *ids_mensualidades],
+            )
+
     datos_pdf = {
         "Fecha de inicio": fecha_inicio.strftime("%Y-%m-%d %H:%M"),
         "Fecha de cierre": fecha_cierre.strftime("%Y-%m-%d %H:%M"),
@@ -202,6 +225,8 @@ def realizar_cierre_diario(usuario):
         "Total recaudado baños": f"${total_banos_monto}",
         "Lavados solos registrados": total_lavados_solos,
         "Total recaudado lavados solos": f"${total_lavados_solos_monto}",
+        "Mensualidades cobradas": total_mensualidades,
+        "Total recaudado mensualidades": f"${total_mensualidades_monto}",
         "Total ingresos": total_ingresos,
         "Total salidas": total_salidas,
         "Total general bruto": f"${total_general}",
