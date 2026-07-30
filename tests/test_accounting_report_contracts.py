@@ -31,6 +31,18 @@ class AccountingReportContractsTests(unittest.TestCase):
         self.assertEqual(summary["total_lavados_solos_monto"], 8000)
         self.assertEqual(summary["total_general"], 9500)
 
+    def test_expenses_reduce_net_total_without_changing_gross_total(self):
+        summary = build_accounting_summary(
+            parking_movements=[{"tarifa_aplicada": 1000}],
+            bathroom_uses=[{"monto": 300}],
+            wash_only_operations=[],
+            expenses=[{"monto": 450}],
+        )
+
+        self.assertEqual(summary["total_general"], 1300)
+        self.assertEqual(summary["total_gastos"], 450)
+        self.assertEqual(summary["total_neto"], 850)
+
     def test_wash_then_stay_defers_wash_revenue_until_parking_exit(self):
         summary = build_accounting_summary(
             parking_movements=[{"tarifa_aplicada": 10000}],

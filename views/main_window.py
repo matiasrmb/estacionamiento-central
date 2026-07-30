@@ -17,6 +17,7 @@ from views.tarifas_personalizadas import TarifasPersonalizadasWindow
 from views.usuarios import UsuariosWindow
 from views.asistencias import AsistenciasWindow
 from views.dashboard import DashboardWindow
+from views.gastos import GastosWindow
 from views.admin_edicion import EdicionIngresosWindow
 from controllers.login_controller import registrar_asistencia_salida
 
@@ -145,6 +146,7 @@ class MainWindow(QWidget):
         self.btn_usuarios = QPushButton()
         self.btn_asistencias = QPushButton()
         self.btn_edicion = QPushButton()
+        self.btn_gastos = QPushButton()
         self.btn_cerrar_sesion = QPushButton()
 
         self.sidebar_buttons_data = [
@@ -159,6 +161,7 @@ class MainWindow(QWidget):
                 (self.btn_config, "Configuración", "configuracion.svg"),
                 (self.btn_tarifas, "Tarifas personalizadas", "tarifas.svg"),
                 (self.btn_edicion, "Edición de ingresos", "edicion.svg"),
+                (self.btn_gastos, "Gastos operacionales", "reportes.svg"),
                 (self.btn_usuarios, "Gestión de usuarios", "usuarios.svg"),
                 (self.btn_asistencias, "Asistencias", "asistencias.svg"),
             ])
@@ -225,6 +228,7 @@ class MainWindow(QWidget):
         )
         self.usuarios_view = UsuariosWindow(self.usuario)
         self.asistencias_view = AsistenciasWindow()
+        self.gastos_view = GastosWindow(self.usuario)
 
         self.dashboard_page = self.crear_pagina_scrollable(self.dashboard_view)
         self.registro_page = self.crear_pagina_scrollable(self.registro_view)
@@ -235,6 +239,7 @@ class MainWindow(QWidget):
         self.edicion_page = self.crear_pagina_scrollable(self.edicion_view)
         self.usuarios_page = self.crear_pagina_scrollable(self.usuarios_view)
         self.asistencias_page = self.crear_pagina_scrollable(self.asistencias_view)
+        self.gastos_page = self.crear_pagina_scrollable(self.gastos_view)
 
         self.stack.addWidget(self.dashboard_page)
         self.stack.addWidget(self.registro_page)
@@ -245,6 +250,7 @@ class MainWindow(QWidget):
         self.stack.addWidget(self.edicion_page)
         self.stack.addWidget(self.usuarios_page)
         self.stack.addWidget(self.asistencias_page)
+        self.stack.addWidget(self.gastos_page)
 
         # =========================================================
         # CONEXIONES
@@ -260,6 +266,7 @@ class MainWindow(QWidget):
             self.btn_edicion.clicked.connect(self.mostrar_edicion)
             self.btn_usuarios.clicked.connect(self.mostrar_usuarios)
             self.btn_asistencias.clicked.connect(self.mostrar_asistencias)
+            self.btn_gastos.clicked.connect(self.mostrar_gastos)
 
         self.btn_cerrar_sesion.clicked.connect(self.cerrar_sesion)
 
@@ -376,6 +383,11 @@ class MainWindow(QWidget):
     def mostrar_asistencias(self):
         self.label_modulo.setText("Asistencias")
         self.stack.setCurrentWidget(self.asistencias_page)
+
+    def mostrar_gastos(self):
+        self.label_modulo.setText("Gastos operacionales")
+        self.gastos_view.cargar_gastos()
+        self.stack.setCurrentWidget(self.gastos_page)
 
     # =========================================================
     # SESIÓN

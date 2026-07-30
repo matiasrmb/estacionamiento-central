@@ -167,6 +167,7 @@ def _usuario_tiene_actividad(cursor, usuario):
     ]
     consultas_opcionales = [
         ("operaciones_servicio", "SELECT 1 AS found FROM operaciones_servicio WHERE usuario_inicio = %s OR usuario_fin = %s LIMIT 1"),
+        ("gastos_operacion", "SELECT 1 AS found FROM gastos_operacion WHERE usuario = %s LIMIT 1"),
         ("ingresos_eliminados", "SELECT 1 AS found FROM ingresos_eliminados WHERE usuario_eliminador = %s LIMIT 1"),
         ("print_jobs", "SELECT 1 AS found FROM print_jobs WHERE JSON_SEARCH(payload_json, 'one', %s) IS NOT NULL LIMIT 1"),
     ]
