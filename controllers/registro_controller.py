@@ -32,6 +32,30 @@ from controllers.lavados_controller import (
 from controllers.operaciones_servicio_controller import obtener_operacion_convertida_por_ingreso
 from utils.slowlog import slow_operation
 
+_schema_noches_asegurado = False
+
+
+def asegurar_schema_noches():
+    """Agrega el estado operativo de Noches sin modificar cobros ya registrados."""
+    global _schema_noches_asegurado
+    if _schema_noches_asegurado:
+        return
+    try:
+        with db_cursor(commit=True) as cursor:
+            for statement in (
+                "ALTER TABLE cobros_noches ADD COLUMN estado_operativo ENUM('PENDIENTE', 'RETIRADO', 'CONVERTIDO') NOT NULL DEFAULT 'PENDIENTE'",
+                "ALTER TABLE cobros_noches ADD COLUMN fecha_hora_resolucion DATETIME NULL",
+                "ALTER TABLE cobros_noches ADD INDEX idx_cobros_noches_estado_operativo (estado_operativo, id_ingreso)",
+            ):
+                try:
+                    cursor.execute(statement)
+                except Exception as exc:
+                    if getattr(exc, "errno", None) not in (1060, 1061):
+                        raise
+    except Exception as exc:
+        raise RuntimeError("No se pudo actualizar el estado operativo de Noches.") from exc
+    _schema_noches_asegurado = True
+
 
 def calcular_minutos_estadia(fecha_hora_ingreso, fecha_hora_salida=None):
     """
@@ -259,9 +283,10 @@ def obtener_opcion_noches(configuracion=None, ahora=None):
 
 def obtener_noches_prepagadas(id_ingreso):
     """Obtiene los cobros Noches pagados que pertenecen a una estadia."""
+    asegurar_schema_noches()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
-            SELECT monto_snapshot, hora_inicio_snapshot, hora_fin_snapshot
+            SELECT monto_snapshot, hora_inicio_snapshot, hora_fin_snapshot, estado_operativo
             FROM cobros_noches
             WHERE id_ingreso = %s
               AND estado = 'PAGADO'
@@ -273,7 +298,89 @@ def obtener_noches_prepagadas(id_ingreso):
         "monto_snapshot": int(cobro["monto_snapshot"] or 0),
         "hora_inicio_snapshot": str(cobro["hora_inicio_snapshot"])[:5],
         "hora_fin_snapshot": str(cobro["hora_fin_snapshot"])[:5],
+        "estado_operativo": cobro.get("estado_operativo"),
     } for cobro in cobros]
+
+
+def es_noche_pendiente(ingreso):
+    return any(cobro.get("estado_operativo") == "PENDIENTE" for cobro in ingreso.get("noches_prepagadas", []))
+
+
+def obtener_noche_pendiente_por_patente(patente):
+    asegurar_schema_noches()
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("""
+            SELECT i.id_ingreso, v.patente, cn.fecha_hora_pago
+            FROM ingresos i
+            JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
+            JOIN cobros_noches cn ON cn.id_ingreso = i.id_ingreso
+            WHERE UPPER(v.patente) = UPPER(%s)
+              AND i.fecha_hora_salida IS NULL
+              AND cn.estado = 'PAGADO'
+              AND cn.estado_operativo = 'PENDIENTE'
+            ORDER BY cn.id_cobro_noche DESC
+            LIMIT 1
+        """, (patente,))
+        return cursor.fetchone()
+
+
+def _inicio_normal_desde_diez(fecha_hora_pago):
+    """Ancla el ingreso normal al fin de la noche cubierta por el pago."""
+    fecha = fecha_hora_pago.date()
+    if fecha_hora_pago.time() > datetime.strptime("10:00", "%H:%M").time():
+        fecha += timedelta(days=1)
+    return datetime.combine(fecha, datetime.strptime("10:00", "%H:%M").time())
+
+
+def finalizar_noche_pendiente(id_ingreso, usuario):
+    asegurar_schema_noches()
+    ahora = datetime.now()
+    with db_cursor(dictionary=True, commit=True) as cursor:
+        cursor.execute("""
+            SELECT cn.id_cobro_noche FROM cobros_noches cn
+            JOIN ingresos i ON i.id_ingreso = cn.id_ingreso
+            WHERE cn.id_ingreso = %s AND cn.estado = 'PAGADO'
+              AND cn.estado_operativo = 'PENDIENTE' AND i.fecha_hora_salida IS NULL
+            FOR UPDATE
+        """, (id_ingreso,))
+        noche = cursor.fetchone()
+        if not noche:
+            return False
+        cursor.execute("""
+            UPDATE cobros_noches SET estado_operativo = 'RETIRADO', fecha_hora_resolucion = %s
+            WHERE id_cobro_noche = %s AND estado_operativo = 'PENDIENTE'
+        """, (ahora, noche["id_cobro_noche"]))
+        cursor.execute("""
+            UPDATE ingresos SET fecha_hora_salida = %s, tarifa_aplicada = 0, usuario = %s
+            WHERE id_ingreso = %s AND fecha_hora_salida IS NULL
+        """, (ahora, usuario, id_ingreso))
+        return cursor.rowcount == 1
+
+
+def convertir_noche_a_ingreso_normal(id_ingreso, usuario):
+    asegurar_schema_noches()
+    ahora = datetime.now()
+    with db_cursor(dictionary=True, commit=True) as cursor:
+        cursor.execute("""
+            SELECT cn.id_cobro_noche, cn.fecha_hora_pago FROM cobros_noches cn
+            JOIN ingresos i ON i.id_ingreso = cn.id_ingreso
+            WHERE cn.id_ingreso = %s AND cn.estado = 'PAGADO'
+              AND cn.estado_operativo = 'PENDIENTE' AND i.fecha_hora_salida IS NULL
+            FOR UPDATE
+        """, (id_ingreso,))
+        noche = cursor.fetchone()
+        if not noche:
+            return None
+        inicio_normal = _inicio_normal_desde_diez(noche["fecha_hora_pago"])
+        cursor.execute("""
+            UPDATE cobros_noches SET estado_operativo = 'CONVERTIDO', fecha_hora_resolucion = %s
+            WHERE id_cobro_noche = %s AND estado_operativo = 'PENDIENTE'
+        """, (ahora, noche["id_cobro_noche"]))
+        cursor.execute("""
+            UPDATE ingresos SET fecha_hora_ingreso = %s, usuario = %s
+            WHERE id_ingreso = %s AND fecha_hora_salida IS NULL
+        """, (inicio_normal, usuario, id_ingreso))
+        return inicio_normal if cursor.rowcount == 1 else None
 
 
 def registrar_ingreso(patente, fecha_hora_ingreso=None):
@@ -408,7 +515,8 @@ def _calcular_detalle_salida(ingreso, fecha_hora_salida, noches_prepagadas=None)
     minutos_lavado = calcular_minutos_lavado(ingreso["id_ingreso"], fecha_hora_salida)
     minutos = max(minutos_totales - minutos_lavado, 0)
     noches_prepagadas = noches_prepagadas if noches_prepagadas is not None else ingreso.get("noches_prepagadas", [])
-    minutos_noche = calcular_minutos_fuera_modo_noche(fecha_ingreso, fecha_hora_salida) if noches_prepagadas else None
+    modo_noche = es_noche_pendiente({"noches_prepagadas": noches_prepagadas})
+    minutos_noche = calcular_minutos_fuera_modo_noche(fecha_ingreso, fecha_hora_salida) if modo_noche else None
     if minutos_noche:
         intervalos_cobrables = descontar_intervalos(
             calcular_intervalos_fuera_modo_noche(fecha_ingreso, fecha_hora_salida),
@@ -416,9 +524,9 @@ def _calcular_detalle_salida(ingreso, fecha_hora_salida, noches_prepagadas=None)
         )
         minutos = sum(calcular_minutos_estadia(inicio, fin) for inicio, fin in intervalos_cobrables)
 
-    if minutos == 0 and noches_prepagadas:
+    if minutos == 0 and modo_noche:
         tarifa_estacionamiento, subida_aplicada, monto_extra = 0, False, 0
-    elif noches_prepagadas:
+    elif modo_noche:
         tarifa_estacionamiento, subida_aplicada, monto_extra = calcular_tarifa_por_intervalos(
             intervalos_cobrables
         )
@@ -469,6 +577,8 @@ def obtener_preview_salida_por_patente(patente, fecha_hora_consulta=None):
             return {"estado": "en_lavado"}
         if ingreso.get("en_espera"):
             return {"estado": "en_espera"}
+        if es_noche_pendiente(ingreso):
+            return {"estado": "noche_pendiente", "patente": ingreso.get("patente") or patente}
 
         preview = _calcular_detalle_salida(ingreso, fecha_hora_consulta or datetime.now())
         preview.update({
@@ -497,6 +607,10 @@ def registrar_salida_detallada(patente, usuario):
 
         if ingreso.get("en_lavado"):
             print(f"[WARN] No se registró salida para {patente}: el vehículo está en lavado.")
+            return None
+
+        if es_noche_pendiente(ingreso):
+            print(f"[WARN] No se registró salida para {patente}: Noche pendiente de revisión.")
             return None
 
         ahora = datetime.now()
@@ -622,6 +736,7 @@ def obtener_vehiculos_activos():
         list[dict]: Lista con patente, hora de ingreso y monto acumulado.
     """
     asegurar_schema_lavados()
+    asegurar_schema_noches()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT
@@ -634,6 +749,7 @@ def obtener_vehiculos_activos():
                     SELECT 1 FROM cobros_noches cn
                     WHERE cn.id_ingreso = i.id_ingreso
                       AND cn.estado = 'PAGADO'
+                      AND cn.estado_operativo = 'PENDIENTE'
                 ) AS modo_noche
             FROM ingresos i
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
@@ -657,20 +773,13 @@ def obtener_vehiculos_activos():
         fecha_ingreso = r["fecha_hora_ingreso"]
         minutos_totales = calcular_minutos_estadia(fecha_ingreso, ahora)
         minutos_lavado = minutos_lavado_por_ingreso.get(r["id_ingreso"], 0)
-        minutos_noche = calcular_minutos_fuera_modo_noche(fecha_ingreso, ahora) if r.get("modo_noche") else None
-        if minutos_noche:
-            intervalos_cobrables = descontar_intervalos(
-                calcular_intervalos_fuera_modo_noche(fecha_ingreso, ahora),
-                obtener_intervalos_lavado(r["id_ingreso"], ahora),
-            )
-            minutos = sum(calcular_minutos_estadia(inicio, fin) for inicio, fin in intervalos_cobrables)
+        if r.get("modo_noche"):
+            minutos = 0
         else:
             minutos = max(minutos_totales - minutos_lavado, 0)
 
-        if r["en_espera"] != 0 or (minutos_noche and minutos == 0):
+        if r["en_espera"] != 0 or r.get("modo_noche"):
             tarifa = 0
-        elif minutos_noche:
-            tarifa, _, _ = calcular_tarifa_por_intervalos(intervalos_cobrables, contexto_tarifa)
         else:
             tarifa = calcular_tarifa_con_contexto(minutos, fecha_ingreso, ahora, contexto_tarifa)
         total_lavados = totales_lavado_por_ingreso.get(r["id_ingreso"], 0)
@@ -686,6 +795,7 @@ def obtener_vehiculos_activos():
             "monto": monto,
             "en_espera": bool(r["en_espera"]),
             "en_lavado": bool(r["en_lavado"]),
+            "noche_pendiente": bool(r.get("modo_noche")),
             "minutos": minutos,
             "total_lavados": total_lavados,
         })

@@ -13,6 +13,7 @@ from controllers.registro_controller import (
     obtener_opcion_noches,
     registrar_salida_detallada, obtener_vehiculos_activos,
     obtener_preview_salida_por_patente,
+    obtener_noche_pendiente_por_patente, finalizar_noche_pendiente, convertir_noche_a_ingreso_normal,
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
     registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual,
@@ -480,6 +481,8 @@ class RegistroWindow(QWidget):
                 self.hora_consulta_label.setText("VEHÍCULO EN ESPERA\nNo hay vista previa de salida disponible.")
             elif preview and preview.get("estado") == "en_lavado":
                 self.hora_consulta_label.setText("VEHÍCULO EN LAVADO\nFinaliza el lavado antes de registrar la salida.")
+            elif preview and preview.get("estado") == "noche_pendiente":
+                self.hora_consulta_label.setText("NOCHE PENDIENTE\nRevisa la noche: marcar retirado o convertir a ingreso normal desde 10:00.")
 
         elif estado == "fuera":
             self.actualizar_estilo_info("neutro")
@@ -868,6 +871,31 @@ class RegistroWindow(QWidget):
             self.actualizar_lista_patentes()
             self.reset()
         else:
+            noche = obtener_noche_pendiente_por_patente(patente)
+            if noche:
+                seleccion, confirmado = QInputDialog.getItem(
+                    self,
+                    "Revisar Noche pendiente",
+                    f"{patente} tiene una Noche prepagada pendiente. Selecciona una acción:",
+                    ["Finalizar Noche (retirado)", "Convertir a ingreso normal desde 10:00"],
+                    0,
+                    False,
+                )
+                if not confirmado:
+                    return
+                if seleccion == "Finalizar Noche (retirado)":
+                    exito = finalizar_noche_pendiente(noche["id_ingreso"], self.usuario)
+                    mensaje = "Noche finalizada sin cobro adicional."
+                else:
+                    inicio = convertir_noche_a_ingreso_normal(noche["id_ingreso"], self.usuario)
+                    exito = inicio is not None
+                    mensaje = f"Ingreso normal activo desde {formatear_fecha_hora(inicio)}." if inicio else ""
+                if exito:
+                    QMessageBox.information(self, "Noche revisada", mensaje)
+                    self.actualizar_lista_patentes()
+                    self.reset()
+                    self.actualizar_tabla_activos()
+                    return
             self.actualizar_estilo_info("error")
             self.info_label.setText("No se pudo registrar la salida.")
             QMessageBox.critical(self, "Error", "No se pudo registrar la salida.")
@@ -916,7 +944,8 @@ class RegistroWindow(QWidget):
             monto = vehiculo["monto"]
             minutos = vehiculo.get("minutos", 0)
 
-            patente_mostrar = f"▲ {patente}" if hay_subida_activa else patente
+            estado_noche = " [NOCHE PENDIENTE]" if vehiculo.get("noche_pendiente") else ""
+            patente_mostrar = f"▲ {patente}{estado_noche}" if hay_subida_activa else f"{patente}{estado_noche}"
 
             item_patente = QTableWidgetItem(patente_mostrar)
             item_patente.setData(Qt.UserRole, vehiculo.get("id_ingreso"))
