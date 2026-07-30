@@ -86,6 +86,30 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
                 "tarifa_aplicada": pago["monto_snapshot"],
             })
 
+        noches_query = """
+            SELECT v.patente, c.fecha_hora_pago, c.monto_snapshot
+            FROM cobros_noches c
+            JOIN ingresos i ON i.id_ingreso = c.id_ingreso
+            JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
+            WHERE c.estado = 'PAGADO'
+              AND DATE(c.fecha_hora_pago) BETWEEN %s AND %s
+        """
+        noches_params = [fecha_inicio, fecha_fin]
+        if patente:
+            noches_query += " AND v.patente = %s"
+            noches_params.append(patente)
+        noches_query += " ORDER BY c.fecha_hora_pago, c.id_cobro_noche"
+        cursor.execute(noches_query, tuple(noches_params))
+        for cobro in cursor.fetchall():
+            resultados.append({
+                "tipo": "noche",
+                "patente": f"[NOCHES] {cobro['patente']}",
+                "fecha_hora_ingreso": cobro["fecha_hora_pago"],
+                "fecha_hora_salida": cobro["fecha_hora_pago"],
+                "minutos": 0,
+                "tarifa_aplicada": cobro["monto_snapshot"],
+            })
+
     return resultados
 
 def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, patente=""):
@@ -110,6 +134,8 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
     monto_lavados = 0
     total_mensualidades = 0
     monto_mensualidades = 0
+    total_noches = 0
+    monto_noches = 0
 
     if fecha_inicio and fecha_fin:
         with db_cursor(dictionary=True) as cursor:
@@ -149,6 +175,23 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
             total_mensualidades = resultado_mensualidades["cantidad"] or 0
             monto_mensualidades = resultado_mensualidades["total"] or 0
 
+            noches_query = """
+                SELECT COUNT(*) AS cantidad, SUM(c.monto_snapshot) AS total
+                FROM cobros_noches c
+                JOIN ingresos i ON i.id_ingreso = c.id_ingreso
+                JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
+                WHERE c.estado = 'PAGADO'
+                  AND DATE(c.fecha_hora_pago) BETWEEN %s AND %s
+            """
+            noches_params = [fecha_inicio, fecha_fin]
+            if patente:
+                noches_query += " AND v.patente = %s"
+                noches_params.append(patente)
+            cursor.execute(noches_query, tuple(noches_params))
+            resultado_noches = cursor.fetchone()
+            total_noches = resultado_noches["cantidad"] or 0
+            monto_noches = resultado_noches["total"] or 0
+
     for row in datos:
         ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
         salida = row["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M")
@@ -164,6 +207,8 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
     pdf.set_font("Arial", "", 11)
     pdf.cell(0, 8, f"Mensualidades cobradas: {total_mensualidades}", ln=True)
     pdf.cell(0, 8, f"Total recaudado por mensualidades: ${monto_mensualidades:.0f}", ln=True)
+    pdf.cell(0, 8, f"Noches prepagadas cobradas: {total_noches}", ln=True)
+    pdf.cell(0, 8, f"Total recaudado por Noches prepagadas: ${monto_noches:.0f}", ln=True)
 
     if incluir_banos:
         pdf.set_font("Arial", "", 11)
@@ -172,7 +217,7 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
         pdf.cell(0, 8, f"Lavados registrados: {total_lavados}", ln=True)
         pdf.cell(0, 8, f"Total recaudado por lavados: ${monto_lavados:.0f}", ln=True)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Total general (vehículos + baños + mensualidades): ${total:.0f}", ln=True)
+        pdf.cell(0, 10, f"Total general (vehículos + baños + mensualidades + Noches): ${total:.0f}", ln=True)
         pdf.set_font("Arial", "", 9)
         pdf.cell(0, 6, "Nota: los lavados ya están incluidos en el importe de cada vehículo.", ln=True)
 

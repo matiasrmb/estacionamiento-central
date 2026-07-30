@@ -36,6 +36,10 @@ class ConfiguracionViewTests(unittest.TestCase):
             vista.layout().indexOf(checkbox.parentWidget()),
             vista.layout().indexOf(vista.modo_combo.parentWidget()),
         )
+        self.assertTrue(vista.noches_activo_check.isVisible())
+        self.assertTrue(vista.noches_valor_input.isVisible())
+        self.assertFalse(hasattr(vista, "noches_inicio_input"))
+        self.assertFalse(hasattr(vista, "noches_fin_input"))
         vista.close()
 
     @patch("views.configuracion.QMessageBox.information")
@@ -47,6 +51,8 @@ class ConfiguracionViewTests(unittest.TestCase):
             minuto_input=Mock(text=Mock(return_value="25")),
             hora_input=Mock(text=Mock(return_value="1300")),
             bano_input=Mock(text=Mock(return_value="300")),
+            noches_activo_check=Mock(isChecked=Mock(return_value=True)),
+            noches_valor_input=Mock(text=Mock(return_value="5000")),
             lavado_inputs={},
             dias_limpieza_input=Mock(text=Mock(return_value="30")),
             limpieza_activa_check=Mock(isChecked=Mock(return_value=True)),
@@ -56,6 +62,11 @@ class ConfiguracionViewTests(unittest.TestCase):
         ConfiguracionWindow.guardar(vista)
 
         actualizar_configuracion.assert_any_call("pc_print_jobs_activos", 0)
+        actualizar_configuracion.assert_any_call("noches_activo", 1)
+        actualizar_configuracion.assert_any_call("noches_valor", "5000")
+        llamadas = [llamada.args[0] for llamada in actualizar_configuracion.call_args_list]
+        self.assertNotIn("noches_hora_inicio", llamadas)
+        self.assertNotIn("noches_hora_fin", llamadas)
 
     @patch("views.configuracion.QMessageBox.information")
     @patch("views.configuracion.obtener_configuracion", return_value={"pc_print_jobs_activos": "0"})
@@ -66,6 +77,8 @@ class ConfiguracionViewTests(unittest.TestCase):
             minuto_input=Mock(),
             hora_input=Mock(),
             bano_input=Mock(),
+            noches_activo_check=Mock(),
+            noches_valor_input=Mock(),
             lavado_inputs={},
             limpieza_activa_check=Mock(),
             dias_limpieza_input=Mock(),
@@ -78,6 +91,8 @@ class ConfiguracionViewTests(unittest.TestCase):
         ConfiguracionWindow.recargar_configuracion(vista)
 
         vista.print_jobs_pc_activos_check.setChecked.assert_called_once_with(False)
+        vista.noches_activo_check.setChecked.assert_called_once_with(False)
+        vista.noches_valor_input.setText.assert_called_once_with("0")
 
 
 if __name__ == "__main__":

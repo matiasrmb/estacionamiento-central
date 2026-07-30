@@ -52,7 +52,7 @@ def obtener_ingreso_activo_priorizado(patente, contexto="operación"):
     primero ingresos normales y luego los más recientes. Si existen varios
     activos, deja una advertencia para facilitar la detección de inconsistencias.
     """
-    activos = obtener_ingresos_activos_por_patente(patente)
+    activos = obtener_ingresos_activos_por_patente(patente, incluir_noches=True)
 
     if not activos:
         return None
@@ -66,7 +66,7 @@ def obtener_ingreso_activo_priorizado(patente, contexto="operación"):
     return activos[0]
 
 
-def obtener_ingresos_activos_por_patente(patente):
+def obtener_ingresos_activos_por_patente(patente, incluir_noches=False):
     """
     Obtiene todos los ingresos activos de una patente, priorizados de forma útil
     para la lógica del sistema.
@@ -100,7 +100,12 @@ def obtener_ingresos_activos_por_patente(patente):
               AND i.fecha_hora_salida IS NULL
             ORDER BY i.en_espera ASC, i.fecha_hora_ingreso DESC
         """, (patente,))
-        return cursor.fetchall()
+        ingresos = cursor.fetchall()
+
+    if incluir_noches:
+        for ingreso in ingresos:
+            ingreso["noches_prepagadas"] = obtener_noches_prepagadas(ingreso["id_ingreso"])
+    return ingresos
 
 
 def buscar_estado_vehiculo(patente):
@@ -162,6 +167,46 @@ def validar_fecha_hora_ingreso_personalizada(fecha_hora_ingreso, ahora=None):
     return True, ""
 
 
+def obtener_opcion_noches(configuracion=None, ahora=None):
+    """Obtiene el cobro Noches activo listo para persistir como snapshot."""
+    config = configuracion if configuracion is not None else obtener_configuracion()
+    if str(config.get("noches_activo", "0")) != "1":
+        return None
+
+    try:
+        monto = int(config.get("noches_valor", "0"))
+    except (TypeError, ValueError):
+        return None
+
+    if monto <= 0:
+        return None
+
+    return {
+        "monto_snapshot": monto,
+        "hora_inicio_snapshot": "22:00",
+        "hora_fin_snapshot": "08:00",
+    }
+
+
+def obtener_noches_prepagadas(id_ingreso):
+    """Obtiene los cobros Noches pagados que pertenecen a una estadia."""
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("""
+            SELECT monto_snapshot, hora_inicio_snapshot, hora_fin_snapshot
+            FROM cobros_noches
+            WHERE id_ingreso = %s
+              AND estado = 'PAGADO'
+            ORDER BY id_cobro_noche ASC
+        """, (id_ingreso,))
+        cobros = cursor.fetchall()
+
+    return [{
+        "monto_snapshot": int(cobro["monto_snapshot"] or 0),
+        "hora_inicio_snapshot": str(cobro["hora_inicio_snapshot"])[:5],
+        "hora_fin_snapshot": str(cobro["hora_fin_snapshot"])[:5],
+    } for cobro in cobros]
+
+
 def registrar_ingreso(patente, fecha_hora_ingreso=None):
     """
     Registra la entrada de un vehículo al estacionamiento.
@@ -179,7 +224,7 @@ def registrar_ingreso(patente, fecha_hora_ingreso=None):
 
 
 @slow_operation("registration")
-def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
+def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None, cobro_noche=None, usuario=None):
     """
     Registra la entrada de un vehículo y retorna datos para feedback de UI.
 
@@ -229,17 +274,43 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None):
                 VALUES (%s, %s, 0)
             """, (id_vehiculo, fecha_hora))
             id_ingreso = cursor.lastrowid
+            if cobro_noche:
+                cursor.execute("""
+                    INSERT INTO cobros_noches (
+                        id_ingreso, monto_snapshot, hora_inicio_snapshot,
+                        hora_fin_snapshot, fecha_hora_pago, usuario
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    id_ingreso,
+                    cobro_noche["monto_snapshot"],
+                    cobro_noche["hora_inicio_snapshot"],
+                    cobro_noche["hora_fin_snapshot"],
+                    fecha_hora,
+                    usuario or "sistema",
+                ))
             if obtener_print_jobs_pc_activos(cursor):
-                crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora)
+                crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora, cobro_noche)
 
     except Exception as e:
         print(f"Error al registrar ingreso: {e}")
         return None
 
-    return {
+    resultado = {
         "patente": patente,
         "fecha_hora_ingreso": fecha_hora,
     }
+    if cobro_noche:
+        resultado["cobro_noche"] = cobro_noche
+    return resultado
+
+
+def registrar_ingreso_con_noches_detallado(patente, usuario):
+    """Registra ingreso y el cobro adicional de Noches en una única transacción."""
+    cobro_noche = obtener_opcion_noches()
+    if not cobro_noche:
+        return None
+    return registrar_ingreso_detallado(patente, cobro_noche=cobro_noche, usuario=usuario)
 
 
 def registrar_salida(patente, usuario):
@@ -261,6 +332,69 @@ def registrar_salida(patente, usuario):
     return resultado["tarifa"] if resultado else None
 
 
+def _calcular_detalle_salida(ingreso, fecha_hora_salida, noches_prepagadas=None):
+    """Calcula los importes de salida sin modificar el ingreso."""
+    fecha_ingreso = ingreso["fecha_hora_ingreso"]
+    minutos_totales = calcular_minutos_estadia(fecha_ingreso, fecha_hora_salida)
+    minutos_lavado = calcular_minutos_lavado(ingreso["id_ingreso"], fecha_hora_salida)
+    minutos = max(minutos_totales - minutos_lavado, 0)
+    tarifa_estacionamiento, subida_aplicada, monto_extra = calcular_tarifa(
+        minutos,
+        fecha_ingreso,
+        fecha_hora_salida,
+        devolver_flag=True,
+    )
+    total_lavados = calcular_total_lavados(ingreso["id_ingreso"])
+    operacion_convertida = obtener_operacion_convertida_por_ingreso(ingreso["id_ingreso"])
+    detalle_secciones = None
+    if operacion_convertida:
+        total_lavados += int(operacion_convertida.get("valor_lavado_snapshot") or 0)
+        detalle_secciones = _build_detalle_salida_lavado_convertido(
+            operacion_convertida,
+            fecha_ingreso,
+            fecha_hora_salida,
+            tarifa_estacionamiento,
+            minutos,
+        )
+
+    noches_prepagadas = noches_prepagadas if noches_prepagadas is not None else ingreso.get("noches_prepagadas", [])
+    return {
+        "fecha_hora_ingreso": fecha_ingreso,
+        "fecha_hora_salida": fecha_hora_salida,
+        "minutos": minutos,
+        "tarifa_estacionamiento": tarifa_estacionamiento,
+        "total_lavados": total_lavados,
+        "tarifa": tarifa_estacionamiento + total_lavados,
+        "noches_prepagadas": noches_prepagadas,
+        "total_noches_prepagadas": sum(cobro["monto_snapshot"] for cobro in noches_prepagadas),
+        "subida_aplicada": subida_aplicada,
+        "monto_extra": monto_extra,
+        "detalle_secciones": detalle_secciones,
+    }
+
+
+def obtener_preview_salida_por_patente(patente, fecha_hora_consulta=None):
+    """Obtiene una vista previa informativa de la salida, sin persistir cambios."""
+    try:
+        ingreso = obtener_ingreso_activo_priorizado(patente, "consultar salida")
+        if not ingreso:
+            return None
+        if ingreso.get("en_lavado"):
+            return {"estado": "en_lavado"}
+        if ingreso.get("en_espera"):
+            return {"estado": "en_espera"}
+
+        preview = _calcular_detalle_salida(ingreso, fecha_hora_consulta or datetime.now())
+        preview.update({
+            "estado": "dentro",
+            "patente": ingreso.get("patente") or patente,
+        })
+        return preview
+    except Exception as e:
+        print(f"Error al obtener preview de salida: {e}")
+        return None
+
+
 @slow_operation("exit")
 def registrar_salida_detallada(patente, usuario):
     """
@@ -279,31 +413,17 @@ def registrar_salida_detallada(patente, usuario):
             print(f"[WARN] No se registró salida para {patente}: el vehículo está en lavado.")
             return None
 
-        fecha_ingreso = ingreso["fecha_hora_ingreso"]
         ahora = datetime.now()
-        minutos_totales = calcular_minutos_estadia(fecha_ingreso, ahora)
-        minutos_lavado = calcular_minutos_lavado(ingreso["id_ingreso"], ahora)
-        minutos = max(minutos_totales - minutos_lavado, 0)
-
-        tarifa, subida_aplicada, monto_extra = calcular_tarifa(
-            minutos,
-            fecha_ingreso,
-            ahora,
-            devolver_flag=True
-        )
-        total_lavados = calcular_total_lavados(ingreso["id_ingreso"])
-        operacion_convertida = obtener_operacion_convertida_por_ingreso(ingreso["id_ingreso"])
-        detalle_secciones = None
-        if operacion_convertida:
-            total_lavados += int(operacion_convertida.get("valor_lavado_snapshot") or 0)
-            detalle_secciones = _build_detalle_salida_lavado_convertido(
-                operacion_convertida,
-                fecha_ingreso,
-                ahora,
-                tarifa,
-                minutos,
-            )
-        total_a_cobrar = tarifa + total_lavados
+        detalle_salida = _calcular_detalle_salida(ingreso, ahora)
+        fecha_ingreso = detalle_salida["fecha_hora_ingreso"]
+        minutos = detalle_salida["minutos"]
+        tarifa = detalle_salida["tarifa_estacionamiento"]
+        total_lavados = detalle_salida["total_lavados"]
+        total_a_cobrar = detalle_salida["tarifa"]
+        subida_aplicada = detalle_salida["subida_aplicada"]
+        monto_extra = detalle_salida["monto_extra"]
+        detalle_secciones = detalle_salida["detalle_secciones"]
+        noches_prepagadas = detalle_salida["noches_prepagadas"]
 
         try:
             config = obtener_configuracion()
@@ -365,6 +485,7 @@ def registrar_salida_detallada(patente, usuario):
                     monto_extra,
                     detalle_secciones,
                     clave_idempotencia,
+                    noches_prepagadas,
                 )
 
     except Exception as e:
@@ -379,6 +500,8 @@ def registrar_salida_detallada(patente, usuario):
         "tarifa": total_a_cobrar,
         "tarifa_estacionamiento": tarifa,
         "total_lavados": total_lavados,
+        "noches_prepagadas": noches_prepagadas,
+        "total_noches_prepagadas": detalle_salida["total_noches_prepagadas"],
     }
 
 

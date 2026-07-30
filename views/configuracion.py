@@ -150,6 +150,43 @@ class ConfiguracionWindow(QWidget):
         layout.addWidget(panel_general)
 
         # =========================================================
+        # NOCHES
+        # =========================================================
+        panel_noches = QFrame()
+        panel_noches.setObjectName("PanelFormulario")
+        layout_noches_wrapper = QVBoxLayout(panel_noches)
+        layout_noches_wrapper.setContentsMargins(14, 14, 14, 14)
+        layout_noches_wrapper.setSpacing(10)
+
+        titulo_noches = QLabel("Noches")
+        titulo_noches.setObjectName("EtiquetaFormulario")
+        layout_noches_wrapper.addWidget(titulo_noches)
+
+        descripcion_noches = QLabel(
+            "Configura el valor adicional prepagado para Noches."
+        )
+        descripcion_noches.setObjectName("SubtituloSeccion")
+        descripcion_noches.setWordWrap(True)
+        layout_noches_wrapper.addWidget(descripcion_noches)
+
+        layout_noches = QGridLayout()
+        layout_noches.setHorizontalSpacing(14)
+        layout_noches.setVerticalSpacing(12)
+
+        self.noches_activo_check = QCheckBox("Habilitar noches")
+        self.noches_activo_check.setChecked(self.config.get("noches_activo", "0") == "1")
+        self.noches_valor_input = QLineEdit(self.config.get("noches_valor", "0"))
+        self.noches_valor_input.setMinimumHeight(38)
+        self.noches_valor_input.returnPressed.connect(self.guardar)
+
+        layout_noches.addWidget(self.noches_activo_check, 0, 0, 1, 2)
+        layout_noches.addWidget(QLabel("Valor adicional (CLP)"), 1, 0)
+        layout_noches.addWidget(self.noches_valor_input, 1, 1)
+        layout_noches.setColumnStretch(1, 1)
+        layout_noches_wrapper.addLayout(layout_noches)
+        layout.addWidget(panel_noches)
+
+        # =========================================================
         # LAVADOS
         # =========================================================
         panel_lavados = QFrame()
@@ -414,6 +451,8 @@ class ConfiguracionWindow(QWidget):
         self.minuto_input.setText(self.config.get("valor_minuto", "25"))
         self.hora_input.setText(self.config.get("tarifa_hora", "1300"))
         self.bano_input.setText(self.config.get("valor_bano", "300"))
+        self.noches_activo_check.setChecked(self.config.get("noches_activo", "0") == "1")
+        self.noches_valor_input.setText(self.config.get("noches_valor", "0"))
         for clave, input_valor in self.lavado_inputs.items():
             valor_default = next(
                 (default for item_clave, _label, default in LAVADO_CATEGORIAS if item_clave == clave),
@@ -725,6 +764,7 @@ class ConfiguracionWindow(QWidget):
         valor_minuto = self.minuto_input.text().strip()
         tarifa_hora = self.hora_input.text().strip()
         valor_bano = self.bano_input.text().strip()
+        noches_valor = self.noches_valor_input.text().strip()
         valores_lavado = {
             clave: input_valor.text().strip()
             for clave, input_valor in self.lavado_inputs.items()
@@ -736,10 +776,11 @@ class ConfiguracionWindow(QWidget):
             or not valor_minuto.isdigit() 
             or not tarifa_hora.isdigit() 
             or not valor_bano.isdigit()
+            or not noches_valor.isdigit()
             or any(not valor.isdigit() for valor in valores_lavado.values())
             or not dias_limpieza.isdigit()
         ):
-            QMessageBox.warning(self, "Error", "Tarifas, valores de lavado y días de limpieza deben ser números enteros.")
+            QMessageBox.warning(self, "Error", "Tarifas, valores de lavado, noches y días de limpieza deben ser números enteros.")
             return
 
         actualizar_configuracion("modo_cobro", modo)
@@ -747,6 +788,8 @@ class ConfiguracionWindow(QWidget):
         actualizar_configuracion("tarifa_hora", tarifa_hora)
         actualizar_configuracion("valor_minuto", valor_minuto)
         actualizar_configuracion("valor_bano", valor_bano)
+        actualizar_configuracion("noches_activo", 1 if self.noches_activo_check.isChecked() else 0)
+        actualizar_configuracion("noches_valor", noches_valor)
         for clave, valor in valores_lavado.items():
             actualizar_configuracion(clave, valor)
         actualizar_configuracion("limpieza_automatica_activa", 1 if self.limpieza_activa_check.isChecked() else 0)

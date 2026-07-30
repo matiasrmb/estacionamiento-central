@@ -41,6 +41,8 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         self.assertIn("total_neto INT NOT NULL DEFAULT 0", schema)
         self.assertIn("total_mensualidades INT NOT NULL DEFAULT 0", schema)
         self.assertIn("total_mensualidades_monto INT NOT NULL DEFAULT 0", schema)
+        self.assertIn("total_noches INT NOT NULL DEFAULT 0", schema)
+        self.assertIn("total_noches_monto INT NOT NULL DEFAULT 0", schema)
         self.assertIn("CREATE TABLE IF NOT EXISTS pagos_mensuales", schema)
         self.assertIn("UNIQUE KEY uq_pagos_mensuales_vehiculo_periodo", schema)
         self.assertIn("id_cierre INT NULL", schema)
@@ -165,6 +167,34 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         self.assertEqual(datos_pdf["Total neto del día"], "$50000")
         update = next((params for query, params in cursor.executed if "UPDATE pagos_mensuales" in query), None)
         self.assertEqual(update, [100, 11])
+
+    @patch.object(cierres_controller, "asegurar_schema_cierres")
+    @patch.object(cierres_controller, "generar_pdf_cierre")
+    @patch.object(cierres_controller, "db_cursor")
+    def test_cierre_solo_con_noches_usa_cobro_prepagado_y_lo_vincula(
+        self, db_cursor, generar_pdf, _asegurar_schema
+    ):
+        cursor = FakeCursor(
+            fetchall_results=[[], [], [], [], [], [{
+                "id_cobro_noche": 12,
+                "monto_snapshot": 5000,
+                "fecha_hora_pago": datetime(2026, 7, 1, 22, 0),
+            }]],
+            fetchone_results=[None],
+            lastrowid=101,
+        )
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
+
+        self.assertTrue(exito)
+        self.assertIn("$5000", mensaje)
+        datos_pdf = generar_pdf.call_args.args[1]
+        self.assertEqual(datos_pdf["Noches prepagadas cobradas"], 1)
+        self.assertEqual(datos_pdf["Total recaudado Noches prepagadas"], "$5000")
+        self.assertEqual(datos_pdf["Total general bruto"], "$5000")
+        update = next((params for query, params in cursor.executed if "UPDATE cobros_noches" in query), None)
+        self.assertEqual(update, [101, 12])
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
 import os
 import unittest
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLineEdit
+from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
 from views.admin_edicion import EdicionIngresosWindow
 from views.registro import QMessageBox, RegistroWindow
 
@@ -81,6 +82,64 @@ class RegistroViewF4Tests(unittest.TestCase):
         self.assertEqual(vista.busqueda_f4, "ABC124")
         self.assertEqual(vista.patentes_f4, [])
         self.assertEqual(vista.indice_patente_f4, -1)
+
+
+class RegistroViewPreviewIngresoTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    @patch("views.registro.datetime")
+    def test_muestra_preview_de_nuevo_ingreso_sin_datos_de_salida(self, datetime_mock):
+        ahora = datetime(2026, 7, 30, 14, 45)
+        datetime_mock.now.return_value = ahora
+        vista = type("VistaPreviewIngreso", (), {})()
+        vista.hora_consulta_label = QLabel()
+        vista.formatear_hora_info = lambda valor: valor.strftime("%H:%M")
+
+        RegistroWindow.mostrar_preview_ingreso(vista, "ABC123")
+
+        self.assertEqual(vista.hora_consulta_label.objectName(), "PreviewSalida")
+        self.assertEqual(vista.hora_consulta_label.text(), "\n".join([
+            "NUEVO INGRESO",
+            "Patente: ABC123",
+            "Hora de ingreso: 14:45",
+            "El ingreso se registra al confirmar la operación.",
+        ]))
+
+    def test_muestra_preview_de_salida_solo_con_horas(self):
+        vista = type("VistaPreviewSalida", (), {})()
+        vista.hora_consulta_label = QLabel()
+        vista.formatear_hora_info = RegistroWindow.formatear_hora_info.__get__(vista)
+        preview = {
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 7, 30, 9, 15),
+            "fecha_hora_salida": "2026-07-30 14:45:00",
+            "minutos": 330,
+            "tarifa_estacionamiento": 2500,
+            "total_lavados": 0,
+            "tarifa": 2500,
+            "noches_prepagadas": [{
+                "monto_snapshot": 5000,
+                "hora_inicio_snapshot": "22:00",
+                "hora_fin_snapshot": "08:00",
+            }],
+        }
+
+        RegistroWindow.mostrar_preview_salida(vista, preview)
+
+        self.assertEqual(vista.hora_consulta_label.text(), "\n".join([
+            "VEHÍCULO DENTRO",
+            "Patente: ABC123",
+            "Ingreso: 09:15",
+            "Consulta de salida: 14:45",
+            "Tiempo facturable: 330 min",
+            "Estacionamiento: $2500",
+            "Noches ya pagadas: $5000",
+            "Referencia Noches: 22:00 a 08:00",
+            "A COBRAR AHORA: $2500",
+            "El importe se recalcula al registrar la salida.",
+        ]))
 
 
 class EdicionIngresosViewReingresoTests(unittest.TestCase):

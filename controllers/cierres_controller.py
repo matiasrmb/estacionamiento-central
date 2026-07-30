@@ -57,6 +57,8 @@ def asegurar_schema_cierres():
             "ALTER TABLE cierres_diarios ADD COLUMN total_general INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_gastos INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_neto INT NOT NULL DEFAULT 0",
+            "ALTER TABLE cierres_diarios ADD COLUMN total_noches INT NOT NULL DEFAULT 0",
+            "ALTER TABLE cierres_diarios ADD COLUMN total_noches_monto INT NOT NULL DEFAULT 0",
             "ALTER TABLE usos_bano ADD COLUMN id_cierre INT NULL",
             "ALTER TABLE usos_bano ADD INDEX idx_usos_bano_cierre (id_cierre)",
             "ALTER TABLE operaciones_servicio ADD COLUMN cerrado TINYINT(1) NOT NULL DEFAULT 0",
@@ -150,10 +152,23 @@ def realizar_cierre_diario(usuario):
             int(pago.get("monto_snapshot") or 0) for pago in mensualidades
         )
 
-        if not registros and not banos and not lavados_solos and not gastos and not mensualidades:
+        cursor.execute("""
+            SELECT id_cobro_noche, monto_snapshot, fecha_hora_pago
+            FROM cobros_noches
+            WHERE id_cierre IS NULL
+              AND estado = 'PAGADO'
+              AND fecha_hora_pago <= %s
+            ORDER BY fecha_hora_pago ASC, id_cobro_noche ASC
+            FOR UPDATE
+        """, (fecha_cierre,))
+        cobros_noches = cursor.fetchall()
+        total_noches = len(cobros_noches)
+        total_noches_monto = sum(int(cobro.get("monto_snapshot") or 0) for cobro in cobros_noches)
+
+        if not registros and not banos and not lavados_solos and not gastos and not mensualidades and not cobros_noches:
             return False, "No hay registros para cerrar hoy."
 
-        total_general = total_recaudado + total_banos_monto + total_lavados_solos_monto + total_mensualidades_monto
+        total_general = total_recaudado + total_banos_monto + total_lavados_solos_monto + total_mensualidades_monto + total_noches_monto
         total_neto = total_general - total_gastos
 
         # Insertar el resumen en la tabla cierres
@@ -162,15 +177,16 @@ def realizar_cierre_diario(usuario):
                 fecha_inicio, fecha_cierre, total_recaudado,
                 total_ingresos, total_salidas, total_banos,
                 total_banos_monto, total_lavados_solos, total_lavados_solos_monto,
-                total_mensualidades, total_mensualidades_monto, total_general, total_gastos,
+                total_mensualidades, total_mensualidades_monto, total_noches, total_noches_monto,
+                total_general, total_gastos,
                 total_neto, usuario
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (fecha_inicio, fecha_cierre, total_recaudado,
                total_ingresos, total_salidas, total_banos,
                 total_banos_monto, total_lavados_solos,
                 total_lavados_solos_monto, total_mensualidades, total_mensualidades_monto,
-                total_general, total_gastos,
+                total_noches, total_noches_monto, total_general, total_gastos,
                 total_neto, usuario))
         id_cierre = cursor.lastrowid
 
@@ -217,6 +233,17 @@ def realizar_cierre_diario(usuario):
                 [id_cierre, *ids_mensualidades],
             )
 
+        ids_noches = [cobro["id_cobro_noche"] for cobro in cobros_noches]
+        if ids_noches:
+            formato = ",".join(["%s"] * len(ids_noches))
+            cursor.execute(
+                f"""UPDATE cobros_noches SET id_cierre = %s
+                    WHERE id_cobro_noche IN ({formato})
+                      AND id_cierre IS NULL
+                      AND estado = 'PAGADO'""",
+                [id_cierre, *ids_noches],
+            )
+
     datos_pdf = {
         "Fecha de inicio": fecha_inicio.strftime("%Y-%m-%d %H:%M"),
         "Fecha de cierre": fecha_cierre.strftime("%Y-%m-%d %H:%M"),
@@ -227,6 +254,8 @@ def realizar_cierre_diario(usuario):
         "Total recaudado lavados solos": f"${total_lavados_solos_monto}",
         "Mensualidades cobradas": total_mensualidades,
         "Total recaudado mensualidades": f"${total_mensualidades_monto}",
+        "Noches prepagadas cobradas": total_noches,
+        "Total recaudado Noches prepagadas": f"${total_noches_monto}",
         "Total ingresos": total_ingresos,
         "Total salidas": total_salidas,
         "Total general bruto": f"${total_general}",

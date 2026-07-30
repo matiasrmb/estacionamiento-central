@@ -30,7 +30,7 @@ def solo_lavado_idempotency_key(id_operacion_servicio):
     return f"desktop-solo-lavado:{id_operacion_servicio}:pc-pdf"
 
 
-def crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora_ingreso):
+def crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora_ingreso, cobro_noche=None):
     """Inserta el ticket de ingreso en la transaccion del ingreso."""
     hora_ingreso = fecha_hora_ingreso.isoformat(timespec="seconds")
     payload = {
@@ -46,6 +46,8 @@ def crear_print_job_ingreso(cursor, id_ingreso, patente, fecha_hora_ingreso):
         "tarifa": {"monto_preliminar": 0},
         "meta": {"server_time": hora_ingreso, "version": 1},
     }
+    if cobro_noche:
+        payload["noches"] = cobro_noche
     cursor.execute(
         """
         INSERT INTO print_jobs
@@ -81,6 +83,7 @@ def crear_print_job_salida(
     monto_extra=0,
     secciones=None,
     idempotency_key=None,
+    noches_prepagadas=None,
 ):
     """Inserta el ticket de salida en la transaccion del cierre."""
     hora_ingreso = fecha_hora_ingreso.isoformat(timespec="seconds")
@@ -109,6 +112,8 @@ def crear_print_job_salida(
         },
         "meta": {"server_time": hora_salida, "version": 1},
     }
+    if noches_prepagadas:
+        payload["noches_prepagadas"] = noches_prepagadas
     cursor.execute(
         """
         INSERT INTO print_jobs

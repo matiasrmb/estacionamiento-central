@@ -133,6 +133,69 @@ class VehicleLockResultCursor(FakeCursor):
 
 
 class RegistrarIngresoTests(unittest.TestCase):
+    def test_obtener_opcion_noches_requiere_configuracion_activa_y_valida(self):
+        configuracion = {
+            "noches_activo": "1",
+            "noches_hora_inicio": "22:00",
+            "noches_hora_fin": "08:00",
+            "noches_valor": "5000",
+        }
+        opcion = registro_controller.obtener_opcion_noches(configuracion, datetime(2026, 1, 1, 23, 0))
+
+        self.assertEqual(opcion, {
+            "monto_snapshot": 5000,
+            "hora_inicio_snapshot": "22:00",
+            "hora_fin_snapshot": "08:00",
+        })
+        self.assertIsNone(registro_controller.obtener_opcion_noches({"noches_activo": "0"}, datetime(2026, 1, 1, 23, 0)))
+
+    def test_obtener_opcion_noches_usa_referencia_fija_e_ignora_horarios_heredados(self):
+        configuracion = {
+            "noches_activo": "1",
+            "noches_hora_inicio": "09:00",
+            "noches_hora_fin": "17:00",
+            "noches_valor": "5000",
+        }
+
+        opcion = registro_controller.obtener_opcion_noches(configuracion, datetime(2026, 1, 1, 12, 0))
+
+        self.assertEqual(opcion["hora_inicio_snapshot"], "22:00")
+        self.assertEqual(opcion["hora_fin_snapshot"], "08:00")
+
+    def test_obtener_opcion_noches_rechaza_inactiva_o_sin_valor(self):
+        configuracion = {
+            "noches_activo": "1",
+            "noches_hora_inicio": "20:00",
+            "noches_hora_fin": "08:00",
+            "noches_valor": "5000",
+        }
+
+        self.assertIsNone(registro_controller.obtener_opcion_noches({**configuracion, "noches_activo": "0"}, datetime(2026, 1, 1, 21, 0)))
+        self.assertIsNone(registro_controller.obtener_opcion_noches({**configuracion, "noches_valor": "0"}, datetime(2026, 1, 1, 21, 0)))
+
+    @patch.object(registro_controller, "obtener_configuracion")
+    @patch.object(registro_controller, "db_cursor")
+    def test_registra_ingreso_y_cobro_noches_en_la_misma_operacion(self, db_cursor, obtener_configuracion):
+        cursor = FakeCursor(fetchone_results=[(77,)])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_configuracion.return_value = {
+            "noches_activo": "1",
+            "noches_hora_inicio": "00:00",
+            "noches_hora_fin": "23:59",
+            "noches_valor": "5000",
+        }
+
+        resultado = registro_controller.registrar_ingreso_con_noches_detallado("ABC123", "operador")
+
+        self.assertEqual(resultado["cobro_noche"]["monto_snapshot"], 5000)
+        cobro_params = next(
+            params for query, params in cursor.executed if "INSERT INTO cobros_noches" in query
+        )
+        self.assertEqual(cobro_params[:4], (123, 5000, "22:00", "08:00"))
+        self.assertEqual(cobro_params[-1], "operador")
+        print_job = next(params for query, params in cursor.executed if "INSERT INTO print_jobs" in query)
+        self.assertEqual(json.loads(print_job[4])["noches"]["monto_snapshot"], 5000)
+
     @patch.object(registro_controller, "db_cursor")
     def test_no_registra_ingreso_si_la_patente_ya_tiene_un_ingreso_activo(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[(77,), {"id_ingreso": 1}])
@@ -518,7 +581,93 @@ class BuscarEstadoVehiculoTests(unittest.TestCase):
         self.assertEqual(estado, "fuera")
 
 
+class PreviewSalidaTests(unittest.TestCase):
+    @patch.object(registro_controller, "calcular_total_lavados", return_value=2500)
+    @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso", return_value=None)
+    @patch.object(registro_controller, "calcular_tarifa", return_value=(1800, False, 0))
+    @patch.object(registro_controller, "calcular_minutos_lavado", return_value=10)
+    @patch.object(registro_controller, "obtener_ingreso_activo_priorizado")
+    def test_preview_activo_calcula_importes_sin_persistir(
+        self,
+        obtener_ingreso,
+        calcular_minutos_lavado,
+        calcular_tarifa,
+        obtener_operacion_convertida,
+        calcular_total_lavados,
+    ):
+        fecha_ingreso = datetime(2026, 1, 1, 10, 0)
+        fecha_consulta = datetime(2026, 1, 1, 11, 0)
+        obtener_ingreso.return_value = {
+            "id_ingreso": 10,
+            "patente": "XX0011",
+            "fecha_hora_ingreso": fecha_ingreso,
+            "en_espera": 0,
+            "en_lavado": 0,
+            "noches_prepagadas": [{
+                "monto_snapshot": 5000,
+                "hora_inicio_snapshot": "22:00",
+                "hora_fin_snapshot": "08:00",
+            }],
+        }
+
+        resultado = registro_controller.obtener_preview_salida_por_patente(
+            "XX0011", fecha_consulta
+        )
+
+        self.assertEqual(resultado["estado"], "dentro")
+        self.assertEqual(resultado["patente"], "XX0011")
+        self.assertEqual(resultado["minutos"], 50)
+        self.assertEqual(resultado["tarifa_estacionamiento"], 1800)
+        self.assertEqual(resultado["total_lavados"], 2500)
+        self.assertEqual(resultado["tarifa"], 4300)
+        self.assertEqual(resultado["total_noches_prepagadas"], 5000)
+        self.assertEqual(resultado["tarifa"], 4300)
+        calcular_tarifa.assert_called_once_with(50, fecha_ingreso, fecha_consulta, devolver_flag=True)
+
+    @patch.object(registro_controller, "calcular_tarifa")
+    @patch.object(registro_controller, "obtener_ingreso_activo_priorizado")
+    def test_preview_no_calcula_para_ingreso_en_espera(self, obtener_ingreso, calcular_tarifa):
+        obtener_ingreso.return_value = {"en_espera": 1, "en_lavado": 0}
+
+        resultado = registro_controller.obtener_preview_salida_por_patente("XX0011")
+
+        self.assertEqual(resultado, {"estado": "en_espera"})
+        calcular_tarifa.assert_not_called()
+
+
 class RegistrarSalidaTests(unittest.TestCase):
+    @patch.object(registro_controller, "obtener_configuracion", return_value={"modo_cobro": "minuto"})
+    @patch.object(registro_controller, "calcular_tarifa", return_value=(1500, False, 0))
+    @patch.object(registro_controller, "calcular_minutos_lavado", return_value=0)
+    @patch.object(registro_controller, "obtener_operacion_convertida_por_ingreso", return_value=None)
+    @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
+    @patch.object(registro_controller, "db_cursor")
+    def test_salida_informa_noches_prepagadas_sin_sumarlas_a_tarifa_aplicada(
+        self, db_cursor, obtener_ingresos, _operacion, _minutos, _tarifa, _configuracion
+    ):
+        cursor = FakeCursor()
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_ingresos.return_value = [{
+            "id_ingreso": 10,
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 10, 0),
+            "patente": "ABC123",
+            "en_lavado": 0,
+            "noches_prepagadas": [{
+                "monto_snapshot": 5000,
+                "hora_inicio_snapshot": "22:00",
+                "hora_fin_snapshot": "08:00",
+            }],
+        }]
+
+        resultado = registro_controller.registrar_salida_detallada("ABC123", "admin")
+
+        update_params = next(params for query, params in cursor.executed if "UPDATE ingresos" in query)
+        print_job = next(params for query, params in cursor.executed if "INSERT INTO print_jobs" in query)
+        self.assertEqual(update_params[1], 1500)
+        self.assertEqual(resultado["tarifa"], 1500)
+        self.assertEqual(resultado["total_noches_prepagadas"], 5000)
+        self.assertEqual(json.loads(print_job[4])["noches_prepagadas"][0]["monto_snapshot"], 5000)
+
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     @patch.object(registro_controller, "db_cursor")
     def test_retorna_none_si_no_hay_ingresos_activos(self, db_cursor, obtener_activos):

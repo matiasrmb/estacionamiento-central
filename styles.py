@@ -420,6 +420,16 @@ QLabel#EstadoInfoError {
     font-size: 13px;
 }
 
+QLabel#PreviewSalida {
+    background-color: #ecfdf5;
+    border: 2px solid #86efac;
+    border-radius: 8px;
+    padding: 12px;
+    color: #14532d;
+    font-size: 14px;
+    font-weight: 600;
+}
+
 QLabel#EstadoSubidaActiva {
     background-color: #fff7ed;
     border: 1px solid #fdba74;

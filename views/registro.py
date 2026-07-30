@@ -9,8 +9,10 @@ from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QShortcut, QKeySequence
 from datetime import datetime, timedelta
 from controllers.registro_controller import (
-    buscar_estado_vehiculo, registrar_ingreso_detallado,
+    buscar_estado_vehiculo, registrar_ingreso_detallado, registrar_ingreso_con_noches_detallado,
+    obtener_opcion_noches,
     registrar_salida_detallada, obtener_vehiculos_activos,
+    obtener_preview_salida_por_patente,
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
     registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual,
@@ -149,8 +151,9 @@ class RegistroWindow(QWidget):
         self.actualizar_estilo_info("neutro")
 
         self.hora_consulta_label = QLabel("")
-        self.hora_consulta_label.setObjectName("EstadoInfoNeutro")
+        self.hora_consulta_label.setObjectName("PreviewSalida")
         self.hora_consulta_label.setWordWrap(True)
+        self.hora_consulta_label.setMinimumHeight(128)
 
         layout_busqueda.addWidget(self.label_patente)
         layout_busqueda.addWidget(self.input_patente)
@@ -177,6 +180,11 @@ class RegistroWindow(QWidget):
         self.boton_ingreso_personalizado.setEnabled(False)
         self.boton_ingreso_personalizado.setMinimumHeight(32)
         self.boton_ingreso_personalizado.clicked.connect(self.registrar_ingreso_con_hora_personalizada)
+
+        self.boton_ingreso_noches = QPushButton("Registrar ingreso con Noches")
+        self.boton_ingreso_noches.setEnabled(False)
+        self.boton_ingreso_noches.setMinimumHeight(32)
+        self.boton_ingreso_noches.clicked.connect(self.registrar_ingreso_con_noches)
 
         self.boton_salida = QPushButton("Registrar salida")
         self.boton_salida.setEnabled(False)
@@ -206,6 +214,7 @@ class RegistroWindow(QWidget):
 
         layout_acciones.addWidget(self.boton_ingreso)
         layout_acciones.addWidget(self.boton_ingreso_personalizado)
+        layout_acciones.addWidget(self.boton_ingreso_noches)
         layout_acciones.addWidget(self.boton_salida)
         layout_acciones.addWidget(self.boton_espera)
         layout_acciones.addWidget(self.boton_bano)
@@ -442,8 +451,7 @@ class RegistroWindow(QWidget):
             self.enfocar_patente()
             return
 
-        hora_consulta = datetime.now().strftime("%H:%M")
-        self.hora_consulta_label.setText(f"HORA DE ENTRADA: {hora_consulta}")
+        self.hora_consulta_label.clear()
 
         estado = buscar_estado_vehiculo(patente)
 
@@ -452,8 +460,10 @@ class RegistroWindow(QWidget):
             self.info_label.setText("Vehículo no registrado. Puedes crear su ingreso.")
             self.boton_ingreso.setEnabled(True)
             self.boton_ingreso_personalizado.setEnabled(True)
+            self.boton_ingreso_noches.setEnabled(bool(obtener_opcion_noches()))
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
+            self.mostrar_preview_ingreso(patente)
 
         elif estado == "dentro":
             self.actualizar_estilo_info("warn")
@@ -461,21 +471,32 @@ class RegistroWindow(QWidget):
             self.boton_salida.setEnabled(True)
             self.boton_ingreso.setEnabled(False)
             self.boton_ingreso_personalizado.setEnabled(False)
+            self.boton_ingreso_noches.setEnabled(False)
             self.boton_espera.setEnabled(True)
+            preview = obtener_preview_salida_por_patente(patente)
+            if preview and preview.get("estado") == "dentro":
+                self.mostrar_preview_salida(preview)
+            elif preview and preview.get("estado") == "en_espera":
+                self.hora_consulta_label.setText("VEHÍCULO EN ESPERA\nNo hay vista previa de salida disponible.")
+            elif preview and preview.get("estado") == "en_lavado":
+                self.hora_consulta_label.setText("VEHÍCULO EN LAVADO\nFinaliza el lavado antes de registrar la salida.")
 
         elif estado == "fuera":
             self.actualizar_estilo_info("neutro")
             self.info_label.setText("Vehículo fuera del estacionamiento. Puedes registrar un nuevo ingreso.")
             self.boton_ingreso.setEnabled(True)
             self.boton_ingreso_personalizado.setEnabled(True)
+            self.boton_ingreso_noches.setEnabled(bool(obtener_opcion_noches()))
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
+            self.mostrar_preview_ingreso(patente)
 
         else:
             self.actualizar_estilo_info("error")
             self.info_label.setText("No fue posible determinar el estado del vehículo.")
             self.boton_ingreso.setEnabled(False)
             self.boton_ingreso_personalizado.setEnabled(False)
+            self.boton_ingreso_noches.setEnabled(False)
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
             QMessageBox.critical(self, "Error", "Error al consultar la patente.")
@@ -490,6 +511,55 @@ class RegistroWindow(QWidget):
             return formatear_fecha_hora(datetime.strptime(str(valor), "%Y-%m-%d %H:%M:%S"))
         except ValueError:
             return str(valor)
+
+    def formatear_hora_info(self, valor):
+        if not valor:
+            return "-"
+        if hasattr(valor, "strftime"):
+            return valor.strftime("%H:%M")
+        try:
+            return datetime.strptime(str(valor), "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+        except ValueError:
+            return str(valor)
+
+    def mostrar_preview_salida(self, preview):
+        lineas = [
+            "VEHÍCULO DENTRO",
+            f"Patente: {preview['patente']}",
+            f"Ingreso: {self.formatear_hora_info(preview['fecha_hora_ingreso'])}",
+            f"Consulta de salida: {self.formatear_hora_info(preview['fecha_hora_salida'])}",
+            f"Tiempo facturable: {preview['minutos']} min",
+            f"Estacionamiento: ${preview['tarifa_estacionamiento']:.0f}",
+        ]
+        if preview["total_lavados"]:
+            lineas.append(f"Lavados: ${preview['total_lavados']:.0f}")
+        for cobro in preview.get("noches_prepagadas", []):
+            lineas.append(f"Noches ya pagadas: ${cobro['monto_snapshot']:.0f}")
+            lineas.append(
+                f"Referencia Noches: {cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']}"
+            )
+        lineas.extend([
+            f"A COBRAR AHORA: ${preview['tarifa']:.0f}",
+            "El importe se recalcula al registrar la salida.",
+        ])
+        self.hora_consulta_label.setText("\n".join(lineas))
+        self.hora_consulta_label.setObjectName("PreviewSalida")
+        self.hora_consulta_label.style().unpolish(self.hora_consulta_label)
+        self.hora_consulta_label.style().polish(self.hora_consulta_label)
+        self.hora_consulta_label.update()
+
+    def mostrar_preview_ingreso(self, patente):
+        ahora = datetime.now()
+        self.hora_consulta_label.setText("\n".join([
+            "NUEVO INGRESO",
+            f"Patente: {patente}",
+            f"Hora de ingreso: {self.formatear_hora_info(ahora)}",
+            "El ingreso se registra al confirmar la operación.",
+        ]))
+        self.hora_consulta_label.setObjectName("PreviewSalida")
+        self.hora_consulta_label.style().unpolish(self.hora_consulta_label)
+        self.hora_consulta_label.style().polish(self.hora_consulta_label)
+        self.hora_consulta_label.update()
 
     def mostrar_info_patente_navegada(
         self,
@@ -728,6 +798,47 @@ class RegistroWindow(QWidget):
 
         self.actualizar_tabla_activos()
 
+    def registrar_ingreso_con_noches(self):
+        patente = self.input_patente.text().strip().upper()
+        opcion = obtener_opcion_noches()
+        if not opcion:
+            QMessageBox.warning(
+                self,
+                "Noches no disponible",
+                "Noches no está disponible para este ingreso. Verifica que esté habilitado y tenga un valor mayor que cero.",
+            )
+            return
+
+        confirmacion = QMessageBox.question(
+            self,
+            "Confirmar ingreso con Noches",
+            f"Registrar ingreso para {patente} con Noches prepagadas por ${opcion['monto_snapshot']}\n"
+            f"Horario de referencia: {opcion['hora_inicio_snapshot']} a {opcion['hora_fin_snapshot']}",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirmacion != QMessageBox.Yes:
+            return
+
+        ingreso = registrar_ingreso_con_noches_detallado(patente, self.usuario)
+        if ingreso:
+            cobro = ingreso["cobro_noche"]
+            QMessageBox.information(
+                self,
+                "Ingreso registrado",
+                "Vehículo ingresado con Noches prepagadas.\n\n"
+                f"Patente: {ingreso['patente']}\n"
+                f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}\n"
+                f"Noches: ${cobro['monto_snapshot']} ({cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']})",
+            )
+            self.actualizar_lista_patentes()
+            self.reset()
+        else:
+            self.actualizar_estilo_info("error")
+            self.info_label.setText("No se pudo registrar el ingreso con Noches.")
+            QMessageBox.critical(self, "Error", "No se pudo registrar el ingreso con Noches.")
+            self.enfocar_patente()
+        self.actualizar_tabla_activos()
+
     def registrar_salida(self):
         patente = self.input_patente.text().strip().upper()
 
@@ -770,6 +881,7 @@ class RegistroWindow(QWidget):
         self.busqueda_f4 = ""
         self.boton_ingreso.setEnabled(False)
         self.boton_ingreso_personalizado.setEnabled(False)
+        self.boton_ingreso_noches.setEnabled(False)
         self.boton_salida.setEnabled(False)
         self.boton_espera.setEnabled(False)
         self.actualizar_estilo_info("neutro")
