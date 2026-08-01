@@ -5,7 +5,7 @@ from utils.plates import normalizar_patente, validar_patente
 
 class PlateTests(unittest.TestCase):
     def test_accepts_all_supported_formats(self):
-        for patente in ("ABCD12", "ABC12", "AB123CD", "ABC123"):
+        for patente in ("ABCD12", "ABC12", "AB123CD", "ABC123", "AB1234"):
             with self.subTest(patente=patente):
                 self.assertTrue(validar_patente(patente))
 
