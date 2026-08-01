@@ -1,13 +1,14 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QInputDialog,
-    QMessageBox, QLabel, QHeaderView, QSizePolicy, QFrame
+    QMessageBox, QLabel, QHeaderView, QSizePolicy, QFrame, QLineEdit
 )
 from PySide6.QtCore import Qt
 from controllers.tarifas_controller import (
     obtener_tarifas_personalizadas, agregar_intervalo,
     eliminar_intervalo, actualizar_intervalo
 )
+from utils.table_filters import filtrar_filas_tabla
 
 
 class TarifasPersonalizadasWindow(QWidget):
@@ -78,6 +79,12 @@ class TarifasPersonalizadasWindow(QWidget):
         # =========================================================
         # TABLA
         # =========================================================
+        self.busqueda = QLineEdit()
+        self.busqueda.setPlaceholderText("Buscar...")
+        self.busqueda.setMinimumHeight(38)
+        self.busqueda.textChanged.connect(self.filtrar_tabla)
+        layout.addWidget(self.busqueda)
+
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(4)
         self.tabla.setHorizontalHeaderLabels(["ID", "Desde (min)", "Hasta (min)", "Valor (CLP)"])
@@ -118,6 +125,11 @@ class TarifasPersonalizadasWindow(QWidget):
             self.tabla.setItem(i, 1, item_inicio)
             self.tabla.setItem(i, 2, item_fin)
             self.tabla.setItem(i, 3, item_valor)
+
+        self.filtrar_tabla()
+
+    def filtrar_tabla(self):
+        filtrar_filas_tabla(self.tabla, self.busqueda.text())
 
     def agregar(self):
         min_inicio, ok1 = QInputDialog.getInt(self, "Nuevo intervalo", "Desde (minutos):", 0)

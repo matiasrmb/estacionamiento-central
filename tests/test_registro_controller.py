@@ -1765,6 +1765,48 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertEqual(resultado, 0.0)
 
     @patch.object(registro_controller, "db_cursor")
+    def test_obtener_resumen_caja_actual_incluye_cada_ingreso_pendiente_de_cierre(self, db_cursor):
+        cursor = FakeCursor(fetchall_results=[
+            [{"tarifa_aplicada": 1200}],
+            [{"monto": 300}],
+            [
+                {"estado": "FINALIZADO_COBRADO", "valor_lavado_snapshot": 8000},
+                {"estado": "CONVERTIDO_ESTADIA", "valor_lavado_snapshot": 9000},
+            ],
+            [{"monto_snapshot": 50000}],
+            [{"monto_snapshot": 5000}],
+            [],
+        ])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resumen = registro_controller.obtener_resumen_caja_actual()
+
+        self.assertEqual(resumen["total_recaudado"], 1200)
+        self.assertEqual(resumen["total_banos_monto"], 300)
+        self.assertEqual(resumen["total_lavados_solos_monto"], 8000)
+        self.assertEqual(resumen["total_mensualidades_monto"], 50000)
+        self.assertEqual(resumen["total_noches_monto"], 5000)
+        self.assertEqual(resumen["total_general"], 64500)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("fecha_hora_salida IS NOT NULL", consultas)
+        self.assertIn("estado = 'FINALIZADO_COBRADO'", consultas)
+        self.assertIn("id_cierre IS NULL", consultas)
+        self.assertIn("estado = 'PAGADO'", consultas)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_obtener_resumen_caja_actual_resta_gastos_pendientes_sin_alterar_bruto(self, db_cursor):
+        cursor = FakeCursor(fetchall_results=[
+            [{"tarifa_aplicada": 1000}], [], [], [], [], [{"monto": 450}],
+        ])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resumen = registro_controller.obtener_resumen_caja_actual()
+
+        self.assertEqual(resumen["total_general"], 1000)
+        self.assertEqual(resumen["total_gastos"], 450)
+        self.assertEqual(resumen["total_neto"], 550)
+
+    @patch.object(registro_controller, "db_cursor")
     def test_obtener_ingresos_activos_por_patente_retorna_filas(self, db_cursor):
         ingresos = [
             {"id_ingreso": 1, "patente": "ABC123", "en_espera": 0},

@@ -30,7 +30,9 @@ from controllers.lavados_controller import (
     obtener_totales_lavado_por_ingresos,
 )
 from controllers.operaciones_servicio_controller import obtener_operacion_convertida_por_ingreso
+from controllers.accounting_contracts import build_accounting_summary
 from utils.slowlog import slow_operation
+from utils.plates import requerir_patente_valida
 
 _schema_noches_asegurado = False
 
@@ -408,6 +410,7 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None, cobro_noche=No
         dict | None: Datos del ingreso registrado o None si falló.
     """
     try:
+        patente = requerir_patente_valida(patente)
         es_ingreso_personalizado = fecha_hora_ingreso is not None
         if es_ingreso_personalizado:
             es_valida, mensaje = validar_fecha_hora_ingreso_personalizada(fecha_hora_ingreso)
@@ -997,6 +1000,66 @@ def obtener_total_vehiculos_pagados_turno_actual():
         return 0.0
 
     return float(resultado["total"] or 0)
+
+
+def obtener_resumen_caja_actual():
+    """Obtiene el efectivo pendiente de cierre usando las fuentes del cierre diario."""
+    ahora = datetime.now()
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("""
+            SELECT tarifa_aplicada
+            FROM ingresos
+            WHERE fecha_hora_salida IS NOT NULL
+              AND cerrado = FALSE
+        """)
+        movimientos_estacionamiento = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT monto
+            FROM usos_bano
+            WHERE id_cierre IS NULL
+        """)
+        usos_bano = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT estado, valor_lavado_snapshot
+            FROM operaciones_servicio
+            WHERE estado = 'FINALIZADO_COBRADO'
+              AND cerrado = FALSE
+        """)
+        lavados_solos = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT monto_snapshot
+            FROM pagos_mensuales
+            WHERE id_cierre IS NULL
+        """)
+        pagos_mensuales = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT monto_snapshot
+            FROM cobros_noches
+            WHERE id_cierre IS NULL
+              AND estado = 'PAGADO'
+              AND fecha_hora_pago <= %s
+        """, (ahora,))
+        cobros_noches = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT monto
+            FROM gastos_operacion
+            WHERE id_cierre IS NULL
+        """)
+        gastos = cursor.fetchall()
+
+    return build_accounting_summary(
+        movimientos_estacionamiento,
+        usos_bano,
+        lavados_solos,
+        gastos,
+        pagos_mensuales,
+        cobros_noches,
+    )
 
 
 def obtener_ingresos_editables():

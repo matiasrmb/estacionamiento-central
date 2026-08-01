@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHBoxLayout,
-    QMessageBox, QGroupBox, QHeaderView, QSizePolicy
+    QMessageBox, QGroupBox, QHeaderView, QSizePolicy, QLineEdit
 )
 from PySide6.QtCore import Qt
 
@@ -11,6 +11,7 @@ from controllers.registro_controller import (
     revertir_en_espera,
     reingresar_vehiculo_cerrado
 )
+from utils.table_filters import filtrar_filas_tabla
 
 
 class EdicionIngresosWindow(QWidget):
@@ -68,6 +69,12 @@ class EdicionIngresosWindow(QWidget):
         layout_tabla = QVBoxLayout()
         layout_tabla.setContentsMargins(12, 0, 12, 18)
         layout_tabla.setSpacing(10)
+
+        self.busqueda = QLineEdit()
+        self.busqueda.setPlaceholderText("Buscar...")
+        self.busqueda.setMinimumHeight(38)
+        self.busqueda.textChanged.connect(self.filtrar_tabla)
+        layout_tabla.addWidget(self.busqueda)
 
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(4)
@@ -152,6 +159,11 @@ class EdicionIngresosWindow(QWidget):
             self.tabla.setItem(fila, 1, item_patente)
             self.tabla.setItem(fila, 2, item_fecha)
             self.tabla.setItem(fila, 3, item_estado)
+
+        self.filtrar_tabla()
+
+    def filtrar_tabla(self):
+        filtrar_filas_tabla(self.tabla, self.busqueda.text())
 
     def revertir_en_espera(self):
         fila = self.tabla.currentRow()

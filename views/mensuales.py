@@ -11,6 +11,8 @@ from controllers.mensuales_controller import (
     obtener_mensuales, agregar_mensual,
     actualizar_tarifa, eliminar_mensual, registrar_pago_mensual
 )
+from utils.plates import normalizar_patente, validar_patente
+from utils.table_filters import filtrar_filas_tabla
 
 
 class MensualesWindow(QWidget):
@@ -95,6 +97,12 @@ class MensualesWindow(QWidget):
         # =========================================================
         # TABLA
         # =========================================================
+        self.busqueda = QLineEdit()
+        self.busqueda.setPlaceholderText("Buscar...")
+        self.busqueda.setMinimumHeight(38)
+        self.busqueda.textChanged.connect(self.filtrar_tabla)
+        layout.addWidget(self.busqueda)
+
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(8)
         self.tabla.setHorizontalHeaderLabels([
@@ -182,13 +190,22 @@ class MensualesWindow(QWidget):
 
             self.tabla.setCellWidget(i, 7, acciones_widget)
 
+        self.filtrar_tabla()
+
+    def filtrar_tabla(self):
+        filtrar_filas_tabla(self.tabla, self.busqueda.text())
+
     def agregar_mensual(self):
-        patente = self.patente_input.text().strip().upper()
+        patente = normalizar_patente(self.patente_input.text())
         tarifa_mensual = self.tarifa_input.value()
         dia_vencimiento = self.vencimiento_input.value()
         telefono = self.telefono_input.text().strip()
-        if not patente:
-            QMessageBox.warning(self, "Atención", "Debes ingresar una patente.")
+        if not validar_patente(patente):
+            QMessageBox.warning(
+                self,
+                "Atención",
+                "Patente inválida. Usa ABCD12, ABC12, AB123CD o ABC123.",
+            )
             return
 
         exito = agregar_mensual(patente, tarifa_mensual, dia_vencimiento, telefono)

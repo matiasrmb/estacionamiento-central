@@ -29,6 +29,7 @@ from utils.printer_manager import (obtener_impresoras_instaladas,
                                    guardar_impresora_tickets,
 )
 from utils.printer_diagnostics import SUPPORTED_PRINT_PATH
+from utils.table_filters import filtrar_filas_tabla
 
 class ConfiguracionWindow(QWidget):
     """
@@ -335,6 +336,12 @@ class ConfiguracionWindow(QWidget):
         titulo_fallidos.setObjectName("EtiquetaFormulario")
         layout_impresion_wrapper.addWidget(titulo_fallidos)
 
+        self.busqueda_trabajos_impresion = QLineEdit()
+        self.busqueda_trabajos_impresion.setPlaceholderText("Buscar...")
+        self.busqueda_trabajos_impresion.setMinimumHeight(38)
+        self.busqueda_trabajos_impresion.textChanged.connect(self.filtrar_trabajos_impresion)
+        layout_impresion_wrapper.addWidget(self.busqueda_trabajos_impresion)
+
         self.tabla_trabajos_fallidos = QTableWidget()
         self.tabla_trabajos_fallidos.setColumnCount(8)
         self.tabla_trabajos_fallidos.setHorizontalHeaderLabels(
@@ -495,6 +502,7 @@ class ConfiguracionWindow(QWidget):
                 if columna == 7:
                     item.setToolTip(str(valor))
                 self.tabla_trabajos_fallidos.setItem(fila, columna, item)
+        self.filtrar_trabajos_impresion()
 
     def reintentar_trabajo_impresion_seleccionado(self):
         fila = self.tabla_trabajos_fallidos.currentRow()
@@ -566,6 +574,12 @@ class ConfiguracionWindow(QWidget):
             ]
             for columna, valor in enumerate(valores):
                 self.tabla_trabajos_impresos.setItem(fila, columna, QTableWidgetItem(str(valor)))
+        self.filtrar_trabajos_impresion()
+
+    def filtrar_trabajos_impresion(self):
+        texto = self.busqueda_trabajos_impresion.text()
+        filtrar_filas_tabla(self.tabla_trabajos_fallidos, texto)
+        filtrar_filas_tabla(self.tabla_trabajos_impresos, texto)
 
     def reimprimir_trabajo_impresion_seleccionado(self):
         fila = self.tabla_trabajos_impresos.currentRow()

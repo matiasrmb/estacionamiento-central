@@ -10,6 +10,7 @@ from controllers.gastos_controller import (
     obtener_total_gastos_pendientes,
     registrar_gasto,
 )
+from utils.table_filters import filtrar_filas_tabla
 
 
 class GastosWindow(QWidget):
@@ -67,6 +68,12 @@ class GastosWindow(QWidget):
         resumen.addStretch()
         layout.addLayout(resumen)
 
+        self.busqueda = QLineEdit()
+        self.busqueda.setPlaceholderText("Buscar...")
+        self.busqueda.setMinimumHeight(38)
+        self.busqueda.textChanged.connect(self.filtrar_tabla)
+        layout.addWidget(self.busqueda)
+
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(5)
         self.tabla.setHorizontalHeaderLabels(["Fecha", "Categoría", "Descripción", "Monto", "Usuario"])
@@ -115,3 +122,7 @@ class GastosWindow(QWidget):
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabla.setItem(fila, columna, item)
         self.total.setText(f"${total:,}")
+        self.filtrar_tabla()
+
+    def filtrar_tabla(self):
+        filtrar_filas_tabla(self.tabla, self.busqueda.text())

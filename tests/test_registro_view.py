@@ -142,6 +142,62 @@ class RegistroViewPreviewIngresoTests(unittest.TestCase):
         ]))
 
 
+class RegistroViewPlateValidationTests(unittest.TestCase):
+    def _vista(self, patente):
+        vista = Mock()
+        vista.input_patente.text.return_value = patente
+        vista.usuario = "operador"
+        vista.validar_patente = RegistroWindow.validar_patente.__get__(vista)
+        return vista
+
+    def test_busca_y_registra_salida_de_patente_historica_con_separador(self):
+        vista = self._vista(" ab-12 ")
+
+        with patch("views.registro.buscar_estado_vehiculo", return_value="dentro") as buscar, \
+             patch("views.registro.obtener_preview_salida_por_patente", return_value=None):
+            RegistroWindow.buscar_vehiculo(vista)
+
+        buscar.assert_called_once_with("AB-12")
+        vista.boton_salida.setEnabled.assert_called_once_with(True)
+
+        salida = {
+            "patente": "AB-12",
+            "fecha_hora_ingreso": datetime(2026, 7, 30, 9, 0),
+            "fecha_hora_salida": datetime(2026, 7, 30, 10, 0),
+            "minutos": 60,
+            "total_noches_prepagadas": 0,
+            "tarifa": 1000,
+        }
+        with patch("views.registro.registrar_salida_detallada", return_value=salida) as registrar, \
+             patch("views.registro.QMessageBox.information"):
+            RegistroWindow.registrar_salida(vista)
+
+        registrar.assert_called_once_with("AB-12", "operador")
+
+    def test_rechaza_ingreso_nuevo_con_patente_historica_invalida(self):
+        vista = self._vista(" ab-12 ")
+
+        with patch("views.registro.registrar_ingreso_detallado") as registrar, \
+             patch("views.registro.QMessageBox.warning") as advertir:
+            RegistroWindow.registrar_ingreso(vista)
+
+        registrar.assert_not_called()
+        advertir.assert_called_once()
+
+    def test_normaliza_patente_canonica_al_registrar_ingreso(self):
+        vista = self._vista(" ab-cd 12 ")
+        ingreso = {
+            "patente": "ABCD12",
+            "fecha_hora_ingreso": datetime(2026, 7, 30, 9, 0),
+        }
+
+        with patch("views.registro.registrar_ingreso_detallado", return_value=ingreso) as registrar, \
+             patch("views.registro.QMessageBox.information"):
+            RegistroWindow.registrar_ingreso(vista)
+
+        registrar.assert_called_once_with("ABCD12")
+
+
 class EdicionIngresosViewReingresoTests(unittest.TestCase):
     def test_reingreso_no_solicita_motivo_y_lo_envia_como_opcional(self):
         vista = Mock()

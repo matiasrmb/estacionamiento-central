@@ -16,7 +16,7 @@ from controllers.registro_controller import (
     obtener_noche_pendiente_por_patente, finalizar_noche_pendiente, convertir_noche_a_ingreso_normal,
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
-    registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual,
+    registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual, obtener_resumen_caja_actual,
     obtener_patentes_turno_actual_para_f4, ordenar_patentes_turno_para_f4,
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
@@ -42,6 +42,7 @@ from controllers.cotizaciones_controller import (
     wash_quote_options_from_legacy_config,
 )
 from views.subida_dialog import SubidaDialog
+from utils.plates import normalizar_patente, validar_patente
 
 
 def formatear_fecha_hora(valor):
@@ -124,9 +125,9 @@ class RegistroWindow(QWidget):
         self.input_patente = QLineEdit()
         self.input_patente.setObjectName("InputPatente")
         self.input_patente.setPlaceholderText("Ej: ABCD12")
-        self.input_patente.setMaxLength(8)
+        self.input_patente.setMaxLength(20)
         self.input_patente.setMinimumHeight(42)
-        self.input_patente.textChanged.connect(self.normalizar_patente)
+        self.input_patente.textChanged.connect(self.normalizar_patente_busqueda)
         self.input_patente.textEdited.connect(self.reiniciar_busqueda_f4)
         self.input_patente.returnPressed.connect(self.buscar_vehiculo)
 
@@ -328,11 +329,15 @@ class RegistroWindow(QWidget):
         self.card_banos = self.crear_tarjeta_resumen("Usos de baño hoy", "0")
         self.card_total_activos = self.crear_tarjeta_resumen("Total activos", "$0")
         self.card_total_turno = self.crear_tarjeta_resumen("Total turno", "$0")
+        self.card_total_caja = self.crear_tarjeta_resumen("Total actual en caja", "$0")
+        self.card_neto_caja = self.crear_tarjeta_resumen("Neto en caja", "$0")
 
         resumen_layout.addWidget(self.card_estacionados)
         resumen_layout.addWidget(self.card_banos)
         resumen_layout.addWidget(self.card_total_activos)
         resumen_layout.addWidget(self.card_total_turno)
+        resumen_layout.addWidget(self.card_total_caja)
+        resumen_layout.addWidget(self.card_neto_caja)
         resumen_layout.addStretch()
 
         layout.addLayout(resumen_layout)
@@ -443,14 +448,6 @@ class RegistroWindow(QWidget):
 
     def buscar_vehiculo(self):
         patente = self.input_patente.text().strip().upper()
-
-        es_valida, mensaje = self.validar_patente(patente)
-        if not es_valida:
-            self.actualizar_estilo_info("warn")
-            self.info_label.setText(mensaje)
-            QMessageBox.warning(self, "Atención", mensaje)
-            self.enfocar_patente()
-            return
 
         self.hora_consulta_label.clear()
 
@@ -701,7 +698,7 @@ class RegistroWindow(QWidget):
         )
 
     def registrar_ingreso(self):
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
@@ -739,7 +736,7 @@ class RegistroWindow(QWidget):
             )
             return
 
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
@@ -804,7 +801,14 @@ class RegistroWindow(QWidget):
         self.actualizar_tabla_activos()
 
     def registrar_ingreso_con_noches(self):
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
+        es_valida, mensaje = self.validar_patente(patente)
+        if not es_valida:
+            self.actualizar_estilo_info("warn")
+            self.info_label.setText(mensaje)
+            QMessageBox.warning(self, "Atención", mensaje)
+            self.enfocar_patente()
+            return
         opcion = obtener_opcion_noches()
         if not opcion:
             QMessageBox.warning(
@@ -846,14 +850,6 @@ class RegistroWindow(QWidget):
 
     def registrar_salida(self):
         patente = self.input_patente.text().strip().upper()
-
-        es_valida, mensaje = self.validar_patente(patente)
-        if not es_valida:
-            self.actualizar_estilo_info("warn")
-            self.info_label.setText(mensaje)
-            QMessageBox.warning(self, "Atención", mensaje)
-            self.enfocar_patente()
-            return
 
         salida = registrar_salida_detallada(patente, self.usuario)
         if salida is not None:
@@ -1004,10 +1000,13 @@ class RegistroWindow(QWidget):
         total_banos = float(resumen_banos["total"])
         total_pagados_turno = obtener_total_vehiculos_pagados_turno_actual()
         total_turno = total_pagados_turno + total + total_banos
+        resumen_caja = obtener_resumen_caja_actual()
 
         self.card_estacionados.label_valor.setText(str(len(datos)))
         self.card_total_activos.label_valor.setText(f"${total:.0f}")
         self.card_total_turno.label_valor.setText(f"${total_turno:.0f}")
+        self.card_total_caja.label_valor.setText(f"${resumen_caja['total_general']:.0f}")
+        self.card_neto_caja.label_valor.setText(f"${resumen_caja['total_neto']:.0f}")
         self.card_banos.label_valor.setText(
             f"{resumen_banos['cantidad']} | ${total_banos:.0f}"
         )
@@ -1098,7 +1097,7 @@ class RegistroWindow(QWidget):
         self.label_subida.update()
 
     def marcar_en_espera(self):
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
         confirm = QMessageBox.question(
             self,
             "Confirmar",
@@ -1253,7 +1252,7 @@ class RegistroWindow(QWidget):
         QMessageBox.critical(self, "Error", "No se pudo iniciar el lavado.")
 
     def iniciar_solo_lavado_desde_patente(self):
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
             QMessageBox.warning(self, "Atención", mensaje)
@@ -1449,7 +1448,7 @@ class RegistroWindow(QWidget):
     def reingresar_vehiculo(self):
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado
 
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
@@ -1585,13 +1584,13 @@ class RegistroWindow(QWidget):
             else:
                 QMessageBox.warning(self, "Error", "No se pudo registrar la subida.")
 
-    def normalizar_patente(self, texto: str):
-        texto_mayus = texto.upper()
-        if texto != texto_mayus:
+    def normalizar_patente_busqueda(self, texto: str):
+        texto_normalizado = texto.upper()
+        if texto != texto_normalizado:
             cursor_pos = self.input_patente.cursorPosition()
             self.input_patente.blockSignals(True)
-            self.input_patente.setText(texto_mayus)
-            self.input_patente.setCursorPosition(cursor_pos)
+            self.input_patente.setText(texto_normalizado)
+            self.input_patente.setCursorPosition(min(cursor_pos, len(texto_normalizado)))
             self.input_patente.blockSignals(False)
 
     def reiniciar_busqueda_f4(self, texto):
@@ -1600,15 +1599,10 @@ class RegistroWindow(QWidget):
         self.indice_patente_f4 = -1
 
     def validar_patente(self, patente: str) -> tuple[bool, str]:
-        if not patente:
+        if not normalizar_patente(patente):
             return False, "Ingresa una patente."
-
-        if len(patente) < 4 or len(patente) > 8:
-            return False, "La patente debe tener entre 4 y 8 caracteres."
-
-        if not patente.isalnum():
-            return False, "La patente solo puede contener letras y números."
-
+        if not validar_patente(patente):
+            return False, "Patente inválida. Usa ABCD12, ABC12, AB123CD o ABC123."
         return True, ""
 
     def actualizar_estilo_info(self, tipo: str):
