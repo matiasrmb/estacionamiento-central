@@ -35,10 +35,12 @@ class MainWindow(QWidget):
     SIDEBAR_COLLAPSED_WIDTH = 78
     ICON_SIZE = QSize(20, 20)
 
-    def __init__(self, usuario, rol):
+    def __init__(self, usuario, rol, api_token=None, api_warning=None):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
+        self.api_token = api_token
+        self.api_warning = api_warning
         self.sidebar_expandido = True
 
         self.base_dir = Path(__file__).resolve().parent.parent
@@ -209,6 +211,8 @@ class MainWindow(QWidget):
         self.dashboard_view = DashboardWindow(
             self.usuario,
             self.rol,
+            api_token=self.api_token,
+            api_warning=self.api_warning,
             on_ir_panel=self.mostrar_dashboard,
             on_ir_registro=self.mostrar_registro,
             on_ir_reportes=self.mostrar_reportes if self.rol == "administrador" else None

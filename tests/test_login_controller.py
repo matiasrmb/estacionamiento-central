@@ -68,6 +68,26 @@ class ValidarUsuarioTests(unittest.TestCase):
         registrar_asistencia.assert_called_once_with("admin")
 
     @patch.object(login_controller, "registrar_asistencia_inicio")
+    @patch.object(login_controller, "cerrar_asistencias_activas")
+    @patch.object(login_controller, "db_cursor")
+    def test_valida_sin_registrar_asistencia_para_delegarla_en_api(
+        self, db_cursor, cerrar_activas, registrar_asistencia
+    ):
+        clave_hash = bcrypt.hashpw("secreta".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        cursor = FakeCursor(
+            fetchone_results=[
+                {"usuario": "admin", "clave_hash": clave_hash, "rol": "administrador", "activo": 1}
+            ]
+        )
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        resultado = login_controller.validar_usuario("admin", "secreta", registrar_asistencia=False)
+
+        self.assertEqual(resultado, (True, "administrador"))
+        cerrar_activas.assert_not_called()
+        registrar_asistencia.assert_not_called()
+
+    @patch.object(login_controller, "registrar_asistencia_inicio")
     @patch.object(login_controller, "db_cursor")
     def test_retorna_false_si_la_clave_es_incorrecta(self, db_cursor, registrar_asistencia):
         clave_hash = bcrypt.hashpw("secreta".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")

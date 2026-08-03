@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 
-def validar_usuario(usuario, clave_plana):
+def validar_usuario(usuario, clave_plana, registrar_asistencia=True):
     """
     Verifica si las credenciales ingresadas son válidas.
 
@@ -40,8 +40,9 @@ def validar_usuario(usuario, clave_plana):
 
         clave_hash = resultado["clave_hash"].encode("utf-8")
         if bcrypt.checkpw(clave_plana.encode("utf-8"), clave_hash):
-            cerrar_asistencias_activas(usuario)
-            registrar_asistencia_inicio(usuario)  # 👈 se registra aquí
+            if registrar_asistencia:
+                cerrar_asistencias_activas(usuario)
+                registrar_asistencia_inicio(usuario)
             return True, resultado["rol"]
 
     return False, None  # Usuario no existe o clave incorrecta

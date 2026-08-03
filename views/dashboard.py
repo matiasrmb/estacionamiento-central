@@ -16,10 +16,12 @@ class DashboardWindow(QWidget):
     Muestra estadísticas del turno actual y permite realizar el cierre diario.
     """
 
-    def __init__(self, usuario, rol, on_ir_panel=None, on_ir_registro=None, on_ir_reportes=None):
+    def __init__(self, usuario, rol, api_token=None, api_warning=None, on_ir_panel=None, on_ir_registro=None, on_ir_reportes=None):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
+        self.api_token = api_token
+        self.api_warning = api_warning
         self.on_ir_panel = on_ir_panel
         self.on_ir_registro = on_ir_registro
         self.on_ir_reportes = on_ir_reportes
@@ -203,7 +205,7 @@ class DashboardWindow(QWidget):
             QMessageBox.Yes | QMessageBox.No
         )
         if respuesta == QMessageBox.Yes:
-            exito, mensaje = realizar_cierre_diario(self.usuario)
+            exito, mensaje = realizar_cierre_diario(self.api_token, self.api_warning)
             if exito:
                 QMessageBox.information(self, "Éxito", mensaje)
 
