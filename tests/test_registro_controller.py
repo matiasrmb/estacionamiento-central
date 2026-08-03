@@ -525,6 +525,18 @@ class OrdenarPatentesTurnoParaF4Tests(unittest.TestCase):
         self.assertEqual([fila["id_ingreso"] for fila in resultado], [1, 2])
 
 
+class OrdenarPatentesParaBusquedaTests(unittest.TestCase):
+    def test_orden_vacio_es_alfabetico_para_f3(self):
+        filas = [
+            {"id_ingreso": 2, "patente": "ZZZ999", "hora": "2026-01-01 09:00:00"},
+            {"id_ingreso": 1, "patente": "ABC123", "hora": "2026-01-01 10:00:00"},
+        ]
+
+        resultado = registro_controller.ordenar_patentes_para_busqueda(filas, "", campo_fecha="hora")
+
+        self.assertEqual([fila["patente"] for fila in resultado], ["ABC123", "ZZZ999"])
+
+
 class ObtenerIngresoActivoPriorizadoTests(unittest.TestCase):
     @patch.object(registro_controller, "obtener_ingresos_activos_por_patente")
     def test_retorna_none_si_no_hay_ingresos_activos(self, obtener_activos):

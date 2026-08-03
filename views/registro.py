@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QShortcut, QKeySequence
 from datetime import datetime, timedelta
+from html import escape
 from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso_detallado, registrar_ingreso_con_noches_detallado,
     obtener_opcion_noches,
@@ -17,7 +18,8 @@ from controllers.registro_controller import (
     marcar_ingreso_en_espera, alternar_estado_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
     registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual, obtener_resumen_caja_actual,
-    obtener_patentes_turno_actual_para_f4, ordenar_patentes_turno_para_f4,
+    obtener_patentes_turno_actual_para_f4, ordenar_patentes_para_busqueda,
+    ordenar_patentes_turno_para_f4,
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from controllers.config_controller import obtener_configuracion
@@ -49,6 +51,42 @@ def formatear_fecha_hora(valor):
     return valor.strftime("%d/%m/%Y %H:%M")
 
 
+def formatear_hora(valor):
+    if hasattr(valor, "strftime"):
+        return valor.strftime("%H:%M")
+    try:
+        return datetime.strptime(str(valor), "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+    except ValueError:
+        return str(valor)
+
+
+def construir_mensaje_ingreso(ingreso, mensaje="Vehículo ingresado correctamente", detalle=None):
+    lineas = [
+        escape(mensaje),
+        "",
+        f"Patente: <b>{escape(str(ingreso['patente']))}</b>",
+        f"Ingreso: <b>{escape(formatear_hora(ingreso['fecha_hora_ingreso']))}</b>",
+    ]
+    if detalle:
+        lineas.append(escape(detalle))
+    return '<div style="font-size: 14pt;">' + "<br>".join(lineas) + "</div>"
+
+
+def construir_mensaje_salida(salida):
+    lineas = [
+        "Salida registrada correctamente",
+        "",
+        f"Patente: <b>{escape(str(salida['patente']))}</b>",
+        f"Ingreso: <b>{escape(formatear_hora(salida['fecha_hora_ingreso']))}</b>",
+        f"Salida: <b>{escape(formatear_hora(salida['fecha_hora_salida']))}</b>",
+        f"Tiempo cobrado: {salida['minutos']} min",
+    ]
+    if salida.get("noches_prepagadas"):
+        lineas.append(f"Noches ya pagadas: ${salida['total_noches_prepagadas']:.0f}")
+    lineas.append(f"A cobrar ahora: <b>${salida['tarifa']:.0f}</b>")
+    return '<div style="font-size: 14pt;">' + "<br>".join(lineas) + "</div>"
+
+
 def _es_tabla_lavado_faltante(exc):
     mensaje = str(exc).lower()
     tablas_lavado = ("tipos_vehiculo_lavado", "tipos_vehiculos_lavado")
@@ -71,6 +109,7 @@ class RegistroWindow(QWidget):
         self.panel_secundario_expandido = True
         self.patentes_f3 = []
         self.indice_patente_f3 = -1
+        self.busqueda_f3 = ""
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
         self.busqueda_f4 = ""
@@ -128,6 +167,7 @@ class RegistroWindow(QWidget):
         self.input_patente.setMaxLength(20)
         self.input_patente.setMinimumHeight(42)
         self.input_patente.textChanged.connect(self.normalizar_patente_busqueda)
+        self.input_patente.textEdited.connect(self.reiniciar_busqueda_f3)
         self.input_patente.textEdited.connect(self.reiniciar_busqueda_f4)
         self.input_patente.returnPressed.connect(self.buscar_vehiculo)
 
@@ -271,7 +311,7 @@ class RegistroWindow(QWidget):
             "Enter: buscar patente\n"
             "F1: ingresar o salir\n"
             "F2 o ESC: limpiar formulario\n"
-            "F3: recorrer patentes abiertas\n"
+            "F3: buscar/recorrer patentes abiertas\n"
             "F4: recorrer patentes del turno\n"
             "F6: registrar baño\n"
             "F7: reingresar vehículo\n"
@@ -594,31 +634,29 @@ class RegistroWindow(QWidget):
 
     def seleccionar_siguiente_patente_abierta(self):
         try:
-            activos = sorted(
-                obtener_vehiculos_activos(),
-                key=lambda row: str(row.get("patente_base") or row.get("patente") or "").upper(),
-            )
+            activos = obtener_vehiculos_activos()
         except Exception as e:
             self.actualizar_estilo_info("error")
             self.info_label.setText("No se pudieron consultar las patentes abiertas.")
             QMessageBox.critical(self, "Error", f"No se pudieron consultar las patentes abiertas:\n{e}")
             return
 
-        if not activos:
+        patentes = ordenar_patentes_para_busqueda(
+            [{
+                **activo,
+                "patente": activo.get("patente_base") or str(activo.get("patente", "")).split()[0],
+            } for activo in activos],
+            self.busqueda_f3,
+            campo_fecha="hora",
+        )
+        if not patentes:
             self.actualizar_estilo_info("neutro")
-            self.info_label.setText("No hay patentes abiertas en este momento.")
+            self.info_label.setText("No hay patentes abiertas que coincidan con la búsqueda.")
             return
 
-        if activos != self.patentes_f3:
-            patente_actual = self.input_patente.text().strip().upper()
-            self.patentes_f3 = activos
-            self.indice_patente_f3 = next(
-                (
-                    i for i, row in enumerate(activos)
-                    if (row.get("patente_base") or str(row.get("patente", "")).split()[0]) == patente_actual
-                ),
-                -1,
-            )
+        if patentes != self.patentes_f3:
+            self.patentes_f3 = patentes
+            self.indice_patente_f3 = -1
 
         self.indice_patente_f3 = (self.indice_patente_f3 + 1) % len(self.patentes_f3)
         seleccion = self.patentes_f3[self.indice_patente_f3]
@@ -713,9 +751,7 @@ class RegistroWindow(QWidget):
             QMessageBox.information(
                 self,
                 "Ingreso registrado",
-                "Vehículo ingresado correctamente\n\n"
-                f"Patente: {ingreso['patente']}\n"
-                f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}"
+                construir_mensaje_ingreso(ingreso)
             )
             self.actualizar_lista_patentes()
             self.reset()
@@ -785,9 +821,7 @@ class RegistroWindow(QWidget):
             QMessageBox.information(
                 self,
                 "Ingreso registrado",
-                "Vehículo ingresado correctamente con hora personalizada\n\n"
-                f"Patente: {ingreso['patente']}\n"
-                f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}"
+                construir_mensaje_ingreso(ingreso, "Vehículo ingresado correctamente con hora personalizada")
             )
             self.actualizar_lista_patentes()
             self.reset()
@@ -834,10 +868,11 @@ class RegistroWindow(QWidget):
             QMessageBox.information(
                 self,
                 "Ingreso registrado",
-                "Vehículo ingresado en modo Noche.\n\n"
-                f"Patente: {ingreso['patente']}\n"
-                f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}\n"
-                f"Noche pagada: ${cobro['monto_snapshot']} ({cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']})",
+                construir_mensaje_ingreso(
+                    ingreso,
+                    "Vehículo ingresado en modo Noche.",
+                    f"Noche pagada: ${cobro['monto_snapshot']} ({cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']})",
+                ),
             )
             self.actualizar_lista_patentes()
             self.reset()
@@ -856,13 +891,7 @@ class RegistroWindow(QWidget):
             QMessageBox.information(
                 self,
                 "Salida registrada",
-                "Salida registrada correctamente\n\n"
-                f"Patente: {salida['patente']}\n"
-                f"Ingreso: {formatear_fecha_hora(salida['fecha_hora_ingreso'])}\n"
-                f"Salida: {formatear_fecha_hora(salida['fecha_hora_salida'])}\n"
-                f"Tiempo cobrado: {salida['minutos']} min\n"
-                f"Noches ya pagadas: ${salida['total_noches_prepagadas']:.0f}\n"
-                f"A cobrar ahora: ${salida['tarifa']:.0f}"
+                construir_mensaje_salida(salida),
             )
             self.actualizar_lista_patentes()
             self.reset()
@@ -903,6 +932,7 @@ class RegistroWindow(QWidget):
         self.input_patente.clear()
         self.patentes_f3 = []
         self.indice_patente_f3 = -1
+        self.busqueda_f3 = ""
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
         self.busqueda_f4 = ""
@@ -1597,6 +1627,11 @@ class RegistroWindow(QWidget):
         self.busqueda_f4 = texto
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
+
+    def reiniciar_busqueda_f3(self, texto):
+        self.busqueda_f3 = texto
+        self.patentes_f3 = []
+        self.indice_patente_f3 = -1
 
     def validar_patente(self, patente: str) -> tuple[bool, str]:
         if not normalizar_patente(patente):

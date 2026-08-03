@@ -884,8 +884,8 @@ def _puntaje_similitud_f4(consulta, patente):
     )
 
 
-def ordenar_patentes_turno_para_f4(filas, consulta):
-    """Filtra y ordena candidatos F4 por coincidencia y antigüedad del movimiento."""
+def ordenar_patentes_para_busqueda(filas, consulta, campo_fecha="fecha_hora_ingreso"):
+    """Filtra y ordena patentes por similitud; sin consulta usa orden alfabético."""
     consulta_normalizada = normalizar_patente_busqueda(consulta)
     if not consulta_normalizada:
         return sorted(
@@ -906,11 +906,19 @@ def ordenar_patentes_turno_para_f4(filas, consulta):
             candidatos,
             key=lambda candidato: (
                 candidato[1],
-                _fecha_orden_f4(candidato[0]),
+                _fecha_orden_f4({
+                    **candidato[0],
+                    "fecha_hora_ingreso": candidato[0].get(campo_fecha),
+                }),
                 candidato[0].get("id_ingreso", 0),
             ),
         )
     ]
+
+
+def ordenar_patentes_turno_para_f4(filas, consulta):
+    """Filtra y ordena candidatos F4 por coincidencia y antigüedad del movimiento."""
+    return ordenar_patentes_para_busqueda(filas, consulta)
 
 
 def obtener_patentes_turno_actual_para_f4():

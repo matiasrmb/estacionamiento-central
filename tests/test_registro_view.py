@@ -7,7 +7,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
 from views.admin_edicion import EdicionIngresosWindow
-from views.registro import QMessageBox, RegistroWindow
+from views.registro import (
+    QMessageBox, RegistroWindow, construir_mensaje_ingreso, construir_mensaje_salida,
+)
 
 
 class RegistroViewReingresoTests(unittest.TestCase):
@@ -84,6 +86,40 @@ class RegistroViewF4Tests(unittest.TestCase):
         self.assertEqual(vista.indice_patente_f4, -1)
 
 
+class RegistroViewF3Tests(unittest.TestCase):
+    def test_f3_con_busqueda_elige_la_patente_mas_similar(self):
+        vista = Mock()
+        vista.busqueda_f3 = "ABC12"
+        vista.patentes_f3 = []
+        vista.indice_patente_f3 = -1
+        vista.formatear_fecha_hora_info.side_effect = lambda valor: str(valor or "-")
+        filas = [
+            {"id_ingreso": 1, "patente_base": "ABC123", "patente": "ABC123", "hora": "2026-01-01 09:00:00"},
+            {"id_ingreso": 2, "patente_base": "ZZZ999", "patente": "ZZZ999", "hora": "2026-01-01 10:00:00"},
+        ]
+
+        with patch("views.registro.obtener_vehiculos_activos", return_value=filas):
+            RegistroWindow.seleccionar_siguiente_patente_abierta(vista)
+
+        vista.input_patente.setText.assert_called_once_with("ABC123")
+
+    def test_f3_vacia_ordena_y_selecciona_alfabeticamente(self):
+        vista = Mock()
+        vista.busqueda_f3 = ""
+        vista.patentes_f3 = []
+        vista.indice_patente_f3 = -1
+        vista.formatear_fecha_hora_info.side_effect = lambda valor: str(valor or "-")
+        filas = [
+            {"id_ingreso": 1, "patente_base": "ZZZ999", "patente": "ZZZ999", "hora": "2026-01-01 09:00:00"},
+            {"id_ingreso": 2, "patente_base": "ABC123", "patente": "ABC123", "hora": "2026-01-01 10:00:00"},
+        ]
+
+        with patch("views.registro.obtener_vehiculos_activos", return_value=filas):
+            RegistroWindow.seleccionar_siguiente_patente_abierta(vista)
+
+        vista.input_patente.setText.assert_called_once_with("ABC123")
+
+
 class RegistroViewPreviewIngresoTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -106,6 +142,39 @@ class RegistroViewPreviewIngresoTests(unittest.TestCase):
             "Hora de ingreso: 14:45",
             "El ingreso se registra al confirmar la operación.",
         ]))
+
+
+class RegistroViewPopupTests(unittest.TestCase):
+    def test_popup_ingreso_omite_fecha_y_destaca_patente_y_hora(self):
+        mensaje = construir_mensaje_ingreso({
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 7, 30, 14, 45),
+        })
+
+        self.assertIn('font-size: 14pt', mensaje)
+        self.assertIn("Patente: <b>ABC123</b>", mensaje)
+        self.assertIn("Ingreso: <b>14:45</b>", mensaje)
+        self.assertNotIn("30/07/2026", mensaje)
+
+    def test_popup_salida_muestra_noches_solo_para_ingreso_nocturno(self):
+        salida = {
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 7, 30, 9, 15),
+            "fecha_hora_salida": datetime(2026, 7, 30, 14, 45),
+            "minutos": 330,
+            "tarifa": 2500,
+            "total_noches_prepagadas": 5000,
+        }
+
+        normal = construir_mensaje_salida({**salida, "noches_prepagadas": []})
+        nocturna = construir_mensaje_salida({**salida, "noches_prepagadas": [{"monto_snapshot": 5000}]})
+
+        self.assertNotIn("Noches ya pagadas", normal)
+        self.assertIn("Noches ya pagadas: $5000", nocturna)
+        self.assertIn("Ingreso: <b>09:15</b>", normal)
+        self.assertIn("Salida: <b>14:45</b>", normal)
+        self.assertIn("A cobrar ahora: <b>$2500</b>", normal)
+        self.assertNotIn("30/07/2026", normal)
 
     def test_muestra_preview_de_salida_solo_con_horas(self):
         vista = type("VistaPreviewSalida", (), {})()
