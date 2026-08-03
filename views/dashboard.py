@@ -215,7 +215,7 @@ class DashboardWindow(QWidget):
                 self.label_periodo.setText(self.obtener_periodo_resumen())
                 self.actualizacion_habilitada = False
             else:
-                QMessageBox.information(self, "Sin registros", mensaje)
+                QMessageBox.information(self, "Cierre diario", mensaje)
 
     def ir_a_registro(self):
         if callable(self.on_ir_registro):

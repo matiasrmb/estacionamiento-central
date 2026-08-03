@@ -1,34 +1,7 @@
 import unittest
-from contextlib import contextmanager
-from datetime import datetime
 from unittest.mock import patch
 
 from controllers import cierres_controller
-
-
-class FakeCursor:
-    def __init__(self, fetchall_results=None, fetchone_results=None, lastrowid=71):
-        self.fetchall_results = list(fetchall_results or [])
-        self.fetchone_results = list(fetchone_results or [])
-        self.executed = []
-        self.lastrowid = lastrowid
-
-    def execute(self, query, params=None):
-        self.executed.append((query, params))
-
-    def fetchall(self):
-        return self.fetchall_results.pop(0) if self.fetchall_results else []
-
-    def fetchone(self):
-        return self.fetchone_results.pop(0) if self.fetchone_results else None
-
-    def close(self):
-        pass
-
-
-@contextmanager
-def fake_db_cursor(cursor):
-    yield cursor
 
 
 class RealizarCierreDiarioTests(unittest.TestCase):
@@ -47,154 +20,16 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         self.assertIn("UNIQUE KEY uq_pagos_mensuales_vehiculo_periodo", schema)
         self.assertIn("id_cierre INT NULL", schema)
 
-    @patch.object(cierres_controller, "asegurar_schema_cierres")
-    @patch.object(cierres_controller, "generar_pdf_cierre")
     @patch.object(cierres_controller, "db_cursor")
-    def test_retorna_false_si_no_hay_registros_pendientes(self, db_cursor, generar_pdf, asegurar_schema):
-        cursor = FakeCursor(fetchall_results=[[], [], [], []], fetchone_results=[None])
-        db_cursor.return_value = fake_db_cursor(cursor)
-
+    def test_rechaza_cierre_local_sin_acceder_a_base_de_datos(self, db_cursor):
         exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
 
         self.assertFalse(exito)
-        self.assertEqual(mensaje, "No hay registros para cerrar hoy.")
-        asegurar_schema.assert_called_once_with()
-        generar_pdf.assert_not_called()
-
-    @patch.object(cierres_controller, "asegurar_schema_cierres")
-    @patch.object(cierres_controller, "generar_pdf_cierre")
-    @patch.object(cierres_controller, "db_cursor")
-    def test_cierre_mixto_calcula_bruto_gastos_neto_y_vincula_pendientes(
-        self, db_cursor, generar_pdf, asegurar_schema
-    ):
-        registros = [{
-            "id_ingreso": 1,
-            "fecha_hora_ingreso": datetime(2026, 1, 1, 9, 0),
-            "fecha_hora_salida": datetime(2026, 1, 1, 10, 0),
-            "tarifa_aplicada": 1000,
-        }]
-        cursor = FakeCursor(
-            fetchall_results=[
-                registros,
-                [{"id": 3, "monto": 600}],
-                [{"id_operacion_servicio": 4, "valor_lavado_snapshot": 8000}],
-                [{"id_gasto": 5, "monto": 2300}],
-            ],
-            fetchone_results=[None],
-            lastrowid=44,
+        self.assertEqual(
+            mensaje,
+            "El cierre diario no está disponible en Desktop. Realícelo desde Mobile/API.",
         )
-        db_cursor.return_value = fake_db_cursor(cursor)
-
-        exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
-
-        self.assertTrue(exito)
-        self.assertIn("$7300", mensaje)
-        asegurar_schema.assert_called_once_with()
-        generar_pdf.assert_called_once()
-        datos_pdf = generar_pdf.call_args.args[1]
-        self.assertEqual(datos_pdf["Total general bruto"], "$9600")
-        self.assertEqual(datos_pdf["Total gastos"], "$2300")
-        self.assertEqual(datos_pdf["Total neto del día"], "$7300")
-
-        consultas = "\n".join(query for query, _ in cursor.executed)
-        self.assertIn("INSERT INTO cierres_diarios", consultas)
-        self.assertIn("UPDATE ingresos SET cerrado = TRUE", consultas)
-        self.assertIn("UPDATE usos_bano SET id_cierre = %s", consultas)
-        self.assertIn("UPDATE operaciones_servicio SET cerrado = TRUE", consultas)
-        self.assertIn("UPDATE gastos_operacion SET id_cierre = %s", consultas)
-
-    @patch.object(cierres_controller, "asegurar_schema_cierres")
-    @patch.object(cierres_controller, "generar_pdf_cierre")
-    @patch.object(cierres_controller, "db_cursor")
-    def test_cierre_solo_con_gastos_es_valido_y_los_vincula(
-        self, db_cursor, generar_pdf, asegurar_schema
-    ):
-        cursor = FakeCursor(
-            fetchall_results=[[], [], [], [{"id_gasto": 9, "monto": 1200}]],
-            fetchone_results=[None],
-            lastrowid=99,
-        )
-        db_cursor.return_value = fake_db_cursor(cursor)
-
-        exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
-
-        self.assertTrue(exito)
-        self.assertIn("$-1200", mensaje)
-        datos_pdf = generar_pdf.call_args.args[1]
-        self.assertEqual(datos_pdf["Total general bruto"], "$0")
-        self.assertEqual(datos_pdf["Total gastos"], "$1200")
-        self.assertEqual(datos_pdf["Total neto del día"], "$-1200")
-        update = next((params for query, params in cursor.executed if "UPDATE gastos_operacion" in query), None)
-        self.assertEqual(update, [99, 9])
-
-    @patch.object(cierres_controller, "asegurar_schema_cierres")
-    @patch.object(cierres_controller, "generar_pdf_cierre")
-    @patch.object(cierres_controller, "db_cursor")
-    def test_gasto_ya_vinculado_no_se_incluye_en_siguiente_cierre(
-        self, db_cursor, generar_pdf, asegurar_schema
-    ):
-        cursor = FakeCursor(fetchall_results=[[], [], [], []], fetchone_results=[None])
-        db_cursor.return_value = fake_db_cursor(cursor)
-
-        exito, _ = cierres_controller.realizar_cierre_diario("admin")
-
-        self.assertFalse(exito)
-        consultas = "\n".join(query for query, _ in cursor.executed)
-        self.assertIn("FROM gastos_operacion\n            WHERE id_cierre IS NULL", consultas)
-        self.assertNotIn("UPDATE gastos_operacion SET id_cierre", consultas)
-
-    @patch.object(cierres_controller, "asegurar_schema_cierres")
-    @patch.object(cierres_controller, "generar_pdf_cierre")
-    @patch.object(cierres_controller, "db_cursor")
-    def test_cierre_solo_con_mensualidad_incluye_y_vincula_el_pago(
-        self, db_cursor, generar_pdf, asegurar_schema
-    ):
-        cursor = FakeCursor(
-            fetchall_results=[[], [], [], [], [{"id_pago_mensual": 11, "monto_snapshot": 50000}]],
-            fetchone_results=[None],
-            lastrowid=100,
-        )
-        db_cursor.return_value = fake_db_cursor(cursor)
-
-        exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
-
-        self.assertTrue(exito)
-        self.assertIn("$50000", mensaje)
-        datos_pdf = generar_pdf.call_args.args[1]
-        self.assertEqual(datos_pdf["Mensualidades cobradas"], 1)
-        self.assertEqual(datos_pdf["Total recaudado mensualidades"], "$50000")
-        self.assertEqual(datos_pdf["Total general bruto"], "$50000")
-        self.assertEqual(datos_pdf["Total neto del día"], "$50000")
-        update = next((params for query, params in cursor.executed if "UPDATE pagos_mensuales" in query), None)
-        self.assertEqual(update, [100, 11])
-
-    @patch.object(cierres_controller, "asegurar_schema_cierres")
-    @patch.object(cierres_controller, "generar_pdf_cierre")
-    @patch.object(cierres_controller, "db_cursor")
-    def test_cierre_solo_con_noches_usa_cobro_prepagado_y_lo_vincula(
-        self, db_cursor, generar_pdf, _asegurar_schema
-    ):
-        cursor = FakeCursor(
-            fetchall_results=[[], [], [], [], [], [{
-                "id_cobro_noche": 12,
-                "monto_snapshot": 5000,
-                "fecha_hora_pago": datetime(2026, 7, 1, 22, 0),
-            }]],
-            fetchone_results=[None],
-            lastrowid=101,
-        )
-        db_cursor.return_value = fake_db_cursor(cursor)
-
-        exito, mensaje = cierres_controller.realizar_cierre_diario("admin")
-
-        self.assertTrue(exito)
-        self.assertIn("$5000", mensaje)
-        datos_pdf = generar_pdf.call_args.args[1]
-        self.assertEqual(datos_pdf["Noches prepagadas cobradas"], 1)
-        self.assertEqual(datos_pdf["Total recaudado Noches prepagadas"], "$5000")
-        self.assertEqual(datos_pdf["Total general bruto"], "$5000")
-        update = next((params for query, params in cursor.executed if "UPDATE cobros_noches" in query), None)
-        self.assertEqual(update, [101, 12])
+        db_cursor.assert_not_called()
 
 
 if __name__ == "__main__":

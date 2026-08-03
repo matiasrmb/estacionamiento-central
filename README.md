@@ -219,6 +219,18 @@ El instalador permite ejecutar el sistema inmediatamente al finalizar.
 
 ---
 
+### Cierre diario
+
+El cierre diario debe realizarse desde Mobile/API. Desktop no ejecuta cierres
+directamente en la base de datos para respetar el bloqueo central de la API.
+
+Para habilitar el cierre desde Desktop en una versión futura se requiere una
+configuración de URL de API y una sesión autenticada que permita usar
+`POST /api/v1/cierres`. También se debe definir cómo Desktop recibe o genera el
+PDF del cierre; hasta entonces, Desktop no genera ni muestra ese documento.
+
+---
+
 ## Arquitectura del Sistema
 
 El sistema sigue una arquitectura modular basada en el patrón **MVC (Modelo-Vista-Controlador)**:
