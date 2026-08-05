@@ -36,6 +36,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="EstacionamientoCentral",
+    icon="assets/icons/logo-estc-central.ico",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
