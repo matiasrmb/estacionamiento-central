@@ -1,6 +1,7 @@
 """Cliente HTTP mínimo para las operaciones centralizadas de la API."""
 
 import json
+import uuid
 from configparser import ConfigParser
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -56,11 +57,15 @@ def _request(method, path, payload=None, token=None):
         raise ApiClientError(detail="API_UNAVAILABLE") from exc
 
 
+def desktop_device_id():
+    return f"desktop-{uuid.getnode():012x}"
+
+
 def autenticar(usuario, clave):
     response = _request(
         "POST",
         "/auth/login",
-        {"usuario": usuario, "clave": clave},
+        {"usuario": usuario, "clave": clave, "device_id": desktop_device_id()},
     )
     if not response.get("access_token"):
         raise ApiClientError(detail="API_INVALID_RESPONSE")
@@ -69,3 +74,7 @@ def autenticar(usuario, clave):
 
 def crear_cierre(token):
     return _request("POST", "/cierres", token=token)
+
+
+def cerrar_sesion(token):
+    return _request("POST", "/auth/logout", token=token)

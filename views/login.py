@@ -7,8 +7,6 @@ from PySide6.QtCore import Qt
 import sys
 
 from controllers.login_controller import (
-    cerrar_asistencias_activas,
-    registrar_asistencia_inicio,
     validar_usuario,
 )
 from utils.api_client import ApiClientError, autenticar
@@ -117,11 +115,9 @@ class LoginWindow(QWidget):
             try:
                 api_token = autenticar(usuario, clave).get("access_token")
             except ApiClientError:
-                cerrar_asistencias_activas(usuario)
-                registrar_asistencia_inicio(usuario)
                 api_warning = (
                     "No fue posible iniciar sesión con la API al ingresar. "
-                    "El cierre diario no estará disponible hasta volver a iniciar sesión."
+                    "La asistencia no se registró y el cierre diario no estará disponible hasta volver a iniciar sesión."
                 )
             self.pass_input.clear()
             QMessageBox.information(self, "Acceso correcto", f"Bienvenido, {usuario}. Rol: {rol}")

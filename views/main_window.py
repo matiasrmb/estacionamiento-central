@@ -19,7 +19,7 @@ from views.asistencias import AsistenciasWindow
 from views.dashboard import DashboardWindow
 from views.gastos import GastosWindow
 from views.admin_edicion import EdicionIngresosWindow
-from controllers.login_controller import registrar_asistencia_salida
+from utils.api_client import ApiClientError, cerrar_sesion
 
 
 class MainWindow(QWidget):
@@ -405,13 +405,30 @@ class MainWindow(QWidget):
     # SESIÓN
     # =========================================================
     def cerrar_sesion(self):
-        resumen = registrar_asistencia_salida(self.usuario)
+        resumen = {"cantidad": 0, "total": 0, "hora_inicio": None}
+        if self.api_token:
+            try:
+                resumen = cerrar_sesion(self.api_token).get("resumen", resumen)
+            except ApiClientError:
+                QMessageBox.warning(
+                    self,
+                    "Sesión sin cerrar",
+                    "No fue posible cerrar la asistencia en la API. La sesión continúa activa; inténtelo nuevamente cuando se recupere la conexión.",
+                )
+                return
+
+        hora_inicio = resumen.get("hora_inicio")
+        if isinstance(hora_inicio, str):
+            try:
+                hora_inicio = datetime.fromisoformat(hora_inicio)
+            except ValueError:
+                hora_inicio = None
 
         QMessageBox.information(
             self,
             "Resumen del día",
-            f"Sesión: {resumen['hora_inicio'].strftime('%d-%m-%Y %H:%M') if resumen['hora_inicio'] else 'N/A'} - ahora\n"
-            f"Vehículos cobrados: {resumen['cantidad']}\n"
-            f"Total recaudado: ${resumen['total']:.0f}"
+            f"Sesión: {hora_inicio.strftime('%d-%m-%Y %H:%M') if hora_inicio else 'No disponible'} - ahora\n"
+            f"Vehículos cobrados: {resumen.get('cantidad', 0)}\n"
+            f"Total recaudado: ${float(resumen.get('total', 0)):.0f}"
         )
         self.close()
