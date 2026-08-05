@@ -114,6 +114,44 @@ class SoloLavadoDesktopControllerTests(unittest.TestCase):
     @patch.object(solo_controller, "datetime")
     @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(solo_controller, "db_cursor")
+    def test_iniciar_solo_lavado_permite_patente_con_solo_ingreso_anulado(
+        self,
+        db_cursor,
+        _ensure,
+        datetime_mock,
+    ):
+        ahora = datetime(2026, 7, 1, 10, 0)
+        datetime_mock.now.return_value = ahora
+        cursor = FakeCursor(fetchone_results=[
+            None,
+            {"id_tipo_vehiculo_lavado": 7, "nombre": "SUV", "valor_lavado": 9000, "activo": 1},
+        ])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        resultado = solo_controller.iniciar_solo_lavado("AA111AA", 7, "operador")
+
+        self.assertEqual(resultado["id_operacion_servicio"], 44)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("FROM ingresos_eliminados ie", consultas)
+        self.assertIn("ie.id_ingreso_original = i.id_ingreso", consultas)
+        self.assertIn("INSERT INTO operaciones_servicio", consultas)
+
+    @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
+    @patch.object(solo_controller, "db_cursor")
+    def test_iniciar_solo_lavado_rechaza_patente_con_ingreso_en_espera(self, db_cursor, _ensure):
+        cursor = FakeCursor(fetchone_results=[{"id_ingreso": 11}])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        resultado = solo_controller.iniciar_solo_lavado("AA111AA", 7, "operador")
+
+        self.assertIsNone(resultado)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertNotIn("en_espera = 0", consultas)
+        self.assertNotIn("INSERT INTO operaciones_servicio", consultas)
+
+    @patch.object(solo_controller, "datetime")
+    @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
+    @patch.object(solo_controller, "db_cursor")
     def test_finalizar_solo_lavado_cobrando_crea_job_durable_y_no_crea_ingreso(
         self,
         db_cursor,

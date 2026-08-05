@@ -85,6 +85,54 @@ class RegistroViewF4Tests(unittest.TestCase):
         self.assertEqual(vista.patentes_f4, [])
         self.assertEqual(vista.indice_patente_f4, -1)
 
+    def test_f8_con_ingreso_abierto_conserva_el_alternado_actual(self):
+        vista = Mock()
+        vista.input_patente.text.return_value = "ABC123"
+        vista.validar_patente.return_value = (True, "")
+        vista.seleccion_f4 = {"id_ingreso": 10, "patente": "ABC123", "estado": "ABIERTO"}
+
+        with patch("views.registro.alternar_estado_espera", return_value=(True, "En espera.")) as alternar, \
+             patch("views.registro.enviar_salida_sin_cobro_a_espera") as enviar, \
+             patch("views.registro.QMessageBox.information"):
+            RegistroWindow.alternar_espera_desde_tecla(vista)
+
+        alternar.assert_called_once_with("ABC123")
+        enviar.assert_not_called()
+
+    def test_f8_envia_el_cerrado_seleccionado_por_f4_a_espera(self):
+        vista = Mock()
+        vista.usuario = "operador"
+        vista.input_patente.text.return_value = "ABC123"
+        vista.validar_patente.return_value = (True, "")
+        vista.seleccion_f4 = {"id_ingreso": 42, "patente": "ABC123", "estado": "CERRADO"}
+
+        with patch("views.registro.enviar_salida_sin_cobro_a_espera", return_value=(True, "En espera.")) as enviar, \
+             patch("views.registro.alternar_estado_espera") as alternar, \
+             patch("views.registro.QMessageBox.question", return_value=QMessageBox.Yes), \
+             patch("views.registro.QMessageBox.information"):
+            RegistroWindow.alternar_espera_desde_tecla(vista)
+
+        enviar.assert_called_once_with(42, "operador", True, patente_esperada="ABC123")
+        alternar.assert_not_called()
+
+    def test_f8_para_ticket_impreso_pide_confirmacion_adicional(self):
+        vista = Mock()
+        vista.usuario = "operador"
+        vista.input_patente.text.return_value = "ABC123"
+        vista.validar_patente.return_value = (True, "")
+        vista.seleccion_f4 = {"id_ingreso": 42, "patente": "ABC123", "estado": "CERRADO"}
+
+        with patch(
+            "views.registro.enviar_salida_sin_cobro_a_espera",
+            side_effect=[(False, "El ticket de salida ya fue impreso."), (True, "En espera.")],
+        ) as enviar, patch(
+            "views.registro.QMessageBox.question", return_value=QMessageBox.Yes
+        ), patch("views.registro.QMessageBox.information"):
+            RegistroWindow.alternar_espera_desde_tecla(vista)
+
+        self.assertEqual(enviar.call_count, 2)
+        self.assertTrue(enviar.call_args_list[1].kwargs["confirma_ticket_impreso"])
+
 
 class RegistroViewF3Tests(unittest.TestCase):
     def test_f3_con_busqueda_elige_la_patente_mas_similar(self):
@@ -284,6 +332,20 @@ class EdicionIngresosViewReingresoTests(unittest.TestCase):
 
         pedir_motivo.assert_not_called()
         reingresar.assert_called_once_with(42, "administrador", True)
+        vista.cargar_datos.assert_called_once_with()
+
+    def test_envia_salida_sin_cobro_a_espera_con_confirmacion(self):
+        vista = Mock()
+        vista.usuario_admin = "administrador"
+        vista.tabla.currentRow.return_value = 0
+        vista.tabla.item.side_effect = [Mock(text=Mock(return_value="CERRADO")), Mock(text=Mock(return_value="42"))]
+
+        with patch("views.admin_edicion.enviar_salida_sin_cobro_a_espera", return_value=(True, "En espera.")) as enviar, \
+             patch("views.admin_edicion.QMessageBox.question", return_value=QMessageBox.Yes), \
+             patch("views.admin_edicion.QMessageBox.information"):
+            EdicionIngresosWindow.enviar_salida_a_espera(vista)
+
+        enviar.assert_called_once_with(42, "administrador", True)
         vista.cargar_datos.assert_called_once_with()
 
 

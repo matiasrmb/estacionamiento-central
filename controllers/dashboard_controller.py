@@ -27,6 +27,10 @@ def obtener_resumen_diario():
             SELECT COUNT(*) AS total
             FROM ingresos
             WHERE fecha_hora_ingreso > %s AND fecha_hora_ingreso <= NOW()
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = ingresos.id_ingreso
+              )
         """, (fecha_inicio,))
         total_ingresos = cursor.fetchone()["total"]
 
@@ -36,6 +40,10 @@ def obtener_resumen_diario():
             FROM ingresos
             WHERE fecha_hora_ingreso > %s
               AND fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = ingresos.id_ingreso
+              )
         """, (fecha_inicio,))
         total_estacionados = cursor.fetchone()["estacionados"]
 
@@ -46,6 +54,10 @@ def obtener_resumen_diario():
             WHERE fecha_hora_salida > %s
               AND fecha_hora_salida <= NOW()
               AND cerrado = FALSE
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = ingresos.id_ingreso
+              )
         """, (fecha_inicio,))
         recaudado = cursor.fetchone()["recaudado"] or 0
 

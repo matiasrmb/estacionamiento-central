@@ -71,6 +71,7 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(resultado[3]["tipo"], "noche")
         self.assertEqual(resultado[3]["patente"], "[NOCHES] ABC123")
         self.assertEqual(len(cursor.executed), 4)
+        self.assertIn("FROM ingresos_eliminados", cursor.executed[0][0])
 
     @patch.object(reportes_controller, "db_cursor")
     def test_obtener_reportes_filtra_por_patente_y_no_incluye_banos(self, db_cursor):

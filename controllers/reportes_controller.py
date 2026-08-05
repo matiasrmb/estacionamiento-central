@@ -35,6 +35,10 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
         FROM ingresos i
         JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
         WHERE i.fecha_hora_salida IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM ingresos_eliminados ie
+              WHERE ie.id_ingreso_original = i.id_ingreso
+          )
           AND DATE(i.fecha_hora_salida) BETWEEN %s AND %s
     """
     params = [fecha_inicio, fecha_fin]
@@ -92,6 +96,10 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
             JOIN ingresos i ON i.id_ingreso = c.id_ingreso
             JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
             WHERE c.estado = 'PAGADO'
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
               AND DATE(c.fecha_hora_pago) BETWEEN %s AND %s
         """
         noches_params = [fecha_inicio, fecha_fin]
@@ -181,6 +189,10 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
                 JOIN ingresos i ON i.id_ingreso = c.id_ingreso
                 JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
                 WHERE c.estado = 'PAGADO'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = i.id_ingreso
+                  )
                   AND DATE(c.fecha_hora_pago) BETWEEN %s AND %s
             """
             noches_params = [fecha_inicio, fecha_fin]

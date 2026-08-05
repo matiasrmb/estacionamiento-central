@@ -160,6 +160,10 @@ def iniciar_solo_lavado(patente, id_tipo_vehiculo_lavado, usuario_inicio):
             JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
             WHERE UPPER(v.patente) = UPPER(%s)
               AND i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             LIMIT 1
         """, (patente_normalizada,))
         if cursor.fetchone():

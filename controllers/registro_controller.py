@@ -193,6 +193,10 @@ def obtener_ingresos_activos_por_patente(patente, incluir_noches=False):
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE v.patente = %s
               AND i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             ORDER BY i.en_espera ASC, i.fecha_hora_ingreso DESC
         """, (patente,))
         ingresos = cursor.fetchall()
@@ -320,6 +324,10 @@ def obtener_noche_pendiente_por_patente(patente):
               AND i.fecha_hora_salida IS NULL
               AND cn.estado = 'PAGADO'
               AND cn.estado_operativo = 'PENDIENTE'
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             ORDER BY cn.id_cobro_noche DESC
             LIMIT 1
         """, (patente,))
@@ -343,6 +351,10 @@ def finalizar_noche_pendiente(id_ingreso, usuario):
             JOIN ingresos i ON i.id_ingreso = cn.id_ingreso
             WHERE cn.id_ingreso = %s AND cn.estado = 'PAGADO'
               AND cn.estado_operativo = 'PENDIENTE' AND i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             FOR UPDATE
         """, (id_ingreso,))
         noche = cursor.fetchone()
@@ -368,6 +380,10 @@ def convertir_noche_a_ingreso_normal(id_ingreso, usuario):
             JOIN ingresos i ON i.id_ingreso = cn.id_ingreso
             WHERE cn.id_ingreso = %s AND cn.estado = 'PAGADO'
               AND cn.estado_operativo = 'PENDIENTE' AND i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             FOR UPDATE
         """, (id_ingreso,))
         noche = cursor.fetchone()
@@ -440,6 +456,10 @@ def registrar_ingreso_detallado(patente, fecha_hora_ingreso=None, cobro_noche=No
                 FROM ingresos
                 WHERE id_vehiculo = %s
                   AND fecha_hora_salida IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = ingresos.id_ingreso
+                  )
                 FOR UPDATE
             """, (id_vehiculo,))
             if cursor.fetchone():
@@ -757,6 +777,10 @@ def obtener_vehiculos_activos():
             FROM ingresos i
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             ORDER BY i.fecha_hora_ingreso ASC
         """)
         resultados = cursor.fetchall()
@@ -825,6 +849,10 @@ def obtener_patentes_cerradas_turno_actual():
             JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
             WHERE i.fecha_hora_salida IS NOT NULL
               AND i.cerrado = FALSE
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
               AND DATE(i.fecha_hora_salida) = CURDATE()
             ORDER BY i.fecha_hora_salida DESC, i.id_ingreso DESC
         """)
@@ -1001,6 +1029,10 @@ def obtener_total_vehiculos_pagados_turno_actual():
             FROM ingresos
             WHERE fecha_hora_salida IS NOT NULL
               AND cerrado = FALSE
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = ingresos.id_ingreso
+              )
         """)
         resultado = cursor.fetchone()
 
@@ -1019,6 +1051,10 @@ def obtener_resumen_caja_actual():
             FROM ingresos
             WHERE fecha_hora_salida IS NOT NULL
               AND cerrado = FALSE
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = ingresos.id_ingreso
+              )
         """)
         movimientos_estacionamiento = cursor.fetchall()
 
@@ -1050,6 +1086,10 @@ def obtener_resumen_caja_actual():
             WHERE id_cierre IS NULL
               AND estado = 'PAGADO'
               AND fecha_hora_pago <= %s
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = cobros_noches.id_ingreso
+              )
         """, (ahora,))
         cobros_noches = cursor.fetchall()
 
@@ -1083,6 +1123,10 @@ def obtener_ingresos_editables():
             FROM ingresos i
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE i.en_espera = 1 AND i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
         """)
         en_espera = cursor.fetchall()
 
@@ -1092,12 +1136,22 @@ def obtener_ingresos_editables():
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE i.fecha_hora_salida IS NOT NULL
               AND i.reingresado = 0
+              AND i.cerrado = FALSE
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
               AND i.id_ingreso IN (
                   SELECT MAX(i2.id_ingreso)
                   FROM ingresos i2
                   JOIN vehiculos v2 ON i2.id_vehiculo = v2.id_vehiculo
-                  WHERE i2.fecha_hora_salida IS NOT NULL
-                    AND i2.reingresado = 0
+                    WHERE i2.fecha_hora_salida IS NOT NULL
+                      AND i2.reingresado = 0
+                      AND i2.cerrado = FALSE
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ingresos_eliminados ie2
+                          WHERE ie2.id_ingreso_original = i2.id_ingreso
+                      )
                   GROUP BY v2.patente
               )
         """)
@@ -1110,9 +1164,8 @@ def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
     """
     Elimina con respaldo únicamente un ingreso abierto marcado en espera.
 
-    Los trabajos de impresión vinculados se conservan. Los reintentables se
-    cancelan y todos se desvinculan del ingreso antes de eliminarlo para
-    respetar su clave foránea.
+    Los ingresos con auditoría de reversión se anulan de forma lógica para
+    conservar sus relaciones; los demás se eliminan físicamente con respaldo.
 
     Args:
         id_ingreso (int): ID del ingreso a eliminar.
@@ -1143,6 +1196,15 @@ def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
                 return False, "Solo se pueden eliminar ingresos abiertos en espera."
 
             cursor.execute("""
+                SELECT 1
+                FROM reversiones_salida
+                WHERE id_ingreso = %s
+                LIMIT 1
+                FOR UPDATE
+            """, (id_ingreso,))
+            conserva_auditoria = cursor.fetchone() is not None
+
+            cursor.execute("""
                 SELECT id_print_job, estado
                 FROM print_jobs
                 WHERE id_ingreso = %s
@@ -1162,12 +1224,33 @@ def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
                   AND estado IN ('PENDIENTE', 'ERROR', 'REVISION_MANUAL')
             """, (id_ingreso,))
 
+            if conserva_auditoria:
+                cursor.execute("""
+                    INSERT INTO ingresos_eliminados (
+                        id_ingreso_original,
+                        patente,
+                        fecha_hora_ingreso,
+                        usuario_eliminador
+                    )
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    id_ingreso,
+                    ingreso["patente"],
+                    ingreso["fecha_hora_ingreso"],
+                    usuario
+                ))
+                cursor.execute("""
+                    UPDATE ingresos
+                    SET en_espera = 0
+                    WHERE id_ingreso = %s
+                """, (id_ingreso,))
+                return True, "Ingreso en espera anulado correctamente."
+
             cursor.execute("""
                 UPDATE print_jobs
                 SET id_ingreso = NULL
                 WHERE id_ingreso = %s
             """, (id_ingreso,))
-
             cursor.execute("""
                 INSERT INTO ingresos_eliminados (
                     id_ingreso_original,
@@ -1182,7 +1265,6 @@ def eliminar_ingreso_con_respaldo(id_ingreso, usuario):
                 ingreso["fecha_hora_ingreso"],
                 usuario
             ))
-
             cursor.execute("DELETE FROM ingresos WHERE id_ingreso = %s", (id_ingreso,))
         return True, "Ingreso en espera eliminado correctamente."
 
@@ -1213,6 +1295,10 @@ def marcar_ingreso_en_espera(patente):
                 WHERE v.patente = %s
                   AND i.fecha_hora_salida IS NULL
                   AND i.en_espera = 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = i.id_ingreso
+                  )
                 ORDER BY i.fecha_hora_ingreso DESC
                 LIMIT 1
             """, (patente,))
@@ -1275,6 +1361,10 @@ def revertir_en_espera(id_ingreso):
                 SET en_espera = 0
                 WHERE id_ingreso = %s
                   AND fecha_hora_salida IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = ingresos.id_ingreso
+                  )
             """, (id_ingreso,))
             return cursor.rowcount > 0
 
@@ -1304,6 +1394,10 @@ def reingresar_vehiculo_cerrado(
                 FROM ingresos i
                 JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
                 WHERE i.id_ingreso = %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = i.id_ingreso
+                  )
                 FOR UPDATE
             """, (id_ingreso,))
             ingreso = cursor.fetchone()
@@ -1326,6 +1420,10 @@ def reingresar_vehiculo_cerrado(
                 FROM ingresos
                 WHERE id_vehiculo = %s
                   AND fecha_hora_salida IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = ingresos.id_ingreso
+                  )
                 FOR UPDATE
             """, (ingreso["id_vehiculo"],))
             if cursor.fetchone():
@@ -1401,6 +1499,130 @@ def reingresar_vehiculo_cerrado(
         return False, "No se pudo revertir la salida; no se aplicaron cambios."
 
 
+def enviar_salida_sin_cobro_a_espera(
+    id_ingreso,
+    usuario_reversion,
+    confirma_sin_cobro=False,
+    confirma_ticket_impreso=False,
+    patente_esperada=None,
+):
+    """Envía a espera una salida sin cobro, conservando su auditoría."""
+    if not confirma_sin_cobro:
+        return False, "Debes confirmar que no se cobró dinero antes de enviar la salida a espera."
+
+    try:
+        with db_cursor(dictionary=True, commit=True) as cursor:
+            cursor.execute("""
+                SELECT i.id_ingreso, i.id_vehiculo, v.patente,
+                       i.fecha_hora_ingreso, i.fecha_hora_salida,
+                       i.tarifa_aplicada, i.usuario, i.cerrado
+                FROM ingresos i
+                JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
+                WHERE i.id_ingreso = %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = i.id_ingreso
+                  )
+                FOR UPDATE
+            """, (id_ingreso,))
+            ingreso = cursor.fetchone()
+
+            if not ingreso or ingreso["fecha_hora_salida"] is None:
+                return False, "El ingreso no tiene una salida que pueda enviarse a espera."
+            if patente_esperada and str(ingreso["patente"]).upper() != str(patente_esperada).upper():
+                return False, "La patente seleccionada no coincide con el ingreso a enviar a espera."
+            if ingreso["cerrado"]:
+                return False, "No se puede enviar a espera una salida incluida en un cierre diario."
+
+            cursor.execute("""
+                SELECT id_vehiculo
+                FROM vehiculos
+                WHERE id_vehiculo = %s
+                FOR UPDATE
+            """, (ingreso["id_vehiculo"],))
+            cursor.fetchone()
+
+            cursor.execute("""
+                SELECT id_ingreso
+                FROM ingresos
+                WHERE id_vehiculo = %s
+                  AND fecha_hora_salida IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = ingresos.id_ingreso
+                  )
+                FOR UPDATE
+            """, (ingreso["id_vehiculo"],))
+            if cursor.fetchone():
+                return False, "No se puede enviar a espera: el vehículo ya tiene un ingreso activo."
+
+            cursor.execute("""
+                SELECT id_print_job, estado
+                FROM print_jobs
+                WHERE id_ingreso = %s
+                  AND tipo = 'TICKET_SALIDA'
+                FOR UPDATE
+            """, (id_ingreso,))
+            jobs_salida = cursor.fetchall()
+            if any(job["estado"] == "IMPRIMIENDO" for job in jobs_salida):
+                return False, "No se puede enviar a espera mientras se imprime un ticket de salida."
+            if any(job["estado"] == "IMPRESO" for job in jobs_salida) and not confirma_ticket_impreso:
+                return False, (
+                    "El ticket de salida ya fue impreso; se requiere confirmación explícita "
+                    "de su entrega antes de enviar a espera."
+                )
+
+            resumen_tickets = json.dumps(
+                [{"id_print_job": job["id_print_job"], "estado": job["estado"]} for job in jobs_salida],
+                ensure_ascii=True,
+            )
+            cursor.execute("""
+                UPDATE print_jobs
+                SET estado = 'CANCELADO'
+                WHERE id_ingreso = %s
+                  AND tipo = 'TICKET_SALIDA'
+                  AND estado IN ('PENDIENTE', 'ERROR', 'REVISION_MANUAL')
+            """, (id_ingreso,))
+            cursor.execute("""
+                UPDATE ingresos
+                SET fecha_hora_salida = NULL,
+                    tarifa_aplicada = NULL,
+                    usuario = NULL,
+                    en_espera = 1
+                WHERE id_ingreso = %s
+                  AND fecha_hora_salida IS NOT NULL
+                  AND cerrado = 0
+            """, (id_ingreso,))
+            if cursor.rowcount != 1:
+                raise RuntimeError("La salida cambió antes de poder enviarse a espera.")
+
+            cursor.execute("""
+                INSERT INTO reversiones_salida (
+                    id_ingreso, patente, fecha_hora_ingreso, fecha_hora_salida_original,
+                    tarifa_aplicada_original, usuario_salida_original, usuario_reversion,
+                    motivo, ticket_estado_resumen, ticket_impreso_confirmado
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                id_ingreso,
+                ingreso["patente"],
+                ingreso["fecha_hora_ingreso"],
+                ingreso["fecha_hora_salida"],
+                ingreso["tarifa_aplicada"],
+                ingreso["usuario"],
+                usuario_reversion,
+                "Salida sin cobro enviada a espera para revisión administrativa.",
+                resumen_tickets,
+                confirma_ticket_impreso,
+            ))
+
+        return True, "Salida enviada a espera para revisión administrativa."
+
+    except Exception as e:
+        print(f"Error al enviar salida a espera: {e}")
+        return False, "No se pudo enviar la salida a espera; no se aplicaron cambios."
+
+
 def alternar_estado_espera(patente):
     """
     Alterna el estado de espera del ingreso activo de una patente.
@@ -1424,6 +1646,10 @@ def alternar_estado_espera(patente):
                 WHERE v.patente = %s
                   AND i.fecha_hora_salida IS NULL
                   AND i.en_espera = 1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = i.id_ingreso
+                  )
                 ORDER BY i.fecha_hora_ingreso DESC
                 LIMIT 1
             """, (patente,))
@@ -1455,6 +1681,10 @@ def obtener_patentes_existentes():
             FROM ingresos i
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             ORDER BY v.patente ASC
         """)
         filas = cursor.fetchall()
@@ -1484,6 +1714,10 @@ def eliminar_ingreso_activo_por_patente(patente, usuario):
                 WHERE v.patente = %s
                   AND i.fecha_hora_salida IS NULL
                   AND i.en_espera = 1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ingresos_eliminados ie
+                      WHERE ie.id_ingreso_original = i.id_ingreso
+                  )
                 ORDER BY i.fecha_hora_ingreso DESC, i.id_ingreso DESC
                 LIMIT 1
             """, (patente,))

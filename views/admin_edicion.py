@@ -9,7 +9,8 @@ from controllers.registro_controller import (
     obtener_ingresos_editables,
     eliminar_ingreso_con_respaldo,
     revertir_en_espera,
-    reingresar_vehiculo_cerrado
+    reingresar_vehiculo_cerrado,
+    enviar_salida_sin_cobro_a_espera,
 )
 from utils.table_filters import filtrar_filas_tabla
 
@@ -21,6 +22,7 @@ class EdicionIngresosWindow(QWidget):
     Permite:
     - Revertir ingresos en espera.
     - Reingresar vehículos cerrados recientemente.
+    - Enviar salidas sin cobro a espera para revisión.
     - Eliminar ingresos en espera con respaldo.
     """
 
@@ -110,6 +112,10 @@ class EdicionIngresosWindow(QWidget):
         self.btn_reingresar.setMinimumHeight(40)
         self.btn_reingresar.clicked.connect(self.reingresar)
 
+        self.btn_enviar_espera = QPushButton("Enviar salida a espera")
+        self.btn_enviar_espera.setMinimumHeight(40)
+        self.btn_enviar_espera.clicked.connect(self.enviar_salida_a_espera)
+
         self.btn_eliminar = QPushButton("Eliminar ingreso en espera")
         self.btn_eliminar.setObjectName("BotonPeligro")
         self.btn_eliminar.setMinimumHeight(40)
@@ -122,6 +128,7 @@ class EdicionIngresosWindow(QWidget):
 
         layout_acciones.addWidget(self.btn_revertir)
         layout_acciones.addWidget(self.btn_reingresar)
+        layout_acciones.addWidget(self.btn_enviar_espera)
         layout_acciones.addWidget(self.btn_eliminar)
         layout_acciones.addWidget(self.btn_refrescar)
 
@@ -253,3 +260,45 @@ class EdicionIngresosWindow(QWidget):
                 self.cargar_datos()
             else:
                 QMessageBox.warning(self, "No se pudo eliminar", mensaje)
+
+    def enviar_salida_a_espera(self):
+        fila = self.tabla.currentRow()
+        if fila == -1:
+            QMessageBox.warning(self, "Selecciona", "Selecciona una fila primero.")
+            return
+
+        estado = self.tabla.item(fila, 3).text()
+        if estado != "CERRADO":
+            QMessageBox.warning(self, "No válido", "Solo puedes enviar a espera vehículos cerrados.")
+            return
+
+        id_ingreso = int(self.tabla.item(fila, 0).text())
+        confirmar = QMessageBox.question(
+            self,
+            "Enviar salida a espera",
+            "Confirma que no se cobró dinero y que la salida debe quedar en espera para revisión administrativa?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirmar != QMessageBox.Yes:
+            return
+
+        exito, mensaje = enviar_salida_sin_cobro_a_espera(
+            id_ingreso, self.usuario_admin, True
+        )
+        if not exito and "ticket de salida ya fue impreso" in mensaje:
+            confirmar_ticket = QMessageBox.question(
+                self,
+                "Ticket de salida impreso",
+                "Confirma que reconoce que el ticket de salida fue impreso y entregado?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if confirmar_ticket == QMessageBox.Yes:
+                exito, mensaje = enviar_salida_sin_cobro_a_espera(
+                    id_ingreso, self.usuario_admin, True, confirma_ticket_impreso=True
+                )
+
+        if exito:
+            QMessageBox.information(self, "Éxito", mensaje)
+            self.cargar_datos()
+        else:
+            QMessageBox.warning(self, "No se pudo enviar a espera", mensaje)

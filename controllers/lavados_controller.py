@@ -92,6 +92,10 @@ def iniciar_lavado(id_ingreso, categoria_lavado, usuario):
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE i.id_ingreso = %s
               AND i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             LIMIT 1
         """, (id_ingreso,))
         ingreso = cursor.fetchone()

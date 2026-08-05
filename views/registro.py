@@ -15,7 +15,7 @@ from controllers.registro_controller import (
     registrar_salida_detallada, obtener_vehiculos_activos,
     obtener_preview_salida_por_patente,
     obtener_noche_pendiente_por_patente, finalizar_noche_pendiente, convertir_noche_a_ingreso_normal,
-    marcar_ingreso_en_espera, alternar_estado_espera,
+    marcar_ingreso_en_espera, alternar_estado_espera, enviar_salida_sin_cobro_a_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
     registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual, obtener_resumen_caja_actual,
     obtener_patentes_turno_actual_para_f4, ordenar_patentes_para_busqueda,
@@ -113,6 +113,7 @@ class RegistroWindow(QWidget):
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
         self.busqueda_f4 = ""
+        self.seleccion_f4 = None
 
         self.setMinimumSize(1000, 650)
         self.init_ui()
@@ -709,6 +710,7 @@ class RegistroWindow(QWidget):
 
         self.indice_patente_f4 = (self.indice_patente_f4 + 1) % len(self.patentes_f4)
         seleccion = self.patentes_f4[self.indice_patente_f4]
+        self.seleccion_f4 = seleccion
         patente = str(seleccion["patente"]).upper()
 
         self.input_patente.setText(patente)
@@ -936,6 +938,7 @@ class RegistroWindow(QWidget):
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
         self.busqueda_f4 = ""
+        self.seleccion_f4 = None
         self.boton_ingreso.setEnabled(False)
         self.boton_ingreso_personalizado.setEnabled(False)
         self.boton_ingreso_noches.setEnabled(False)
@@ -1549,7 +1552,35 @@ class RegistroWindow(QWidget):
             QMessageBox.warning(self, "Atención", mensaje)
             return
 
-        exito, mensaje = alternar_estado_espera(patente)
+        seleccion = self.seleccion_f4
+        if isinstance(seleccion, dict) and seleccion.get("estado") == "CERRADO":
+            confirmar = QMessageBox.question(
+                self,
+                "Enviar salida a espera",
+                "Confirma que no se cobró dinero y que la salida debe quedar en espera para revisión administrativa?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if confirmar != QMessageBox.Yes:
+                return
+
+            exito, mensaje = enviar_salida_sin_cobro_a_espera(
+                seleccion["id_ingreso"], self.usuario, True, patente_esperada=seleccion["patente"]
+            )
+            if not exito and "ticket de salida ya fue impreso" in mensaje:
+                confirmar_ticket = QMessageBox.question(
+                    self,
+                    "Ticket de salida impreso",
+                    "Confirma que reconoce que el ticket de salida fue impreso y entregado?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if confirmar_ticket == QMessageBox.Yes:
+                    exito, mensaje = enviar_salida_sin_cobro_a_espera(
+                        seleccion["id_ingreso"], self.usuario, True,
+                        confirma_ticket_impreso=True,
+                        patente_esperada=seleccion["patente"],
+                    )
+        else:
+            exito, mensaje = alternar_estado_espera(patente)
 
         if exito:
             QMessageBox.information(self, "Listo", mensaje)
@@ -1627,6 +1658,7 @@ class RegistroWindow(QWidget):
         self.busqueda_f4 = texto
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
+        self.seleccion_f4 = None
 
     def reiniciar_busqueda_f3(self, texto):
         self.busqueda_f3 = texto
@@ -1679,6 +1711,7 @@ class RegistroWindow(QWidget):
         self.indice_patente_f3 = -1
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
+        self.seleccion_f4 = None
         self.actualizar_tabla_activos()
         self.actualizar_lista_patentes()
         self.actualizar_estado_subida()
