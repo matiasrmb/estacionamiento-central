@@ -2038,6 +2038,8 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertIn("FROM reversiones_salida", consultas)
         self.assertIn("INSERT INTO ingresos_eliminados", consultas)
         self.assertIn("SET en_espera = 0", consultas)
+        self.assertNotIn("SET fecha_hora_salida", consultas)
+        self.assertNotIn("SET tarifa_aplicada", consultas)
         self.assertNotIn("SET id_ingreso = NULL", consultas)
         self.assertNotIn("DELETE FROM ingresos", consultas)
 
