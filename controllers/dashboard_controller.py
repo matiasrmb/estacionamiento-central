@@ -6,6 +6,7 @@ Obtiene estadísticas simples para el panel principal (dashboard) del sistema.
 
 from utils.db import db_cursor
 from utils.slowlog import slow_operation
+from controllers.registro_controller import obtener_resumen_caja_actual
 
 @slow_operation("dashboard_refresh")
 def obtener_resumen_diario():
@@ -47,24 +48,21 @@ def obtener_resumen_diario():
         """, (fecha_inicio,))
         total_estacionados = cursor.fetchone()["estacionados"]
 
-        # Total recaudado desde último cierre
-        cursor.execute("""
-            SELECT SUM(tarifa_aplicada) AS recaudado
-            FROM ingresos
-            WHERE fecha_hora_salida > %s
-              AND fecha_hora_salida <= NOW()
-              AND cerrado = FALSE
-              AND NOT EXISTS (
-                  SELECT 1 FROM ingresos_eliminados ie
-                  WHERE ie.id_ingreso_original = ingresos.id_ingreso
-              )
-        """, (fecha_inicio,))
-        recaudado = cursor.fetchone()["recaudado"] or 0
+    # Reuse the daily-close sources so dashboard cards cannot drift from cashbox.
+    caja = obtener_resumen_caja_actual()
+    recaudado = (
+        caja["total_recaudado"]
+        + caja["total_lavados_solos_monto"]
+        + caja["total_mensualidades_monto"]
+        + caja["total_noches_monto"]
+    )
 
     return {
         "total_ingresos": total_ingresos,
         "estacionados": total_estacionados,
-        "recaudado": recaudado
+        "recaudado": recaudado,
+        "total_general": caja["total_general"],
+        "total_neto": caja["total_neto"],
     }
 
 

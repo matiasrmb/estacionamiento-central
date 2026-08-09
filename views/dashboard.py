@@ -184,13 +184,12 @@ class DashboardWindow(QWidget):
 
         resumen = obtener_resumen_diario()
         resumen_banos = obtener_resumen_banos()
-        recaudacion_total = resumen["recaudado"] + resumen_banos["total"]
 
         self.card_ingresos["valor"].setText(str(resumen["total_ingresos"]))
         self.card_estacionados["valor"].setText(str(resumen["estacionados"]))
         self.card_recaudado["valor"].setText(f"${resumen['recaudado']:.0f}")
         self.card_banos["valor"].setText(f"{resumen_banos['cantidad']} | ${resumen_banos['total']:.0f}")
-        self.card_total["valor"].setText(f"${recaudacion_total:.0f}")
+        self.card_total["valor"].setText(f"${resumen['total_neto']:.0f}")
 
         self.label_periodo.setText(self.obtener_periodo_resumen())
 

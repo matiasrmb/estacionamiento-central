@@ -1070,6 +1070,7 @@ def obtener_resumen_caja_actual():
             FROM operaciones_servicio
             WHERE estado = 'FINALIZADO_COBRADO'
               AND cerrado = FALSE
+              AND id_ingreso_generado IS NULL
         """)
         lavados_solos = cursor.fetchall()
 

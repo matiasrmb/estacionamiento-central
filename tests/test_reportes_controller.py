@@ -57,7 +57,9 @@ class ObtenerReportesTests(unittest.TestCase):
             "fecha_hora_pago": datetime(2026, 1, 2, 22, 0),
             "monto_snapshot": 5000,
         }
-        cursor = FakeCursor(fetchall_results=[[movimiento], [bano], [pago_mensual], [cobro_noche]])
+        cursor = FakeCursor(fetchall_results=[
+            [movimiento], [bano], [], [], [pago_mensual], [cobro_noche],
+        ])
         db_cursor.return_value = fake_db_cursor(cursor)
 
         resultado = reportes_controller.obtener_reportes(date(2026, 1, 1), date(2026, 1, 31))
@@ -65,17 +67,18 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(len(resultado), 4)
         self.assertEqual(resultado[1]["patente"], "[BAÑO]")
         self.assertEqual(resultado[1]["tarifa_aplicada"], 300)
-        self.assertEqual(resultado[2]["tipo"], "mensualidad")
-        self.assertEqual(resultado[2]["patente"], "[MENSUAL] MENSUAL1")
-        self.assertEqual(resultado[2]["tarifa_aplicada"], 50000)
-        self.assertEqual(resultado[3]["tipo"], "noche")
-        self.assertEqual(resultado[3]["patente"], "[NOCHES] ABC123")
-        self.assertEqual(len(cursor.executed), 4)
+        mensualidad = next(item for item in resultado if item.get("tipo") == "mensualidad")
+        noche = next(item for item in resultado if item.get("tipo") == "noche")
+        self.assertEqual(mensualidad["patente"], "[MENSUAL] MENSUAL1")
+        self.assertEqual(mensualidad["tarifa_aplicada"], 50000)
+        self.assertEqual(noche["patente"], "[NOCHES] ABC123")
+        self.assertEqual(len(cursor.executed), 6)
         self.assertIn("FROM ingresos_eliminados", cursor.executed[0][0])
+        self.assertIn("id_ingreso_generado IS NULL", cursor.executed[2][0])
 
     @patch.object(reportes_controller, "db_cursor")
     def test_obtener_reportes_filtra_por_patente_y_no_incluye_banos(self, db_cursor):
-        cursor = FakeCursor(fetchall_results=[[], []])
+        cursor = FakeCursor(fetchall_results=[[], [], [], []])
         db_cursor.return_value = fake_db_cursor(cursor)
 
         resultado = reportes_controller.obtener_reportes(
@@ -85,9 +88,21 @@ class ObtenerReportesTests(unittest.TestCase):
         )
 
         self.assertEqual(resultado, [])
-        self.assertEqual(len(cursor.executed), 3)
-        for query, params in cursor.executed:
-            self.assertIn("AND v.patente = %s", query)
+        self.assertEqual(len(cursor.executed), 4)
+        self.assertIn("AND v.patente = %s", cursor.executed[0][0])
+        self.assertIn("WHERE patente = %s", cursor.executed[1][0])
+        self.assertIn("id_ingreso_generado IS NULL", cursor.executed[1][0])
+        self.assertIn("AND v.patente = %s", cursor.executed[2][0])
+        self.assertIn("AND v.patente = %s", cursor.executed[3][0])
+        self.assertEqual(
+            cursor.executed[0][1],
+            (date(2026, 1, 1), date(2026, 1, 31), "ABC123"),
+        )
+        self.assertEqual(
+            cursor.executed[1][1],
+            ("ABC123", date(2026, 1, 1), date(2026, 1, 31)),
+        )
+        for _, params in cursor.executed[2:]:
             self.assertEqual(params, (date(2026, 1, 1), date(2026, 1, 31), "ABC123"))
 
 
@@ -105,7 +120,6 @@ class ExportarPdfTests(unittest.TestCase):
     ):
         cursor = FakeCursor(fetchone_results=[
             {"cantidad": 2, "total": 600},
-            {"cantidad": 1, "total": 8000},
             {"cantidad": 1, "total": 50000},
             {"cantidad": 1, "total": 5000},
         ])
@@ -139,6 +153,7 @@ class ExportarPdfTests(unittest.TestCase):
             "Total recaudado por mensualidades: $50000",
             [call.args[2] for call in pdf.cell.call_args_list],
         )
+        self.assertIn("Total neto: $1200", [call.args[2] for call in pdf.cell.call_args_list])
         self.assertIn(
             "Total recaudado por Noches prepagadas: $5000",
             [call.args[2] for call in pdf.cell.call_args_list],

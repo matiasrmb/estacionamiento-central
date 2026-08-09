@@ -1031,13 +1031,12 @@ class RegistroWindow(QWidget):
 
         resumen_banos = obtener_resumen_banos()
         total_banos = float(resumen_banos["total"])
-        total_pagados_turno = obtener_total_vehiculos_pagados_turno_actual()
-        total_turno = total_pagados_turno + total + total_banos
         resumen_caja = obtener_resumen_caja_actual()
 
         self.card_estacionados.label_valor.setText(str(len(datos)))
         self.card_total_activos.label_valor.setText(f"${total:.0f}")
-        self.card_total_turno.label_valor.setText(f"${total_turno:.0f}")
+        # Collected cash since the last daily close; active quotes are not revenue.
+        self.card_total_turno.label_valor.setText(f"${resumen_caja['total_general']:.0f}")
         self.card_total_caja.label_valor.setText(f"${resumen_caja['total_general']:.0f}")
         self.card_neto_caja.label_valor.setText(f"${resumen_caja['total_neto']:.0f}")
         self.card_banos.label_valor.setText(

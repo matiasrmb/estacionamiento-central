@@ -68,6 +68,65 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
                     "tarifa_aplicada": b["monto"]
                 })
 
+            cursor.execute("""
+                SELECT patente, fecha_hora_inicio, fecha_hora_fin,
+                       TIMESTAMPDIFF(MINUTE, fecha_hora_inicio, fecha_hora_fin) AS minutos,
+                       valor_lavado_snapshot
+                FROM operaciones_servicio
+                WHERE estado = 'FINALIZADO_COBRADO'
+                  AND id_ingreso_generado IS NULL
+                  AND fecha_hora_fin IS NOT NULL
+                  AND DATE(fecha_hora_fin) BETWEEN %s AND %s
+                ORDER BY fecha_hora_fin
+            """, (fecha_inicio, fecha_fin))
+            for lavado in cursor.fetchall():
+                resultados.append({
+                    "tipo": "lavado_solo",
+                    "patente": lavado["patente"],
+                    "fecha_hora_ingreso": lavado["fecha_hora_inicio"],
+                    "fecha_hora_salida": lavado["fecha_hora_fin"],
+                    "minutos": lavado["minutos"] or 0,
+                    "tarifa_aplicada": lavado["valor_lavado_snapshot"] or 0,
+                })
+
+            cursor.execute("""
+                SELECT fecha_hora, monto, descripcion
+                FROM gastos_operacion
+                WHERE DATE(fecha_hora) BETWEEN %s AND %s
+                ORDER BY fecha_hora
+            """, (fecha_inicio, fecha_fin))
+            for gasto in cursor.fetchall():
+                resultados.append({
+                    "tipo": "gasto",
+                    "patente": "[GASTO]",
+                    "fecha_hora_ingreso": gasto["fecha_hora"],
+                    "fecha_hora_salida": gasto["fecha_hora"],
+                    "minutos": 0,
+                    "tarifa_aplicada": -(gasto["monto"] or 0),
+                })
+        else:
+            cursor.execute("""
+                SELECT patente, fecha_hora_inicio, fecha_hora_fin,
+                       TIMESTAMPDIFF(MINUTE, fecha_hora_inicio, fecha_hora_fin) AS minutos,
+                       valor_lavado_snapshot
+                FROM operaciones_servicio
+                WHERE patente = %s
+                  AND estado = 'FINALIZADO_COBRADO'
+                  AND id_ingreso_generado IS NULL
+                  AND fecha_hora_fin IS NOT NULL
+                  AND DATE(fecha_hora_fin) BETWEEN %s AND %s
+                ORDER BY fecha_hora_fin
+            """, (patente, fecha_inicio, fecha_fin))
+            for lavado in cursor.fetchall():
+                resultados.append({
+                    "tipo": "lavado_solo",
+                    "patente": lavado["patente"],
+                    "fecha_hora_ingreso": lavado["fecha_hora_inicio"],
+                    "fecha_hora_salida": lavado["fecha_hora_fin"],
+                    "minutos": lavado["minutos"] or 0,
+                    "tarifa_aplicada": lavado["valor_lavado_snapshot"] or 0,
+                })
+
         pagos_query = """
             SELECT v.patente, p.periodo, p.fecha_pago, p.monto_snapshot
             FROM pagos_mensuales p
@@ -118,6 +177,7 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
                 "tarifa_aplicada": cobro["monto_snapshot"],
             })
 
+    resultados.sort(key=lambda item: item["fecha_hora_salida"])
     return resultados
 
 def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, patente=""):
@@ -138,8 +198,9 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
     total = 0
     total_banos = 0
     monto_banos = 0
-    total_lavados = 0
-    monto_lavados = 0
+    lavados_solos = [row for row in datos if row.get("tipo") == "lavado_solo"]
+    total_lavados = len(lavados_solos)
+    monto_lavados = sum(row.get("tarifa_aplicada") or 0 for row in lavados_solos)
     total_mensualidades = 0
     monto_mensualidades = 0
     total_noches = 0
@@ -156,17 +217,6 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
                 resultado = cursor.fetchone()
                 total_banos = resultado["cantidad"] or 0
                 monto_banos = resultado["total"] or 0
-
-                cursor.execute("""
-                    SELECT COUNT(*) AS cantidad, SUM(valor_lavado) AS total
-                    FROM lavados
-                    WHERE estado = 'finalizado'
-                      AND fecha_hora_fin IS NOT NULL
-                      AND DATE(fecha_hora_fin) BETWEEN %s AND %s
-                """, (fecha_inicio, fecha_fin))
-                resultado_lavados = cursor.fetchone()
-                total_lavados = resultado_lavados["cantidad"] or 0
-                monto_lavados = resultado_lavados["total"] or 0
 
             pagos_query = """
                 SELECT COUNT(*) AS cantidad, SUM(p.monto_snapshot) AS total
@@ -214,7 +264,7 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
 
     pdf.ln(5)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, f"Total recaudado: ${total:.0f}", ln=True)
+    pdf.cell(0, 10, f"Total neto: ${total:.0f}", ln=True)
 
     pdf.set_font("Arial", "", 11)
     pdf.cell(0, 8, f"Mensualidades cobradas: {total_mensualidades}", ln=True)
@@ -226,12 +276,12 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
         pdf.set_font("Arial", "", 11)
         pdf.cell(0, 8, f"Baños registrados: {total_banos}", ln=True)
         pdf.cell(0, 8, f"Total recaudado por baños: ${monto_banos:.0f}", ln=True)
-        pdf.cell(0, 8, f"Lavados registrados: {total_lavados}", ln=True)
-        pdf.cell(0, 8, f"Total recaudado por lavados: ${monto_lavados:.0f}", ln=True)
+        pdf.cell(0, 8, f"Lavados independientes registrados: {total_lavados}", ln=True)
+        pdf.cell(0, 8, f"Total por lavados independientes: ${monto_lavados:.0f}", ln=True)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Total general (vehículos + baños + mensualidades + Noches): ${total:.0f}", ln=True)
+        pdf.cell(0, 10, f"Total neto (vehículos, baños, lavados, mensualidades y noches): ${total:.0f}", ln=True)
         pdf.set_font("Arial", "", 9)
-        pdf.cell(0, 6, "Nota: los lavados ya están incluidos en el importe de cada vehículo.", ln=True)
+        pdf.cell(0, 6, "Nota: los lavados vinculados a una estadía se incluyen en el importe del vehículo.", ln=True)
 
     carpeta = "reportes"
     os.makedirs(carpeta, exist_ok=True)
