@@ -426,7 +426,7 @@ class MainWindow(QWidget):
 
         QMessageBox.information(
             self,
-            "Resumen del día",
+            "Resumen de sesión",
             f"Sesión: {hora_inicio.strftime('%d-%m-%Y %H:%M') if hora_inicio else 'No disponible'} - ahora\n"
             f"Vehículos cobrados: {resumen.get('cantidad', 0)}\n"
             f"Total recaudado: ${float(resumen.get('total', 0)):.0f}"
