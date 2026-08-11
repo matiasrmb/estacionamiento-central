@@ -54,6 +54,15 @@ QLabel#ValorResumenModulo {
     color: #111827;
 }
 
+QLabel#AyudaResumenModulo {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+QLabel#IconoResumenModulo {
+    font-size: 17px;
+}
+
 QLabel#TituloAcceso {
     font-size: 24px;
     font-weight: 700;

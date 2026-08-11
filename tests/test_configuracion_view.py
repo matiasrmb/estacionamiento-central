@@ -57,11 +57,14 @@ class ConfiguracionViewTests(unittest.TestCase):
             dias_limpieza_input=Mock(text=Mock(return_value="30")),
             limpieza_activa_check=Mock(isChecked=Mock(return_value=True)),
             print_jobs_pc_activos_check=Mock(isChecked=Mock(return_value=False)),
+            modo_privacidad_metricas_check=Mock(isChecked=Mock(return_value=True)),
         )
 
-        ConfiguracionWindow.guardar(vista)
+        with patch("views.configuracion.guardar_modo_privacidad_metricas") as guardar_privacidad:
+            ConfiguracionWindow.guardar(vista)
 
         actualizar_configuracion.assert_any_call("pc_print_jobs_activos", 0)
+        guardar_privacidad.assert_called_once_with(True)
         actualizar_configuracion.assert_any_call("noches_activo", 1)
         actualizar_configuracion.assert_any_call("noches_valor", "5000")
         llamadas = [llamada.args[0] for llamada in actualizar_configuracion.call_args_list]
@@ -83,16 +86,19 @@ class ConfiguracionViewTests(unittest.TestCase):
             limpieza_activa_check=Mock(),
             dias_limpieza_input=Mock(),
             print_jobs_pc_activos_check=Mock(),
+            modo_privacidad_metricas_check=Mock(),
             cargar_impresoras_en_combo=Mock(),
             actualizar_trabajos_impresion_fallidos=Mock(),
             actualizar_trabajos_impresion_impresos=Mock(),
         )
 
-        ConfiguracionWindow.recargar_configuracion(vista)
+        with patch("views.configuracion.obtener_modo_privacidad_metricas", return_value=True):
+            ConfiguracionWindow.recargar_configuracion(vista)
 
         vista.print_jobs_pc_activos_check.setChecked.assert_called_once_with(False)
         vista.noches_activo_check.setChecked.assert_called_once_with(False)
         vista.noches_valor_input.setText.assert_called_once_with("0")
+        vista.modo_privacidad_metricas_check.setChecked.assert_called_once_with(True)
 
 
 if __name__ == "__main__":

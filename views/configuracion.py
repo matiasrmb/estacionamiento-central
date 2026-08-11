@@ -30,6 +30,10 @@ from utils.printer_manager import (obtener_impresoras_instaladas,
 )
 from utils.printer_diagnostics import SUPPORTED_PRINT_PATH
 from utils.table_filters import filtrar_filas_tabla
+from utils.local_preferences import (
+    guardar_modo_privacidad_metricas,
+    obtener_modo_privacidad_metricas,
+)
 
 class ConfiguracionWindow(QWidget):
     """
@@ -85,6 +89,22 @@ class ConfiguracionWindow(QWidget):
         self.print_jobs_pc_activos_label.setWordWrap(True)
         layout_print_jobs_pc.addWidget(self.print_jobs_pc_activos_label)
         layout.addWidget(panel_print_jobs_pc)
+
+        panel_privacidad = QFrame()
+        panel_privacidad.setObjectName("PanelFormulario")
+        layout_privacidad = QVBoxLayout(panel_privacidad)
+        layout_privacidad.setContentsMargins(14, 14, 14, 14)
+        layout_privacidad.setSpacing(6)
+        self.modo_privacidad_metricas_check = QCheckBox("Modo privacidad en métricas")
+        self.modo_privacidad_metricas_check.setChecked(obtener_modo_privacidad_metricas())
+        layout_privacidad.addWidget(self.modo_privacidad_metricas_check)
+        descripcion_privacidad = QLabel(
+            "Oculta los valores de las tarjetas hasta pasar el mouse o tocar."
+        )
+        descripcion_privacidad.setObjectName("SubtituloSeccion")
+        descripcion_privacidad.setWordWrap(True)
+        layout_privacidad.addWidget(descripcion_privacidad)
+        layout.addWidget(panel_privacidad)
 
         # =========================================================
         # CONFIGURACIÓN GENERAL
@@ -471,6 +491,7 @@ class ConfiguracionWindow(QWidget):
         self.print_jobs_pc_activos_check.setChecked(
             self.config.get("pc_print_jobs_activos", "1") == "1"
         )
+        self.modo_privacidad_metricas_check.setChecked(obtener_modo_privacidad_metricas())
         self.cargar_impresoras_en_combo()
         self.actualizar_trabajos_impresion_fallidos()
         self.actualizar_trabajos_impresion_impresos()
@@ -812,6 +833,7 @@ class ConfiguracionWindow(QWidget):
             "pc_print_jobs_activos",
             1 if self.print_jobs_pc_activos_check.isChecked() else 0,
         )
+        guardar_modo_privacidad_metricas(self.modo_privacidad_metricas_check.isChecked())
 
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 

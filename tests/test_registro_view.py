@@ -5,11 +5,50 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QEvent, QPointF
+from PySide6.QtGui import QEnterEvent
 from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
 from views.admin_edicion import EdicionIngresosWindow
 from views.registro import (
-    QMessageBox, RegistroWindow, construir_mensaje_ingreso, construir_mensaje_salida,
+    QMessageBox, REGISTRO_METRICAS, RegistroWindow, TarjetaResumen,
+    calcular_metricas_resumen, construir_mensaje_ingreso, construir_mensaje_salida,
 )
+
+
+class RegistroMetricCardTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_privacidad_esta_desactivada_por_defecto(self):
+        tarjeta = TarjetaResumen("Total turno", "$5000", "$")
+
+        self.assertEqual(tarjeta.label_valor.text(), "$5000")
+
+    def test_privacidad_oculta_y_revela_el_valor_al_pasarlo_con_el_mouse(self):
+        tarjeta = TarjetaResumen("Total turno", "$5000", "$", modo_privacidad=True)
+
+        self.assertEqual(tarjeta.label_valor.text(), "Oculto")
+        tarjeta.enterEvent(QEnterEvent(QPointF(), QPointF(), QPointF()))
+        self.assertEqual(tarjeta.label_valor.text(), "$5000")
+        tarjeta.leaveEvent(QEvent(QEvent.Leave))
+        self.assertEqual(tarjeta.label_valor.text(), "Oculto")
+
+    def test_orden_y_formulas_de_metricas_del_registro(self):
+        metricas = calcular_metricas_resumen(1250, {"total_general": 5000, "total_neto": 4400})
+
+        self.assertEqual(REGISTRO_METRICAS, (
+            "Vehículos activos",
+            "Usos de baño hoy",
+            "Estimado activos",
+            "Total proyectado",
+            "Total turno",
+            "Neto en caja",
+        ))
+        self.assertEqual(metricas["estimado_activos"], 1250)
+        self.assertEqual(metricas["total_proyectado"], 6250)
+        self.assertEqual(metricas["total_turno"], 5000)
+        self.assertEqual(metricas["neto_caja"], 4400)
 
 
 class RegistroViewReingresoTests(unittest.TestCase):

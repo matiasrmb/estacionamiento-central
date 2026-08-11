@@ -45,6 +45,7 @@ from controllers.cotizaciones_controller import (
 )
 from views.subida_dialog import SubidaDialog
 from utils.plates import normalizar_patente, validar_patente
+from utils.local_preferences import obtener_modo_privacidad_metricas
 
 
 def formatear_fecha_hora(valor):
@@ -95,6 +96,93 @@ def _es_tabla_lavado_faltante(exc):
     )
 
 
+REGISTRO_METRICAS = (
+    "Vehículos activos",
+    "Usos de baño hoy",
+    "Estimado activos",
+    "Total proyectado",
+    "Total turno",
+    "Neto en caja",
+)
+(
+    METRICA_VEHICULOS_ACTIVOS,
+    METRICA_USOS_BANO,
+    METRICA_ESTIMADO_ACTIVOS,
+    METRICA_TOTAL_PROYECTADO,
+    METRICA_TOTAL_TURNO,
+    METRICA_NETO_CAJA,
+) = REGISTRO_METRICAS
+
+
+def calcular_metricas_resumen(total_activos, resumen_caja):
+    """Calcula los importes de las tarjetas sin mezclar estimaciones con cobros."""
+    total_turno = float(resumen_caja["total_general"])
+    return {
+        "estimado_activos": float(total_activos),
+        "total_proyectado": total_turno + float(total_activos),
+        "total_turno": total_turno,
+        "neto_caja": float(resumen_caja["total_neto"]),
+    }
+
+
+class TarjetaResumen(QFrame):
+    """Tarjeta de métrica que revela su valor al pasar el mouse en modo privacidad."""
+
+    def __init__(self, titulo, valor, icono, ayuda=None, modo_privacidad=False):
+        super().__init__()
+        self.setObjectName("ResumenModulo")
+        self.setMinimumHeight(96)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setMouseTracking(True)
+        self.valor_real = valor
+        self.modo_privacidad = modo_privacidad
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(4)
+
+        encabezado = QHBoxLayout()
+        encabezado.setSpacing(6)
+        self.label_icono = QLabel(icono)
+        self.label_icono.setObjectName("IconoResumenModulo")
+        self.label_titulo = QLabel(titulo)
+        self.label_titulo.setObjectName("TituloResumenModulo")
+        self.label_titulo.setWordWrap(True)
+        encabezado.addWidget(self.label_icono, 0, alignment=Qt.AlignTop)
+        encabezado.addWidget(self.label_titulo, 1)
+
+        self.label_valor = QLabel()
+        self.label_valor.setObjectName("ValorResumenModulo")
+        self.label_valor.setWordWrap(True)
+        layout.addLayout(encabezado)
+        if ayuda:
+            self.label_ayuda = QLabel(ayuda)
+            self.label_ayuda.setObjectName("AyudaResumenModulo")
+            self.label_ayuda.setWordWrap(True)
+            layout.addWidget(self.label_ayuda)
+        layout.addWidget(self.label_valor)
+        self.actualizar_valor_visible()
+
+    def set_valor(self, valor):
+        self.valor_real = valor
+        self.actualizar_valor_visible()
+
+    def set_modo_privacidad(self, activo):
+        self.modo_privacidad = activo
+        self.actualizar_valor_visible()
+
+    def actualizar_valor_visible(self, revelar=False):
+        self.label_valor.setText(self.valor_real if revelar or not self.modo_privacidad else "Oculto")
+
+    def enterEvent(self, event):
+        self.actualizar_valor_visible(revelar=True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.actualizar_valor_visible()
+        super().leaveEvent(event)
+
+
 class RegistroWindow(QWidget):
     """
     Vista principal para el registro de ingresos y salidas de vehículos.
@@ -114,6 +202,7 @@ class RegistroWindow(QWidget):
         self.indice_patente_f4 = -1
         self.busqueda_f4 = ""
         self.seleccion_f4 = None
+        self.modo_privacidad_metricas = obtener_modo_privacidad_metricas()
 
         self.setMinimumSize(1000, 650)
         self.init_ui()
@@ -366,18 +455,26 @@ class RegistroWindow(QWidget):
         resumen_layout = QHBoxLayout()
         resumen_layout.setSpacing(12)
 
-        self.card_estacionados = self.crear_tarjeta_resumen("Vehículos activos", "0")
-        self.card_banos = self.crear_tarjeta_resumen("Usos de baño hoy", "0")
-        self.card_total_activos = self.crear_tarjeta_resumen("Total activos", "$0")
-        self.card_total_turno = self.crear_tarjeta_resumen("Total turno", "$0")
-        self.card_total_caja = self.crear_tarjeta_resumen("Total actual en caja", "$0")
-        self.card_neto_caja = self.crear_tarjeta_resumen("Neto en caja", "$0")
+        self.card_estacionados = self.crear_tarjeta_resumen(METRICA_VEHICULOS_ACTIVOS, "0", "🚗")
+        self.card_banos = self.crear_tarjeta_resumen(METRICA_USOS_BANO, "0", "🚻")
+        self.card_total_activos = self.crear_tarjeta_resumen(
+            METRICA_ESTIMADO_ACTIVOS, "$0", "≈", "Vehículos sin cobrar"
+        )
+        self.card_total_proyectado = self.crear_tarjeta_resumen(
+            METRICA_TOTAL_PROYECTADO, "$0", "↗", "Cobrado + activos estimados"
+        )
+        self.card_total_turno = self.crear_tarjeta_resumen(
+            METRICA_TOTAL_TURNO, "$0", "💵", "Cobrado desde último cierre"
+        )
+        self.card_neto_caja = self.crear_tarjeta_resumen(
+            METRICA_NETO_CAJA, "$0", "💰", "Cobrado - gastos"
+        )
 
         resumen_layout.addWidget(self.card_estacionados)
         resumen_layout.addWidget(self.card_banos)
         resumen_layout.addWidget(self.card_total_activos)
+        resumen_layout.addWidget(self.card_total_proyectado)
         resumen_layout.addWidget(self.card_total_turno)
-        resumen_layout.addWidget(self.card_total_caja)
         resumen_layout.addWidget(self.card_neto_caja)
         resumen_layout.addStretch()
 
@@ -452,30 +549,14 @@ class RegistroWindow(QWidget):
 
         QTimer.singleShot(0, self.input_patente.setFocus)
 
-    def crear_tarjeta_resumen(self, titulo, valor):
-        frame = QFrame()
-        frame.setObjectName("ResumenModulo")
-        frame.setMinimumHeight(86)
-        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(4)
-
-        label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("TituloResumenModulo")
-        label_titulo.setWordWrap(True)
-
-        label_valor = QLabel(valor)
-        label_valor.setObjectName("ValorResumenModulo")
-        label_valor.setWordWrap(True)
-
-        layout.addWidget(label_titulo)
-        layout.addWidget(label_valor)
-
-        frame.label_titulo = label_titulo
-        frame.label_valor = label_valor
-        return frame
+    def crear_tarjeta_resumen(self, titulo, valor, icono, ayuda=None):
+        return TarjetaResumen(
+            titulo,
+            valor,
+            icono,
+            ayuda,
+            modo_privacidad=self.modo_privacidad_metricas,
+        )
 
     def toggle_panel_secundario(self):
         self.panel_secundario_expandido = not self.panel_secundario_expandido
@@ -1033,13 +1114,13 @@ class RegistroWindow(QWidget):
         total_banos = float(resumen_banos["total"])
         resumen_caja = obtener_resumen_caja_actual()
 
-        self.card_estacionados.label_valor.setText(str(len(datos)))
-        self.card_total_activos.label_valor.setText(f"${total:.0f}")
-        # Collected cash since the last daily close; active quotes are not revenue.
-        self.card_total_turno.label_valor.setText(f"${resumen_caja['total_general']:.0f}")
-        self.card_total_caja.label_valor.setText(f"${resumen_caja['total_general']:.0f}")
-        self.card_neto_caja.label_valor.setText(f"${resumen_caja['total_neto']:.0f}")
-        self.card_banos.label_valor.setText(
+        metricas = calcular_metricas_resumen(total, resumen_caja)
+        self.card_estacionados.set_valor(str(len(datos)))
+        self.card_total_activos.set_valor(f"${metricas['estimado_activos']:.0f}")
+        self.card_total_proyectado.set_valor(f"${metricas['total_proyectado']:.0f}")
+        self.card_total_turno.set_valor(f"${metricas['total_turno']:.0f}")
+        self.card_neto_caja.set_valor(f"${metricas['neto_caja']:.0f}")
+        self.card_banos.set_valor(
             f"{resumen_banos['cantidad']} | ${total_banos:.0f}"
         )
 
