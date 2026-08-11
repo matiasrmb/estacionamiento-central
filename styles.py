@@ -63,6 +63,12 @@ QLabel#IconoResumenModulo {
     font-size: 17px;
 }
 
+QLabel#IconoPrivacidadResumenModulo {
+    font-size: 32px;
+    font-weight: 700;
+    color: #374151;
+}
+
 QLabel#TituloAcceso {
     font-size: 24px;
     font-weight: 700;

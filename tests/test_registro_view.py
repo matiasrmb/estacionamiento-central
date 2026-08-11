@@ -24,15 +24,41 @@ class RegistroMetricCardTests(unittest.TestCase):
         tarjeta = TarjetaResumen("Total turno", "$5000", "$")
 
         self.assertEqual(tarjeta.label_valor.text(), "$5000")
+        self.assertFalse(tarjeta.label_valor.isHidden())
+        self.assertFalse(tarjeta.label_icono.isHidden())
+        self.assertEqual(tarjeta.label_icono.text(), "$")
+        self.assertTrue(tarjeta.label_privacidad.isHidden())
 
     def test_privacidad_oculta_y_revela_el_valor_al_pasarlo_con_el_mouse(self):
-        tarjeta = TarjetaResumen("Total turno", "$5000", "$", modo_privacidad=True)
+        tarjeta = TarjetaResumen(
+            "Total turno",
+            "$5000",
+            "💰",
+            ayuda="Cobrado desde último cierre",
+            modo_privacidad=True,
+        )
 
-        self.assertEqual(tarjeta.label_valor.text(), "Oculto")
+        self.assertEqual(tarjeta.label_titulo.text(), "Total turno")
+        self.assertFalse(tarjeta.label_titulo.isHidden())
+        self.assertEqual(tarjeta.label_ayuda.text(), "Cobrado desde último cierre")
+        self.assertFalse(tarjeta.label_ayuda.isHidden())
+        self.assertEqual(tarjeta.label_valor.text(), "")
+        self.assertTrue(tarjeta.label_valor.isHidden())
+        self.assertTrue(tarjeta.label_icono.isHidden())
+        self.assertFalse(tarjeta.label_privacidad.isHidden())
+        self.assertEqual(tarjeta.label_privacidad.text(), "💰")
+        self.assertEqual(tarjeta.label_privacidad.objectName(), "IconoPrivacidadResumenModulo")
+        self.assertNotIn("Oculto", [label.text() for label in tarjeta.findChildren(QLabel)])
         tarjeta.enterEvent(QEnterEvent(QPointF(), QPointF(), QPointF()))
         self.assertEqual(tarjeta.label_valor.text(), "$5000")
+        self.assertFalse(tarjeta.label_valor.isHidden())
+        self.assertFalse(tarjeta.label_icono.isHidden())
+        self.assertTrue(tarjeta.label_privacidad.isHidden())
         tarjeta.leaveEvent(QEvent(QEvent.Leave))
-        self.assertEqual(tarjeta.label_valor.text(), "Oculto")
+        self.assertEqual(tarjeta.label_valor.text(), "")
+        self.assertTrue(tarjeta.label_valor.isHidden())
+        self.assertTrue(tarjeta.label_icono.isHidden())
+        self.assertFalse(tarjeta.label_privacidad.isHidden())
 
     def test_orden_y_formulas_de_metricas_del_registro(self):
         metricas = calcular_metricas_resumen(1250, {"total_general": 5000, "total_neto": 4400})

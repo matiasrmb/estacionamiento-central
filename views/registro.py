@@ -136,6 +136,7 @@ class TarjetaResumen(QFrame):
         self.setMouseTracking(True)
         self.valor_real = valor
         self.modo_privacidad = modo_privacidad
+        self.mouse_sobre_tarjeta = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -154,6 +155,9 @@ class TarjetaResumen(QFrame):
         self.label_valor = QLabel()
         self.label_valor.setObjectName("ValorResumenModulo")
         self.label_valor.setWordWrap(True)
+        self.label_privacidad = QLabel(icono)
+        self.label_privacidad.setObjectName("IconoPrivacidadResumenModulo")
+        self.label_privacidad.setAlignment(Qt.AlignCenter)
         layout.addLayout(encabezado)
         if ayuda:
             self.label_ayuda = QLabel(ayuda)
@@ -161,6 +165,7 @@ class TarjetaResumen(QFrame):
             self.label_ayuda.setWordWrap(True)
             layout.addWidget(self.label_ayuda)
         layout.addWidget(self.label_valor)
+        layout.addWidget(self.label_privacidad)
         self.actualizar_valor_visible()
 
     def set_valor(self, valor):
@@ -172,13 +177,20 @@ class TarjetaResumen(QFrame):
         self.actualizar_valor_visible()
 
     def actualizar_valor_visible(self, revelar=False):
-        self.label_valor.setText(self.valor_real if revelar or not self.modo_privacidad else "Oculto")
+        revelar = revelar or self.mouse_sobre_tarjeta
+        valor_visible = not self.modo_privacidad or revelar
+        self.label_valor.setText(self.valor_real if valor_visible else "")
+        self.label_valor.setVisible(valor_visible)
+        self.label_icono.setVisible(valor_visible)
+        self.label_privacidad.setVisible(self.modo_privacidad and not revelar)
 
     def enterEvent(self, event):
-        self.actualizar_valor_visible(revelar=True)
+        self.mouse_sobre_tarjeta = True
+        self.actualizar_valor_visible()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
+        self.mouse_sobre_tarjeta = False
         self.actualizar_valor_visible()
         super().leaveEvent(event)
 
