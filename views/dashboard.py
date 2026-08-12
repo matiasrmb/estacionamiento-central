@@ -1,13 +1,36 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QMessageBox,
-    QGridLayout, QFrame, QSizePolicy, QHBoxLayout
+    QGridLayout, QHBoxLayout
 )
 from PySide6.QtCore import QDateTime, QTimer, Qt
 
-from controllers.dashboard_controller import obtener_resumen_diario, obtener_resumen_banos
+from controllers.dashboard_controller import obtener_resumen_diario
 from controllers.cierres_controller import realizar_cierre_diario
 from utils.db import db_cursor
+from utils.local_preferences import obtener_modo_privacidad_metricas
+from views.registro import TarjetaResumen
 from datetime import datetime
+
+
+DASHBOARD_METRICAS = (
+    ("Operación", (
+        ("ingresos", "Ingresos registrados", "0", "ingresos-registrados.svg", "Ingresos creados desde el último cierre."),
+        ("vehiculos", "Vehículos activos", "0", "vehiculos-activos.svg", "Vehículos con estadía abierta. No incluye lavados solos."),
+        ("banos", "Usos de baño", "0 | $0", "usos-bano-hoy.svg", "Usos y cobros pendientes de cierre."),
+        ("lavados", "Lavados cobrados", "0 | $0", "lavados-cobrados.svg", "Solo lavados finalizados y cobrados, pendientes de cierre. Los lavados asociados a una estadía se cobran dentro de la salida del vehículo."),
+        ("mensualidades", "Mensualidades del mes", "0 | $0", "mensualidades-mes.svg", "Pagos registrados en el mes calendario actual; puede incluir pagos ya cerrados."),
+        ("noches", "Noches cobradas", "0 | $0", "noches-cobradas.svg", "Cobros prepagados de Noche pendientes de cierre."),
+    )),
+    ("Caja", (
+        ("total_turno", "Total turno", "$0", "total-turno.svg", "Cobros pendientes de cierre."),
+        ("gastos", "Gastos", "$0", "gastos.svg", "Gastos operacionales pendientes de cierre."),
+        ("neto_caja", "Neto en caja", "$0", "neto-caja.svg", "Total turno menos gastos pendientes de cierre."),
+    )),
+    ("Proyección", (
+        ("estimado", "Estimado por cobrar", "$0", "estimado-activos.svg", "Cotización actual de estadías abiertas y servicios aún no cobrados. No es efectivo en caja."),
+        ("total_proyectado", "Total proyectado", "$0", "total-proyectado.svg", "Recaudado pendiente de cierre más cobros estimados aún no realizados. No descuenta gastos."),
+    )),
+)
 
 
 class DashboardWindow(QWidget):
@@ -25,6 +48,7 @@ class DashboardWindow(QWidget):
         self.on_ir_panel = on_ir_panel
         self.on_ir_registro = on_ir_registro
         self.on_ir_reportes = on_ir_reportes
+        self.modo_privacidad_metricas = obtener_modo_privacidad_metricas()
 
         self.actualizacion_habilitada = True
         self.init_ui()
@@ -57,26 +81,28 @@ class DashboardWindow(QWidget):
         # =========================================================
         # TARJETAS DE RESUMEN
         # =========================================================
-        grid_resumen = QGridLayout()
-        grid_resumen.setHorizontalSpacing(12)
-        grid_resumen.setVerticalSpacing(12)
+        self.tarjetas_metricas = {}
+        for seccion, definiciones in DASHBOARD_METRICAS:
+            titulo_seccion = QLabel(seccion)
+            titulo_seccion.setObjectName("SubtituloSeccion")
+            layout.addWidget(titulo_seccion)
 
-        self.card_ingresos = self.crear_tarjeta("Ingresos del turno", "0")
-        self.card_estacionados = self.crear_tarjeta("Vehículos estacionados", "0")
-        self.card_recaudado = self.crear_tarjeta("Recaudado vehículos", "$0")
-        self.card_banos = self.crear_tarjeta("Usos de baño", "0 | $0")
-        self.card_total = self.crear_tarjeta("Total general", "$0")
-
-        grid_resumen.addWidget(self.card_ingresos["frame"], 0, 0)
-        grid_resumen.addWidget(self.card_estacionados["frame"], 0, 1)
-        grid_resumen.addWidget(self.card_recaudado["frame"], 1, 0)
-        grid_resumen.addWidget(self.card_banos["frame"], 1, 1)
-        grid_resumen.addWidget(self.card_total["frame"], 2, 0, 1, 2)
-
-        grid_resumen.setColumnStretch(0, 1)
-        grid_resumen.setColumnStretch(1, 1)
-
-        layout.addLayout(grid_resumen)
+            grid_resumen = QGridLayout()
+            grid_resumen.setHorizontalSpacing(12)
+            grid_resumen.setVerticalSpacing(12)
+            for indice, (clave, titulo, valor, icono, ayuda) in enumerate(definiciones):
+                tarjeta = TarjetaResumen(
+                    titulo,
+                    valor,
+                    icono,
+                    ayuda,
+                    modo_privacidad=self.modo_privacidad_metricas,
+                )
+                self.tarjetas_metricas[clave] = tarjeta
+                grid_resumen.addWidget(tarjeta, indice // 3, indice % 3)
+            for columna in range(3):
+                grid_resumen.setColumnStretch(columna, 1)
+            layout.addLayout(grid_resumen)
 
         # =========================================================
         # ACCIONES PRINCIPALES
@@ -133,34 +159,6 @@ class DashboardWindow(QWidget):
 
         self.actualizar_resumen()
 
-    def crear_tarjeta(self, titulo, valor):
-        frame = QFrame()
-        frame.setObjectName("TarjetaResumen")
-        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        frame.setMinimumHeight(110)
-
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(6)
-
-        label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("TituloResumenModulo")
-        label_titulo.setWordWrap(True)
-
-        label_valor = QLabel(valor)
-        label_valor.setObjectName("ValorResumenModulo")
-        label_valor.setWordWrap(True)
-
-        layout.addWidget(label_titulo)
-        layout.addWidget(label_valor)
-        layout.addStretch()
-
-        return {
-            "frame": frame,
-            "titulo": label_titulo,
-            "valor": label_valor
-        }
-
     def actualizar_hora(self):
         hora_actual = QDateTime.currentDateTime().toString("hh:mm:ss")
         self.label_hora.setText(f"Hora actual: {hora_actual}")
@@ -183,17 +181,29 @@ class DashboardWindow(QWidget):
             return
 
         resumen = obtener_resumen_diario()
-        resumen_banos = obtener_resumen_banos()
-
-        self.card_ingresos["valor"].setText(str(resumen["total_ingresos"]))
-        self.card_estacionados["valor"].setText(str(resumen["estacionados"]))
-        self.card_recaudado["valor"].setText(f"${resumen['recaudado']:.0f}")
-        self.card_banos["valor"].setText(f"{resumen_banos['cantidad']} | ${resumen_banos['total']:.0f}")
-        self.card_total["valor"].setText(f"${resumen['total_neto']:.0f}")
+        self.tarjetas_metricas["ingresos"].set_valor(str(resumen["total_ingresos"]))
+        self.tarjetas_metricas["vehiculos"].set_valor(str(resumen["vehiculos_activos"]))
+        self.tarjetas_metricas["banos"].set_valor(
+            f"{resumen['usos_bano']} | ${resumen['usos_bano_monto']:.0f}"
+        )
+        self.tarjetas_metricas["lavados"].set_valor(
+            f"{resumen['lavados_cobrados']} | ${resumen['lavados_cobrados_monto']:.0f}"
+        )
+        self.tarjetas_metricas["mensualidades"].set_valor(
+            f"{resumen['mensualidades_mes']} | ${resumen['mensualidades_mes_monto']:.0f}"
+        )
+        self.tarjetas_metricas["noches"].set_valor(
+            f"{resumen['noches_cobradas']} | ${resumen['noches_cobradas_monto']:.0f}"
+        )
+        self.tarjetas_metricas["total_turno"].set_valor(f"${resumen['total_turno']:.0f}")
+        self.tarjetas_metricas["gastos"].set_valor(f"${resumen['gastos']:.0f}")
+        self.tarjetas_metricas["neto_caja"].set_valor(f"${resumen['neto_caja']:.0f}")
+        self.tarjetas_metricas["estimado"].set_valor(f"${resumen['estimado_por_cobrar']:.0f}")
+        self.tarjetas_metricas["total_proyectado"].set_valor(f"${resumen['total_proyectado']:.0f}")
 
         self.label_periodo.setText(self.obtener_periodo_resumen())
 
-        if resumen["total_ingresos"] > 0 or resumen_banos["cantidad"] > 0 or resumen["recaudado"] > 0:
+        if resumen["total_ingresos"] > 0 or resumen["usos_bano"] > 0 or resumen["total_turno"] > 0:
             self.actualizacion_habilitada = True
 
     def confirmar_cierre_diario(self):
@@ -208,13 +218,9 @@ class DashboardWindow(QWidget):
             if exito:
                 QMessageBox.information(self, "Éxito", mensaje)
 
-                self.card_ingresos["valor"].setText("0")
-                self.card_estacionados["valor"].setText("0")
-                self.card_recaudado["valor"].setText("$0")
-                self.card_banos["valor"].setText("0 | $0")
-                self.card_total["valor"].setText("$0")
-                self.label_periodo.setText(self.obtener_periodo_resumen())
-                self.actualizacion_habilitada = False
+                # Algunas métricas no dependen del cierre; recargar evita mostrarlas como cero.
+                self.actualizacion_habilitada = True
+                self.actualizar_resumen()
             else:
                 QMessageBox.information(self, "Cierre diario", mensaje)
 

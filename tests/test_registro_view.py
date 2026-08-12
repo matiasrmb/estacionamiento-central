@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QEvent, QPointF
+from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QEnterEvent
 from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
 from views.admin_edicion import EdicionIngresosWindow
@@ -21,32 +21,34 @@ class RegistroMetricCardTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def test_privacidad_esta_desactivada_por_defecto(self):
-        tarjeta = TarjetaResumen("Total turno", "$5000", "$")
+        tarjeta = TarjetaResumen("Total turno", "$5000", "total-turno.svg")
 
         self.assertEqual(tarjeta.label_valor.text(), "$5000")
         self.assertFalse(tarjeta.label_valor.isHidden())
         self.assertFalse(tarjeta.label_icono.isHidden())
-        self.assertEqual(tarjeta.label_icono.text(), "$")
+        self.assertEqual(tarjeta.icono_archivo, "total-turno.svg")
+        self.assertFalse(tarjeta.label_icono.pixmap().isNull())
         self.assertTrue(tarjeta.label_privacidad.isHidden())
 
     def test_privacidad_oculta_y_revela_el_valor_al_pasarlo_con_el_mouse(self):
         tarjeta = TarjetaResumen(
             "Total turno",
             "$5000",
-            "💰",
+            "neto-caja.svg",
             ayuda="Cobrado desde último cierre",
             modo_privacidad=True,
         )
 
         self.assertEqual(tarjeta.label_titulo.text(), "Total turno")
         self.assertFalse(tarjeta.label_titulo.isHidden())
-        self.assertEqual(tarjeta.label_ayuda.text(), "Cobrado desde último cierre")
-        self.assertFalse(tarjeta.label_ayuda.isHidden())
+        self.assertEqual(tarjeta.label_ayuda.text(), "i")
+        self.assertEqual(tarjeta.label_ayuda.toolTip(), "Cobrado desde último cierre")
+        self.assertEqual(tarjeta.label_titulo.toolTip(), "Cobrado desde último cierre")
         self.assertEqual(tarjeta.label_valor.text(), "")
         self.assertTrue(tarjeta.label_valor.isHidden())
         self.assertTrue(tarjeta.label_icono.isHidden())
         self.assertFalse(tarjeta.label_privacidad.isHidden())
-        self.assertEqual(tarjeta.label_privacidad.text(), "💰")
+        self.assertFalse(tarjeta.label_privacidad.pixmap().isNull())
         self.assertEqual(tarjeta.label_privacidad.objectName(), "IconoPrivacidadResumenModulo")
         self.assertNotIn("Oculto", [label.text() for label in tarjeta.findChildren(QLabel)])
         tarjeta.enterEvent(QEnterEvent(QPointF(), QPointF(), QPointF()))
@@ -59,6 +61,31 @@ class RegistroMetricCardTests(unittest.TestCase):
         self.assertTrue(tarjeta.label_valor.isHidden())
         self.assertTrue(tarjeta.label_icono.isHidden())
         self.assertFalse(tarjeta.label_privacidad.isHidden())
+
+    def test_tarjetas_mantienen_altura_fija_en_privacidad_y_al_revelar(self):
+        tarjeta = TarjetaResumen(
+            "Total proyectado",
+            "$5000",
+            "total-proyectado.svg",
+            modo_privacidad=True,
+        )
+
+        self.assertEqual(tarjeta.minimumHeight(), 112)
+        self.assertEqual(tarjeta.maximumHeight(), 112)
+        tarjeta.enterEvent(QEnterEvent(QPointF(), QPointF(), QPointF()))
+        self.assertEqual(tarjeta.height(), 112)
+
+    def test_titulo_permanece_alineado_arriba_al_revelar_privacidad(self):
+        tarjeta = TarjetaResumen(
+            "Total proyectado",
+            "$5000",
+            "total-proyectado.svg",
+            modo_privacidad=True,
+        )
+
+        self.assertEqual(tarjeta.label_titulo.alignment(), Qt.AlignLeft | Qt.AlignTop)
+        tarjeta.enterEvent(QEnterEvent(QPointF(), QPointF(), QPointF()))
+        self.assertEqual(tarjeta.label_titulo.alignment(), Qt.AlignLeft | Qt.AlignTop)
 
     def test_orden_y_formulas_de_metricas_del_registro(self):
         metricas = calcular_metricas_resumen(1250, {"total_general": 5000, "total_neto": 4400})
@@ -75,6 +102,40 @@ class RegistroMetricCardTests(unittest.TestCase):
         self.assertEqual(metricas["total_proyectado"], 6250)
         self.assertEqual(metricas["total_turno"], 5000)
         self.assertEqual(metricas["neto_caja"], 4400)
+
+    def test_total_proyectado_del_registro_incluye_servicios_activos(self):
+        vista = Mock()
+        vista.subida_vigente_ahora.return_value = False
+        vista._fila_solo_lavado.return_value = {
+            "patente": "Solo lavado: ABC123",
+            "hora": "12/08/2026 10:00",
+            "monto": 3000,
+            "minutos": 0,
+            "tipo_fila": "solo_lavado",
+        }
+        vista.tabla_activos = Mock()
+        vista.grupo_tabla = Mock()
+        vista.label_leyenda_tabla = Mock()
+        vista.aplicar_estilo_fila_total = Mock()
+        vista.card_estacionados = Mock()
+        vista.card_total_activos = Mock()
+        vista.card_total_proyectado = Mock()
+        vista.card_total_turno = Mock()
+        vista.card_neto_caja = Mock()
+        vista.card_banos = Mock()
+
+        with patch("views.registro.obtener_vehiculos_activos", return_value=[{
+            "patente": "AAA111",
+            "hora": "12/08/2026 09:00",
+            "monto": 5000,
+            "minutos": 60,
+        }]), patch("views.registro.obtener_solo_lavados_activos", return_value=[{"id_operacion_servicio": 7}]), \
+             patch("views.registro.obtener_resumen_banos", return_value={"cantidad": 0, "total": 0}), \
+             patch("views.registro.obtener_resumen_caja_actual", return_value={"total_general": 10000, "total_neto": 9000}):
+            RegistroWindow.actualizar_tabla_activos(vista)
+
+        vista.card_total_activos.set_valor.assert_called_with("$8000")
+        vista.card_total_proyectado.set_valor.assert_called_with("$18000")
 
 
 class RegistroViewReingresoTests(unittest.TestCase):

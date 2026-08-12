@@ -5,10 +5,12 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QGridLayout, QFrame, QSizePolicy, QScrollArea,
     QDialog, QDialogButtonBox, QInputDialog
 )
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QShortcut, QKeySequence
+from PySide6.QtCore import QTimer, Qt, QSize
+from PySide6.QtGui import QIcon, QShortcut, QKeySequence
 from datetime import datetime, timedelta
 from html import escape
+from pathlib import Path
+import sys
 from controllers.registro_controller import (
     buscar_estado_vehiculo, registrar_ingreso_detallado, registrar_ingreso_con_noches_detallado,
     obtener_opcion_noches,
@@ -59,6 +61,12 @@ def formatear_hora(valor):
         return datetime.strptime(str(valor), "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
     except ValueError:
         return str(valor)
+
+
+def ruta_recurso(*partes):
+    """Resuelve recursos tanto desde el código fuente como desde PyInstaller."""
+    base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    return str(base_dir.joinpath(*partes))
 
 
 def construir_mensaje_ingreso(ingreso, mensaje="Vehículo ingresado correctamente", detalle=None):
@@ -128,15 +136,17 @@ def calcular_metricas_resumen(total_activos, resumen_caja):
 class TarjetaResumen(QFrame):
     """Tarjeta de métrica que revela su valor al pasar el mouse en modo privacidad."""
 
-    def __init__(self, titulo, valor, icono, ayuda=None, modo_privacidad=False):
+    def __init__(self, titulo, valor, icono_archivo, ayuda=None, modo_privacidad=False):
         super().__init__()
         self.setObjectName("ResumenModulo")
-        self.setMinimumHeight(96)
+        self.setFixedHeight(112)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMouseTracking(True)
         self.valor_real = valor
         self.modo_privacidad = modo_privacidad
         self.mouse_sobre_tarjeta = False
+        self.icono_archivo = icono_archivo
+        self.icono = QIcon(ruta_recurso("assets", "icons", icono_archivo))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -144,26 +154,32 @@ class TarjetaResumen(QFrame):
 
         encabezado = QHBoxLayout()
         encabezado.setSpacing(6)
-        self.label_icono = QLabel(icono)
+        self.label_icono = QLabel()
         self.label_icono.setObjectName("IconoResumenModulo")
+        self.label_icono.setPixmap(self.icono.pixmap(QSize(22, 22)))
         self.label_titulo = QLabel(titulo)
         self.label_titulo.setObjectName("TituloResumenModulo")
         self.label_titulo.setWordWrap(True)
+        self.label_titulo.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.label_titulo.setToolTip(ayuda or titulo)
         encabezado.addWidget(self.label_icono, 0, alignment=Qt.AlignTop)
-        encabezado.addWidget(self.label_titulo, 1)
+        encabezado.addWidget(self.label_titulo, 1, alignment=Qt.AlignTop)
+        if ayuda:
+            self.label_ayuda = QLabel("i")
+            self.label_ayuda.setObjectName("AyudaResumenModulo")
+            self.label_ayuda.setToolTip(ayuda)
+            self.label_ayuda.setFixedSize(16, 16)
+            self.label_ayuda.setAlignment(Qt.AlignCenter)
+            encabezado.addWidget(self.label_ayuda, 0, alignment=Qt.AlignTop)
 
         self.label_valor = QLabel()
         self.label_valor.setObjectName("ValorResumenModulo")
         self.label_valor.setWordWrap(True)
-        self.label_privacidad = QLabel(icono)
+        self.label_privacidad = QLabel()
         self.label_privacidad.setObjectName("IconoPrivacidadResumenModulo")
         self.label_privacidad.setAlignment(Qt.AlignCenter)
+        self.label_privacidad.setPixmap(self.icono.pixmap(QSize(36, 36)))
         layout.addLayout(encabezado)
-        if ayuda:
-            self.label_ayuda = QLabel(ayuda)
-            self.label_ayuda.setObjectName("AyudaResumenModulo")
-            self.label_ayuda.setWordWrap(True)
-            layout.addWidget(self.label_ayuda)
         layout.addWidget(self.label_valor)
         layout.addWidget(self.label_privacidad)
         self.actualizar_valor_visible()
@@ -467,19 +483,23 @@ class RegistroWindow(QWidget):
         resumen_layout = QHBoxLayout()
         resumen_layout.setSpacing(12)
 
-        self.card_estacionados = self.crear_tarjeta_resumen(METRICA_VEHICULOS_ACTIVOS, "0", "🚗")
-        self.card_banos = self.crear_tarjeta_resumen(METRICA_USOS_BANO, "0", "🚻")
+        self.card_estacionados = self.crear_tarjeta_resumen(
+            METRICA_VEHICULOS_ACTIVOS, "0", "vehiculos-activos.svg"
+        )
+        self.card_banos = self.crear_tarjeta_resumen(
+            METRICA_USOS_BANO, "0", "usos-bano-hoy.svg"
+        )
         self.card_total_activos = self.crear_tarjeta_resumen(
-            METRICA_ESTIMADO_ACTIVOS, "$0", "≈", "Vehículos sin cobrar"
+            METRICA_ESTIMADO_ACTIVOS, "$0", "estimado-activos.svg", "Vehículos sin cobrar"
         )
         self.card_total_proyectado = self.crear_tarjeta_resumen(
-            METRICA_TOTAL_PROYECTADO, "$0", "↗", "Cobrado + activos estimados"
+            METRICA_TOTAL_PROYECTADO, "$0", "total-proyectado.svg", "Cobrado + activos estimados"
         )
         self.card_total_turno = self.crear_tarjeta_resumen(
-            METRICA_TOTAL_TURNO, "$0", "💵", "Cobrado desde último cierre"
+            METRICA_TOTAL_TURNO, "$0", "total-turno.svg", "Cobrado desde último cierre"
         )
         self.card_neto_caja = self.crear_tarjeta_resumen(
-            METRICA_NETO_CAJA, "$0", "💰", "Cobrado - gastos"
+            METRICA_NETO_CAJA, "$0", "neto-caja.svg", "Cobrado - gastos"
         )
 
         resumen_layout.addWidget(self.card_estacionados)
@@ -1094,8 +1114,7 @@ class RegistroWindow(QWidget):
             item_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 3, item_monto)
 
-            if vehiculo.get("tipo_fila") != "solo_lavado":
-                total += monto
+            total += monto
 
         fila_total = len(filas)
 
