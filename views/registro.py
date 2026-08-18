@@ -108,7 +108,7 @@ def construir_info_patente_navegada(tecla, posicion, total, patente, estado, ing
         f"<b>Tiempo: {minutos} min</b>",
         f"<b>{escape(etiqueta_monto)}: ${monto:.0f}</b>",
     ]
-    return '<div style="font-size: 14pt;">' + "<br>".join(lineas) + "</div>"
+    return '<div style="font-size: 14px;">' + "<br>".join(lineas) + "</div>"
 
 
 def _es_tabla_lavado_faltante(exc):

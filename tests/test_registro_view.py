@@ -404,7 +404,7 @@ class RegistroViewPopupTests(unittest.TestCase):
         self.assertIn("<b>Salida: 14:45</b>", mensaje)
         self.assertIn("<b>Tiempo: 330 min</b>", mensaje)
         self.assertIn("<b>Total: $2500</b>", mensaje)
-        self.assertIn("font-size: 14pt", mensaje)
+        self.assertIn("font-size: 14px", mensaje)
         self.assertIn("<br>", mensaje)
         self.assertNotIn("|", mensaje)
         self.assertNotIn("2026-07-30", mensaje)
@@ -436,7 +436,7 @@ class RegistroViewPopupTests(unittest.TestCase):
         )
 
         self.assertEqual(vista.hora_consulta_label.objectName(), "PreviewSalida")
-        self.assertIn("font-size: 14pt", vista.hora_consulta_label.text())
+        self.assertIn("font-size: 14px", vista.hora_consulta_label.text())
         self.assertIn("<b>Patente: ABC123</b>", vista.hora_consulta_label.text())
 
     def test_popup_ingreso_omite_fecha_y_destaca_patente_y_hora(self):
