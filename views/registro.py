@@ -100,15 +100,15 @@ def construir_info_patente_navegada(tecla, posicion, total, patente, estado, ing
     """Construye el resumen vertical de una patente seleccionada con F3 o F4."""
     etiqueta_monto = "Total" if "CERRADO" in estado else "Monto actual"
     lineas = [
-        f"<b>{escape(tecla)} {posicion}/{total}</b>",
-        f"<b>Patente: {escape(patente)}</b>",
-        f"<b>Estado: {escape(estado)}</b>",
-        f"<b>Ingreso: {escape(str(ingreso))}</b>",
-        f"<b>Salida: {escape(str(salida))}</b>",
-        f"<b>Tiempo: {minutos} min</b>",
-        f"<b>{escape(etiqueta_monto)}: ${monto:.0f}</b>",
+        f"{escape(tecla)} {posicion}/{total}",
+        f"Patente: {escape(patente)}",
+        f"Estado: {escape(estado)}",
+        f"Ingreso: {escape(str(ingreso))}",
+        f"Salida: {escape(str(salida))}",
+        f"Tiempo: {minutos} min",
+        f"{escape(etiqueta_monto)}: ${monto:.0f}",
     ]
-    return '<div style="font-size: 14px;">' + "<br>".join(lineas) + "</div>"
+    return '<div style="font-family: &quot;Segoe UI&quot;, Arial, sans-serif; font-size: 14px; font-weight: 600;">' + "<br>".join(lineas) + "</div>"
 
 
 def _es_tabla_lavado_faltante(exc):

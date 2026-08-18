@@ -397,13 +397,15 @@ class RegistroViewPopupTests(unittest.TestCase):
             "F4", 2, 3, "ABC123", "CERRADO", "09:15", "14:45", 330, 2500,
         )
 
-        self.assertIn("<b>F4 2/3</b>", mensaje)
-        self.assertIn("<b>Patente: ABC123</b>", mensaje)
-        self.assertIn("<b>Estado: CERRADO</b>", mensaje)
-        self.assertIn("<b>Ingreso: 09:15</b>", mensaje)
-        self.assertIn("<b>Salida: 14:45</b>", mensaje)
-        self.assertIn("<b>Tiempo: 330 min</b>", mensaje)
-        self.assertIn("<b>Total: $2500</b>", mensaje)
+        self.assertIn("font-family: &quot;Segoe UI&quot;, Arial, sans-serif", mensaje)
+        self.assertIn("font-weight: 600", mensaje)
+        self.assertIn("F4 2/3", mensaje)
+        self.assertIn("Patente: ABC123", mensaje)
+        self.assertIn("Estado: CERRADO", mensaje)
+        self.assertIn("Ingreso: 09:15", mensaje)
+        self.assertIn("Salida: 14:45", mensaje)
+        self.assertIn("Tiempo: 330 min", mensaje)
+        self.assertIn("Total: $2500", mensaje)
         self.assertIn("font-size: 14px", mensaje)
         self.assertIn("<br>", mensaje)
         self.assertNotIn("|", mensaje)
@@ -414,9 +416,9 @@ class RegistroViewPopupTests(unittest.TestCase):
             "F3", 1, 4, "ABC123", "ABIERTO (EN ESPERA)", "09:15", "Aún dentro", 45, 1200,
         )
 
-        self.assertIn("<b>Estado: ABIERTO (EN ESPERA)</b>", mensaje)
-        self.assertIn("<b>Monto actual: $1200</b>", mensaje)
-        self.assertNotIn("<b>Total: $1200</b>", mensaje)
+        self.assertIn("Estado: ABIERTO (EN ESPERA)", mensaje)
+        self.assertIn("Monto actual: $1200", mensaje)
+        self.assertNotIn("Total: $1200", mensaje)
 
     def test_info_f3_f4_usa_mismo_estilo_visual_que_preview(self):
         vista = type("VistaInfoNavegada", (), {})()
@@ -437,7 +439,9 @@ class RegistroViewPopupTests(unittest.TestCase):
 
         self.assertEqual(vista.hora_consulta_label.objectName(), "PreviewSalida")
         self.assertIn("font-size: 14px", vista.hora_consulta_label.text())
-        self.assertIn("<b>Patente: ABC123</b>", vista.hora_consulta_label.text())
+        self.assertIn("font-family: &quot;Segoe UI&quot;, Arial, sans-serif", vista.hora_consulta_label.text())
+        self.assertIn("font-weight: 600", vista.hora_consulta_label.text())
+        self.assertIn("Patente: ABC123", vista.hora_consulta_label.text())
 
     def test_popup_ingreso_omite_fecha_y_destaca_patente_y_hora(self):
         mensaje = construir_mensaje_ingreso({
