@@ -99,15 +99,16 @@ def construir_mensaje_salida(salida):
 def construir_info_patente_navegada(tecla, posicion, total, patente, estado, ingreso, salida, minutos, monto):
     """Construye el resumen vertical de una patente seleccionada con F3 o F4."""
     etiqueta_monto = "Total" if "CERRADO" in estado else "Monto actual"
-    return "\n".join([
-        f"{tecla} {posicion}/{total}",
-        f"Patente: {patente}",
-        f"Estado: {estado}",
-        f"Ingreso: {ingreso}",
-        f"Salida: {salida}",
-        f"Tiempo: {minutos} min",
-        f"{etiqueta_monto}: ${monto:.0f}",
-    ])
+    lineas = [
+        f"<b>{escape(tecla)} {posicion}/{total}</b>",
+        f"<b>Patente:</b> {escape(patente)}",
+        f"<b>Estado:</b> {escape(estado)}",
+        f"<b>Ingreso:</b> {escape(str(ingreso))}",
+        f"<b>Salida:</b> {escape(str(salida))}",
+        f"<b>Tiempo:</b> {minutos} min",
+        f"<b>{escape(etiqueta_monto)}:</b> ${monto:.0f}",
+    ]
+    return '<div style="font-size: 14pt;">' + "<br>".join(lineas) + "</div>"
 
 
 def _es_tabla_lavado_faltante(exc):

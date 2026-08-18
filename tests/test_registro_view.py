@@ -397,15 +397,15 @@ class RegistroViewPopupTests(unittest.TestCase):
             "F4", 2, 3, "ABC123", "CERRADO", "09:15", "14:45", 330, 2500,
         )
 
-        self.assertEqual(mensaje, "\n".join([
-            "F4 2/3",
-            "Patente: ABC123",
-            "Estado: CERRADO",
-            "Ingreso: 09:15",
-            "Salida: 14:45",
-            "Tiempo: 330 min",
-            "Total: $2500",
-        ]))
+        self.assertIn("<b>F4 2/3</b>", mensaje)
+        self.assertIn("<b>Patente:</b> ABC123", mensaje)
+        self.assertIn("<b>Estado:</b> CERRADO", mensaje)
+        self.assertIn("<b>Ingreso:</b> 09:15", mensaje)
+        self.assertIn("<b>Salida:</b> 14:45", mensaje)
+        self.assertIn("<b>Tiempo:</b> 330 min", mensaje)
+        self.assertIn("<b>Total:</b> $2500", mensaje)
+        self.assertIn("font-size: 14pt", mensaje)
+        self.assertIn("<br>", mensaje)
         self.assertNotIn("|", mensaje)
         self.assertNotIn("2026-07-30", mensaje)
 
@@ -414,9 +414,9 @@ class RegistroViewPopupTests(unittest.TestCase):
             "F3", 1, 4, "ABC123", "ABIERTO (EN ESPERA)", "09:15", "Aún dentro", 45, 1200,
         )
 
-        self.assertIn("Estado: ABIERTO (EN ESPERA)", mensaje)
-        self.assertIn("Monto actual: $1200", mensaje)
-        self.assertNotIn("Total: $1200", mensaje)
+        self.assertIn("<b>Estado:</b> ABIERTO (EN ESPERA)", mensaje)
+        self.assertIn("<b>Monto actual:</b> $1200", mensaje)
+        self.assertNotIn("<b>Total:</b> $1200", mensaje)
 
     def test_popup_ingreso_omite_fecha_y_destaca_patente_y_hora(self):
         mensaje = construir_mensaje_ingreso({
