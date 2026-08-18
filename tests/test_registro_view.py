@@ -11,7 +11,8 @@ from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
 from views.admin_edicion import EdicionIngresosWindow
 from views.registro import (
     QMessageBox, REGISTRO_METRICAS, RegistroWindow, TarjetaResumen,
-    calcular_metricas_resumen, construir_mensaje_ingreso, construir_mensaje_salida,
+    calcular_metricas_resumen, construir_info_patente_navegada,
+    construir_mensaje_ingreso, construir_mensaje_salida,
 )
 
 
@@ -189,6 +190,31 @@ class RegistroViewF4Tests(unittest.TestCase):
         self.assertEqual(vista.input_patente.setText.call_args_list[0].args[0], "ABC123")
         self.assertEqual(vista.input_patente.setText.call_args_list[1].args[0], "ABD123")
 
+    def test_f4_formatea_ingreso_y_salida_solo_con_horas(self):
+        vista = Mock()
+        vista.busqueda_f4 = ""
+        vista.patentes_f4 = []
+        vista.indice_patente_f4 = -1
+        vista.formatear_hora_info.side_effect = lambda valor: str(valor)[11:16] if valor else "-"
+        fila = {
+            "id_ingreso": 1,
+            "patente": "ABC123",
+            "estado": "CERRADO",
+            "fecha_hora_ingreso": "2026-07-30 09:15:00",
+            "fecha_hora_salida": "2026-07-30 14:45:00",
+            "minutos": 330,
+            "monto": 2500,
+        }
+
+        with patch("views.registro.obtener_patentes_turno_actual_para_f4", return_value=[fila]), \
+             patch("views.registro.ordenar_patentes_turno_para_f4", return_value=[fila]):
+            RegistroWindow.seleccionar_siguiente_patente_turno(vista)
+
+        vista.mostrar_info_patente_navegada.assert_called_once_with(
+            tecla="F4", posicion=1, total=1, patente="ABC123", estado="CERRADO",
+            ingreso="09:15", salida="14:45", minutos=330, monto=2500,
+        )
+
     def test_solo_edicion_humana_reinicia_la_sesion_f4(self):
         vista = type("SesionF4", (), {})()
         vista.busqueda_f4 = "AB"
@@ -293,6 +319,53 @@ class RegistroViewF3Tests(unittest.TestCase):
 
         vista.input_patente.setText.assert_called_once_with("ABC123")
 
+    def test_f3_formatea_el_ingreso_solo_con_hora(self):
+        vista = Mock()
+        vista.busqueda_f3 = ""
+        vista.patentes_f3 = []
+        vista.indice_patente_f3 = -1
+        vista.formatear_hora_info.return_value = "09:15"
+        fila = {
+            "id_ingreso": 1,
+            "patente_base": "ABC123",
+            "patente": "ABC123",
+            "hora": "2026-07-30 09:15:00",
+        }
+
+        with patch("views.registro.obtener_vehiculos_activos", return_value=[fila]):
+            RegistroWindow.seleccionar_siguiente_patente_abierta(vista)
+
+        vista.mostrar_info_patente_navegada.assert_called_once_with(
+            tecla="F3", posicion=1, total=1, patente="ABC123", estado="ABIERTO",
+            ingreso="09:15", salida="Aún dentro", minutos=0, monto=0,
+        )
+
+    def test_f3_conserva_marcadores_de_espera_y_lavado(self):
+        vista = Mock()
+        vista.busqueda_f3 = ""
+        vista.patentes_f3 = []
+        vista.indice_patente_f3 = -1
+        vista.formatear_hora_info.return_value = "09:15"
+        fila = {
+            "id_ingreso": 1,
+            "patente_base": "ABC123",
+            "patente": "ABC123",
+            "hora": "2026-07-30 09:15:00",
+            "minutos": 45,
+            "monto": 1200,
+            "en_espera": True,
+            "en_lavado": True,
+        }
+
+        with patch("views.registro.obtener_vehiculos_activos", return_value=[fila]):
+            RegistroWindow.seleccionar_siguiente_patente_abierta(vista)
+
+        vista.mostrar_info_patente_navegada.assert_called_once_with(
+            tecla="F3", posicion=1, total=1, patente="ABC123",
+            estado="ABIERTO (EN ESPERA, EN LAVADO)",
+            ingreso="09:15", salida="Aún dentro", minutos=45, monto=1200,
+        )
+
 
 class RegistroViewPreviewIngresoTests(unittest.TestCase):
     @classmethod
@@ -319,6 +392,32 @@ class RegistroViewPreviewIngresoTests(unittest.TestCase):
 
 
 class RegistroViewPopupTests(unittest.TestCase):
+    def test_info_f3_f4_usa_jerarquia_vertical_y_distingue_total_cerrado(self):
+        mensaje = construir_info_patente_navegada(
+            "F4", 2, 3, "ABC123", "CERRADO", "09:15", "14:45", 330, 2500,
+        )
+
+        self.assertEqual(mensaje, "\n".join([
+            "F4 2/3",
+            "Patente: ABC123",
+            "Estado: CERRADO",
+            "Ingreso: 09:15",
+            "Salida: 14:45",
+            "Tiempo: 330 min",
+            "Total: $2500",
+        ]))
+        self.assertNotIn("|", mensaje)
+        self.assertNotIn("2026-07-30", mensaje)
+
+    def test_info_f3_f4_usa_monto_actual_para_estado_abierto(self):
+        mensaje = construir_info_patente_navegada(
+            "F3", 1, 4, "ABC123", "ABIERTO (EN ESPERA)", "09:15", "Aún dentro", 45, 1200,
+        )
+
+        self.assertIn("Estado: ABIERTO (EN ESPERA)", mensaje)
+        self.assertIn("Monto actual: $1200", mensaje)
+        self.assertNotIn("Total: $1200", mensaje)
+
     def test_popup_ingreso_omite_fecha_y_destaca_patente_y_hora(self):
         mensaje = construir_mensaje_ingreso({
             "patente": "ABC123",

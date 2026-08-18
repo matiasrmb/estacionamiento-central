@@ -96,6 +96,20 @@ def construir_mensaje_salida(salida):
     return '<div style="font-size: 14pt;">' + "<br>".join(lineas) + "</div>"
 
 
+def construir_info_patente_navegada(tecla, posicion, total, patente, estado, ingreso, salida, minutos, monto):
+    """Construye el resumen vertical de una patente seleccionada con F3 o F4."""
+    etiqueta_monto = "Total" if "CERRADO" in estado else "Monto actual"
+    return "\n".join([
+        f"{tecla} {posicion}/{total}",
+        f"Patente: {patente}",
+        f"Estado: {estado}",
+        f"Ingreso: {ingreso}",
+        f"Salida: {salida}",
+        f"Tiempo: {minutos} min",
+        f"{etiqueta_monto}: ${monto:.0f}",
+    ])
+
+
 def _es_tabla_lavado_faltante(exc):
     mensaje = str(exc).lower()
     tablas_lavado = ("tipos_vehiculo_lavado", "tipos_vehiculos_lavado")
@@ -729,11 +743,9 @@ class RegistroWindow(QWidget):
         minutos,
         monto,
     ):
-        self.hora_consulta_label.setText(
-            f"{tecla} {posicion}/{total} | {patente} | {estado}\n"
-            f"Ingreso: {ingreso} | Salida: {salida}\n"
-            f"Tiempo: {minutos} min | Monto: ${monto:.0f}"
-        )
+        self.hora_consulta_label.setText(construir_info_patente_navegada(
+            tecla, posicion, total, patente, estado, ingreso, salida, minutos, monto
+        ))
 
         if "CERRADO" in estado:
             self.hora_consulta_label.setObjectName("EstadoInfoOk")
@@ -780,7 +792,7 @@ class RegistroWindow(QWidget):
         self.enfocar_patente()
         self.buscar_vehiculo()
 
-        ingreso = self.formatear_fecha_hora_info(seleccion.get("hora"))
+        ingreso = self.formatear_hora_info(seleccion.get("hora"))
         minutos = int(seleccion.get("minutos") or 0)
         monto = float(seleccion.get("monto") or 0)
         extras = []
@@ -830,8 +842,8 @@ class RegistroWindow(QWidget):
         self.enfocar_patente()
         self.buscar_vehiculo()
 
-        ingreso = self.formatear_fecha_hora_info(seleccion.get("fecha_hora_ingreso"))
-        salida = self.formatear_fecha_hora_info(seleccion.get("fecha_hora_salida"))
+        ingreso = self.formatear_hora_info(seleccion.get("fecha_hora_ingreso"))
+        salida = self.formatear_hora_info(seleccion.get("fecha_hora_salida"))
         estado = seleccion.get("estado", "-")
         minutos = int(seleccion.get("minutos") or 0)
         monto = float(seleccion.get("monto") or 0)
