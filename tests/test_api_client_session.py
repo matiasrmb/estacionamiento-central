@@ -22,6 +22,12 @@ class ApiClientSessionTests(unittest.TestCase):
 
         request.assert_called_once_with("POST", "/auth/logout", token="desktop-token")
 
+    @patch.object(api_client, "_request", return_value={"resumen": {}})
+    def test_desktop_session_summary_uses_its_bearer_token(self, request):
+        api_client.obtener_resumen_sesion("desktop-token")
+
+        request.assert_called_once_with("GET", "/auth/session-summary", token="desktop-token")
+
 
 if __name__ == "__main__":
     unittest.main()

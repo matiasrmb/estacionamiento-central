@@ -78,3 +78,7 @@ def crear_cierre(token):
 
 def cerrar_sesion(token):
     return _request("POST", "/auth/logout", token=token)
+
+
+def obtener_resumen_sesion(token):
+    return _request("GET", "/auth/session-summary", token=token)
