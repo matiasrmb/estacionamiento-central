@@ -101,12 +101,12 @@ def construir_info_patente_navegada(tecla, posicion, total, patente, estado, ing
     etiqueta_monto = "Total" if "CERRADO" in estado else "Monto actual"
     lineas = [
         f"<b>{escape(tecla)} {posicion}/{total}</b>",
-        f"<b>Patente:</b> {escape(patente)}",
-        f"<b>Estado:</b> {escape(estado)}",
-        f"<b>Ingreso:</b> {escape(str(ingreso))}",
-        f"<b>Salida:</b> {escape(str(salida))}",
-        f"<b>Tiempo:</b> {minutos} min",
-        f"<b>{escape(etiqueta_monto)}:</b> ${monto:.0f}",
+        f"<b>Patente: {escape(patente)}</b>",
+        f"<b>Estado: {escape(estado)}</b>",
+        f"<b>Ingreso: {escape(str(ingreso))}</b>",
+        f"<b>Salida: {escape(str(salida))}</b>",
+        f"<b>Tiempo: {minutos} min</b>",
+        f"<b>{escape(etiqueta_monto)}: ${monto:.0f}</b>",
     ]
     return '<div style="font-size: 14pt;">' + "<br>".join(lineas) + "</div>"
 
@@ -748,12 +748,7 @@ class RegistroWindow(QWidget):
             tecla, posicion, total, patente, estado, ingreso, salida, minutos, monto
         ))
 
-        if "CERRADO" in estado:
-            self.hora_consulta_label.setObjectName("EstadoInfoOk")
-        elif "LAVADO" in estado or "ESPERA" in estado:
-            self.hora_consulta_label.setObjectName("EstadoInfoWarn")
-        else:
-            self.hora_consulta_label.setObjectName("EstadoInfoNeutro")
+        self.hora_consulta_label.setObjectName("PreviewSalida")
 
         self.hora_consulta_label.style().unpolish(self.hora_consulta_label)
         self.hora_consulta_label.style().polish(self.hora_consulta_label)

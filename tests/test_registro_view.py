@@ -398,12 +398,12 @@ class RegistroViewPopupTests(unittest.TestCase):
         )
 
         self.assertIn("<b>F4 2/3</b>", mensaje)
-        self.assertIn("<b>Patente:</b> ABC123", mensaje)
-        self.assertIn("<b>Estado:</b> CERRADO", mensaje)
-        self.assertIn("<b>Ingreso:</b> 09:15", mensaje)
-        self.assertIn("<b>Salida:</b> 14:45", mensaje)
-        self.assertIn("<b>Tiempo:</b> 330 min", mensaje)
-        self.assertIn("<b>Total:</b> $2500", mensaje)
+        self.assertIn("<b>Patente: ABC123</b>", mensaje)
+        self.assertIn("<b>Estado: CERRADO</b>", mensaje)
+        self.assertIn("<b>Ingreso: 09:15</b>", mensaje)
+        self.assertIn("<b>Salida: 14:45</b>", mensaje)
+        self.assertIn("<b>Tiempo: 330 min</b>", mensaje)
+        self.assertIn("<b>Total: $2500</b>", mensaje)
         self.assertIn("font-size: 14pt", mensaje)
         self.assertIn("<br>", mensaje)
         self.assertNotIn("|", mensaje)
@@ -414,9 +414,30 @@ class RegistroViewPopupTests(unittest.TestCase):
             "F3", 1, 4, "ABC123", "ABIERTO (EN ESPERA)", "09:15", "Aún dentro", 45, 1200,
         )
 
-        self.assertIn("<b>Estado:</b> ABIERTO (EN ESPERA)", mensaje)
-        self.assertIn("<b>Monto actual:</b> $1200", mensaje)
-        self.assertNotIn("<b>Total:</b> $1200", mensaje)
+        self.assertIn("<b>Estado: ABIERTO (EN ESPERA)</b>", mensaje)
+        self.assertIn("<b>Monto actual: $1200</b>", mensaje)
+        self.assertNotIn("<b>Total: $1200</b>", mensaje)
+
+    def test_info_f3_f4_usa_mismo_estilo_visual_que_preview(self):
+        vista = type("VistaInfoNavegada", (), {})()
+        vista.hora_consulta_label = QLabel()
+
+        RegistroWindow.mostrar_info_patente_navegada(
+            vista,
+            tecla="F3",
+            posicion=1,
+            total=2,
+            patente="ABC123",
+            estado="ABIERTO",
+            ingreso="09:15",
+            salida="Aún dentro",
+            minutos=20,
+            monto=1000,
+        )
+
+        self.assertEqual(vista.hora_consulta_label.objectName(), "PreviewSalida")
+        self.assertIn("font-size: 14pt", vista.hora_consulta_label.text())
+        self.assertIn("<b>Patente: ABC123</b>", vista.hora_consulta_label.text())
 
     def test_popup_ingreso_omite_fecha_y_destaca_patente_y_hora(self):
         mensaje = construir_mensaje_ingreso({
