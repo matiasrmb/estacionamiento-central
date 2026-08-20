@@ -273,7 +273,6 @@ estacionamiento-central/
 +---reportes
 +---tickets
 +---utils
-|   |   crear_admin.py
 |   |   db.py
 |   |   pdf.py
 |   |   pdf_asistencias.py
