@@ -30,7 +30,7 @@ Su objetivo es modernizar la operación de estacionamientos mediante la automati
 - Reportes exportables a PDF
 - Configuración flexible de tarifas
 - Compatibilidad con impresoras térmicas
-- Funcionamiento completamente local (offline)
+- Operación Desktop conectada a una API local o central
 
 ---
 
@@ -150,7 +150,7 @@ Credenciales internas:
 Ruta:
 
 
-C:\EstacionamientoCentral_internal\config.ini
+C:\EstacionamientoCentral\_internal\config.ini
 
 
 ---
@@ -247,7 +247,6 @@ El sistema sigue una arquitectura modular basada en el patrón **MVC (Modelo-Vis
 ```graphql
 estacionamiento-central/
 |   config.ini
-|   crear_usuario.py
 |   EstacionamientoCentral.spec
 |   estructura_limpia.txt
 |   main.py

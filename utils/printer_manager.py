@@ -45,22 +45,6 @@ def obtener_impresora_predeterminada() -> str | None:
         return None
 
 
-def impresora_existe(nombre_impresora: str | None) -> bool:
-    """
-    Verifica si una impresora existe entre las impresoras instaladas.
-
-    Args:
-        nombre_impresora (str | None): Nombre de la impresora.
-
-    Returns:
-        bool: True si existe, False en caso contrario.
-    """
-    if not nombre_impresora:
-        return False
-
-    return nombre_impresora in obtener_impresoras_instaladas()
-
-
 def cargar_impresora_guardada(config_path: Path = CONFIG_PATH) -> str | None:
     """
     Carga la impresora de tickets guardada en config.ini.
@@ -100,30 +84,3 @@ def guardar_impresora_tickets(nombre_impresora: str, config_path: Path = CONFIG_
 
     with open(config_path, "w", encoding="utf-8") as archivo:
         config.write(archivo)
-
-
-def resolver_impresora_tickets() -> str | None:
-    """
-    Resuelve la impresora a usar para tickets siguiendo esta prioridad:
-
-    1. Impresora guardada en config.ini, si existe.
-    2. Impresora predeterminada de Windows, si existe.
-    3. Primera impresora instalada disponible.
-    4. None si no hay impresoras disponibles.
-
-    Returns:
-        str | None: Nombre de la impresora seleccionada o None.
-    """
-    impresora_guardada = cargar_impresora_guardada()
-    if impresora_existe(impresora_guardada):
-        return impresora_guardada
-
-    impresora_default = obtener_impresora_predeterminada()
-    if impresora_existe(impresora_default):
-        return impresora_default
-
-    impresoras = obtener_impresoras_instaladas()
-    if impresoras:
-        return impresoras[0]
-
-    return None
