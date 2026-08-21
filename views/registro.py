@@ -5,16 +5,23 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QGridLayout, QFrame, QSizePolicy, QScrollArea,
     QDialog, QDialogButtonBox, QInputDialog
 )
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QShortcut, QKeySequence
+from PySide6.QtCore import QTimer, Qt, QSize
+from PySide6.QtGui import QIcon, QShortcut, QKeySequence
 from datetime import datetime, timedelta
+from html import escape
+from pathlib import Path
+import sys
 from controllers.registro_controller import (
-    buscar_estado_vehiculo, registrar_ingreso_detallado,
+    buscar_estado_vehiculo, registrar_ingreso_detallado, registrar_ingreso_con_noches_detallado,
+    obtener_opcion_noches,
     registrar_salida_detallada, obtener_vehiculos_activos,
-    marcar_ingreso_en_espera, alternar_estado_espera,
+    obtener_preview_salida_por_patente,
+    obtener_noche_pendiente_por_patente, finalizar_noche_pendiente, convertir_noche_a_ingreso_normal,
+    marcar_ingreso_en_espera, alternar_estado_espera, enviar_salida_sin_cobro_a_espera,
     obtener_patentes_existentes, eliminar_ingreso_activo_por_patente,
-    registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual,
-    obtener_patentes_turno_actual_para_f4, ordenar_patentes_turno_para_f4,
+    registrar_uso_bano, obtener_total_vehiculos_pagados_turno_actual, obtener_resumen_caja_actual,
+    obtener_patentes_turno_actual_para_f4, ordenar_patentes_para_busqueda,
+    ordenar_patentes_turno_para_f4,
 )
 from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
 from controllers.config_controller import obtener_configuracion
@@ -39,10 +46,69 @@ from controllers.cotizaciones_controller import (
     wash_quote_options_from_legacy_config,
 )
 from views.subida_dialog import SubidaDialog
+from utils.plates import normalizar_patente, validar_patente
+from utils.local_preferences import obtener_modo_privacidad_metricas
 
 
 def formatear_fecha_hora(valor):
     return valor.strftime("%d/%m/%Y %H:%M")
+
+
+def formatear_hora(valor):
+    if hasattr(valor, "strftime"):
+        return valor.strftime("%H:%M")
+    try:
+        return datetime.strptime(str(valor), "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+    except ValueError:
+        return str(valor)
+
+
+def ruta_recurso(*partes):
+    """Resuelve recursos tanto desde el código fuente como desde PyInstaller."""
+    base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    return str(base_dir.joinpath(*partes))
+
+
+def construir_mensaje_ingreso(ingreso, mensaje="Vehículo ingresado correctamente", detalle=None):
+    lineas = [
+        escape(mensaje),
+        "",
+        f"Patente: <b>{escape(str(ingreso['patente']))}</b>",
+        f"Ingreso: <b>{escape(formatear_hora(ingreso['fecha_hora_ingreso']))}</b>",
+    ]
+    if detalle:
+        lineas.append(escape(detalle))
+    return '<div style="font-size: 14pt;">' + "<br>".join(lineas) + "</div>"
+
+
+def construir_mensaje_salida(salida):
+    lineas = [
+        "Salida registrada correctamente",
+        "",
+        f"Patente: <b>{escape(str(salida['patente']))}</b>",
+        f"Ingreso: <b>{escape(formatear_hora(salida['fecha_hora_ingreso']))}</b>",
+        f"Salida: <b>{escape(formatear_hora(salida['fecha_hora_salida']))}</b>",
+        f"Tiempo cobrado: {salida['minutos']} min",
+    ]
+    if salida.get("noches_prepagadas"):
+        lineas.append(f"Noches ya pagadas: ${salida['total_noches_prepagadas']:.0f}")
+    lineas.append(f"A cobrar ahora: <b>${salida['tarifa']:.0f}</b>")
+    return '<div style="font-size: 14pt;">' + "<br>".join(lineas) + "</div>"
+
+
+def construir_info_patente_navegada(tecla, posicion, total, patente, estado, ingreso, salida, minutos, monto):
+    """Construye el resumen vertical de una patente seleccionada con F3 o F4."""
+    etiqueta_monto = "Total" if "CERRADO" in estado else "Monto actual"
+    lineas = [
+        f"{escape(tecla)} {posicion}/{total}",
+        f"Patente: {escape(patente)}",
+        f"Estado: {escape(estado)}",
+        f"Ingreso: {escape(str(ingreso))}",
+        f"Salida: {escape(str(salida))}",
+        f"Tiempo: {minutos} min",
+        f"{escape(etiqueta_monto)}: ${monto:.0f}",
+    ]
+    return '<div style="font-family: &quot;Segoe UI&quot;, Arial, sans-serif; font-size: 14px; font-weight: 600;">' + "<br>".join(lineas) + "</div>"
 
 
 def _es_tabla_lavado_faltante(exc):
@@ -51,6 +117,113 @@ def _es_tabla_lavado_faltante(exc):
     return any(tabla in mensaje for tabla in tablas_lavado) and (
         "doesn't exist" in mensaje or "does not exist" in mensaje or "no such table" in mensaje
     )
+
+
+REGISTRO_METRICAS = (
+    "Vehículos activos",
+    "Usos de baño hoy",
+    "Estimado activos",
+    "Total proyectado",
+    "Total turno",
+    "Neto en caja",
+)
+(
+    METRICA_VEHICULOS_ACTIVOS,
+    METRICA_USOS_BANO,
+    METRICA_ESTIMADO_ACTIVOS,
+    METRICA_TOTAL_PROYECTADO,
+    METRICA_TOTAL_TURNO,
+    METRICA_NETO_CAJA,
+) = REGISTRO_METRICAS
+
+
+def calcular_metricas_resumen(total_activos, resumen_caja):
+    """Calcula los importes de las tarjetas sin mezclar estimaciones con cobros."""
+    total_turno = float(resumen_caja["total_general"])
+    return {
+        "estimado_activos": float(total_activos),
+        "total_proyectado": total_turno + float(total_activos),
+        "total_turno": total_turno,
+        "neto_caja": float(resumen_caja["total_neto"]),
+    }
+
+
+class TarjetaResumen(QFrame):
+    """Tarjeta de métrica que revela su valor al pasar el mouse en modo privacidad."""
+
+    def __init__(self, titulo, valor, icono_archivo, ayuda=None, modo_privacidad=False):
+        super().__init__()
+        self.setObjectName("ResumenModulo")
+        self.setFixedHeight(112)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setMouseTracking(True)
+        self.valor_real = valor
+        self.modo_privacidad = modo_privacidad
+        self.mouse_sobre_tarjeta = False
+        self.icono_archivo = icono_archivo
+        self.icono = QIcon(ruta_recurso("assets", "icons", icono_archivo))
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(4)
+
+        encabezado = QHBoxLayout()
+        encabezado.setSpacing(6)
+        self.label_icono = QLabel()
+        self.label_icono.setObjectName("IconoResumenModulo")
+        self.label_icono.setPixmap(self.icono.pixmap(QSize(22, 22)))
+        self.label_titulo = QLabel(titulo)
+        self.label_titulo.setObjectName("TituloResumenModulo")
+        self.label_titulo.setWordWrap(True)
+        self.label_titulo.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.label_titulo.setToolTip(ayuda or titulo)
+        encabezado.addWidget(self.label_icono, 0, alignment=Qt.AlignTop)
+        encabezado.addWidget(self.label_titulo, 1, alignment=Qt.AlignTop)
+        if ayuda:
+            self.label_ayuda = QLabel("i")
+            self.label_ayuda.setObjectName("AyudaResumenModulo")
+            self.label_ayuda.setToolTip(ayuda)
+            self.label_ayuda.setFixedSize(16, 16)
+            self.label_ayuda.setAlignment(Qt.AlignCenter)
+            encabezado.addWidget(self.label_ayuda, 0, alignment=Qt.AlignTop)
+
+        self.label_valor = QLabel()
+        self.label_valor.setObjectName("ValorResumenModulo")
+        self.label_valor.setWordWrap(True)
+        self.label_privacidad = QLabel()
+        self.label_privacidad.setObjectName("IconoPrivacidadResumenModulo")
+        self.label_privacidad.setAlignment(Qt.AlignCenter)
+        self.label_privacidad.setPixmap(self.icono.pixmap(QSize(36, 36)))
+        layout.addLayout(encabezado)
+        layout.addWidget(self.label_valor)
+        layout.addWidget(self.label_privacidad)
+        self.actualizar_valor_visible()
+
+    def set_valor(self, valor):
+        self.valor_real = valor
+        self.actualizar_valor_visible()
+
+    def set_modo_privacidad(self, activo):
+        self.modo_privacidad = activo
+        self.actualizar_valor_visible()
+
+    def actualizar_valor_visible(self, revelar=False):
+        revelar = revelar or self.mouse_sobre_tarjeta
+        valor_visible = not self.modo_privacidad or revelar
+        self.label_valor.setText(self.valor_real if valor_visible else "")
+        self.label_valor.setVisible(valor_visible)
+        self.label_icono.setVisible(valor_visible)
+        self.label_privacidad.setVisible(self.modo_privacidad and not revelar)
+
+    def enterEvent(self, event):
+        self.mouse_sobre_tarjeta = True
+        self.actualizar_valor_visible()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.mouse_sobre_tarjeta = False
+        self.actualizar_valor_visible()
+        super().leaveEvent(event)
 
 
 class RegistroWindow(QWidget):
@@ -67,9 +240,12 @@ class RegistroWindow(QWidget):
         self.panel_secundario_expandido = True
         self.patentes_f3 = []
         self.indice_patente_f3 = -1
+        self.busqueda_f3 = ""
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
         self.busqueda_f4 = ""
+        self.seleccion_f4 = None
+        self.modo_privacidad_metricas = obtener_modo_privacidad_metricas()
 
         self.setMinimumSize(1000, 650)
         self.init_ui()
@@ -121,9 +297,10 @@ class RegistroWindow(QWidget):
         self.input_patente = QLineEdit()
         self.input_patente.setObjectName("InputPatente")
         self.input_patente.setPlaceholderText("Ej: ABCD12")
-        self.input_patente.setMaxLength(8)
+        self.input_patente.setMaxLength(20)
         self.input_patente.setMinimumHeight(42)
-        self.input_patente.textChanged.connect(self.normalizar_patente)
+        self.input_patente.textChanged.connect(self.normalizar_patente_busqueda)
+        self.input_patente.textEdited.connect(self.reiniciar_busqueda_f3)
         self.input_patente.textEdited.connect(self.reiniciar_busqueda_f4)
         self.input_patente.returnPressed.connect(self.buscar_vehiculo)
 
@@ -149,8 +326,9 @@ class RegistroWindow(QWidget):
         self.actualizar_estilo_info("neutro")
 
         self.hora_consulta_label = QLabel("")
-        self.hora_consulta_label.setObjectName("EstadoInfoNeutro")
+        self.hora_consulta_label.setObjectName("PreviewSalida")
         self.hora_consulta_label.setWordWrap(True)
+        self.hora_consulta_label.setMinimumHeight(128)
 
         layout_busqueda.addWidget(self.label_patente)
         layout_busqueda.addWidget(self.input_patente)
@@ -177,6 +355,11 @@ class RegistroWindow(QWidget):
         self.boton_ingreso_personalizado.setEnabled(False)
         self.boton_ingreso_personalizado.setMinimumHeight(32)
         self.boton_ingreso_personalizado.clicked.connect(self.registrar_ingreso_con_hora_personalizada)
+
+        self.boton_ingreso_noches = QPushButton("Registrar ingreso en modo Noche")
+        self.boton_ingreso_noches.setEnabled(False)
+        self.boton_ingreso_noches.setMinimumHeight(32)
+        self.boton_ingreso_noches.clicked.connect(self.registrar_ingreso_con_noches)
 
         self.boton_salida = QPushButton("Registrar salida")
         self.boton_salida.setEnabled(False)
@@ -206,6 +389,7 @@ class RegistroWindow(QWidget):
 
         layout_acciones.addWidget(self.boton_ingreso)
         layout_acciones.addWidget(self.boton_ingreso_personalizado)
+        layout_acciones.addWidget(self.boton_ingreso_noches)
         layout_acciones.addWidget(self.boton_salida)
         layout_acciones.addWidget(self.boton_espera)
         layout_acciones.addWidget(self.boton_bano)
@@ -260,7 +444,7 @@ class RegistroWindow(QWidget):
             "Enter: buscar patente\n"
             "F1: ingresar o salir\n"
             "F2 o ESC: limpiar formulario\n"
-            "F3: recorrer patentes abiertas\n"
+            "F3: buscar/recorrer patentes abiertas\n"
             "F4: recorrer patentes del turno\n"
             "F6: registrar baño\n"
             "F7: reingresar vehículo\n"
@@ -314,15 +498,31 @@ class RegistroWindow(QWidget):
         resumen_layout = QHBoxLayout()
         resumen_layout.setSpacing(12)
 
-        self.card_estacionados = self.crear_tarjeta_resumen("Vehículos activos", "0")
-        self.card_banos = self.crear_tarjeta_resumen("Usos de baño hoy", "0")
-        self.card_total_activos = self.crear_tarjeta_resumen("Total activos", "$0")
-        self.card_total_turno = self.crear_tarjeta_resumen("Total turno", "$0")
+        self.card_estacionados = self.crear_tarjeta_resumen(
+            METRICA_VEHICULOS_ACTIVOS, "0", "vehiculos-activos.svg"
+        )
+        self.card_banos = self.crear_tarjeta_resumen(
+            METRICA_USOS_BANO, "0", "usos-bano-hoy.svg"
+        )
+        self.card_total_activos = self.crear_tarjeta_resumen(
+            METRICA_ESTIMADO_ACTIVOS, "$0", "estimado-activos.svg", "Vehículos sin cobrar"
+        )
+        self.card_total_proyectado = self.crear_tarjeta_resumen(
+            METRICA_TOTAL_PROYECTADO, "$0", "total-proyectado.svg", "Cobrado + activos estimados"
+        )
+        self.card_total_turno = self.crear_tarjeta_resumen(
+            METRICA_TOTAL_TURNO, "$0", "total-turno.svg", "Cobrado desde último cierre"
+        )
+        self.card_neto_caja = self.crear_tarjeta_resumen(
+            METRICA_NETO_CAJA, "$0", "neto-caja.svg", "Cobrado - gastos"
+        )
 
         resumen_layout.addWidget(self.card_estacionados)
         resumen_layout.addWidget(self.card_banos)
         resumen_layout.addWidget(self.card_total_activos)
+        resumen_layout.addWidget(self.card_total_proyectado)
         resumen_layout.addWidget(self.card_total_turno)
+        resumen_layout.addWidget(self.card_neto_caja)
         resumen_layout.addStretch()
 
         layout.addLayout(resumen_layout)
@@ -396,30 +596,14 @@ class RegistroWindow(QWidget):
 
         QTimer.singleShot(0, self.input_patente.setFocus)
 
-    def crear_tarjeta_resumen(self, titulo, valor):
-        frame = QFrame()
-        frame.setObjectName("ResumenModulo")
-        frame.setMinimumHeight(86)
-        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(4)
-
-        label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("TituloResumenModulo")
-        label_titulo.setWordWrap(True)
-
-        label_valor = QLabel(valor)
-        label_valor.setObjectName("ValorResumenModulo")
-        label_valor.setWordWrap(True)
-
-        layout.addWidget(label_titulo)
-        layout.addWidget(label_valor)
-
-        frame.label_titulo = label_titulo
-        frame.label_valor = label_valor
-        return frame
+    def crear_tarjeta_resumen(self, titulo, valor, icono, ayuda=None):
+        return TarjetaResumen(
+            titulo,
+            valor,
+            icono,
+            ayuda,
+            modo_privacidad=self.modo_privacidad_metricas,
+        )
 
     def toggle_panel_secundario(self):
         self.panel_secundario_expandido = not self.panel_secundario_expandido
@@ -434,16 +618,7 @@ class RegistroWindow(QWidget):
     def buscar_vehiculo(self):
         patente = self.input_patente.text().strip().upper()
 
-        es_valida, mensaje = self.validar_patente(patente)
-        if not es_valida:
-            self.actualizar_estilo_info("warn")
-            self.info_label.setText(mensaje)
-            QMessageBox.warning(self, "Atención", mensaje)
-            self.enfocar_patente()
-            return
-
-        hora_consulta = datetime.now().strftime("%H:%M")
-        self.hora_consulta_label.setText(f"HORA DE ENTRADA: {hora_consulta}")
+        self.hora_consulta_label.clear()
 
         estado = buscar_estado_vehiculo(patente)
 
@@ -452,8 +627,10 @@ class RegistroWindow(QWidget):
             self.info_label.setText("Vehículo no registrado. Puedes crear su ingreso.")
             self.boton_ingreso.setEnabled(True)
             self.boton_ingreso_personalizado.setEnabled(True)
+            self.boton_ingreso_noches.setEnabled(bool(obtener_opcion_noches()))
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
+            self.mostrar_preview_ingreso(patente)
 
         elif estado == "dentro":
             self.actualizar_estilo_info("warn")
@@ -461,21 +638,34 @@ class RegistroWindow(QWidget):
             self.boton_salida.setEnabled(True)
             self.boton_ingreso.setEnabled(False)
             self.boton_ingreso_personalizado.setEnabled(False)
+            self.boton_ingreso_noches.setEnabled(False)
             self.boton_espera.setEnabled(True)
+            preview = obtener_preview_salida_por_patente(patente)
+            if preview and preview.get("estado") == "dentro":
+                self.mostrar_preview_salida(preview)
+            elif preview and preview.get("estado") == "en_espera":
+                self.hora_consulta_label.setText("VEHÍCULO EN ESPERA\nNo hay vista previa de salida disponible.")
+            elif preview and preview.get("estado") == "en_lavado":
+                self.hora_consulta_label.setText("VEHÍCULO EN LAVADO\nFinaliza el lavado antes de registrar la salida.")
+            elif preview and preview.get("estado") == "noche_pendiente":
+                self.hora_consulta_label.setText("NOCHE PENDIENTE\nRevisa la noche: marcar retirado o convertir a ingreso normal desde 10:00.")
 
         elif estado == "fuera":
             self.actualizar_estilo_info("neutro")
             self.info_label.setText("Vehículo fuera del estacionamiento. Puedes registrar un nuevo ingreso.")
             self.boton_ingreso.setEnabled(True)
             self.boton_ingreso_personalizado.setEnabled(True)
+            self.boton_ingreso_noches.setEnabled(bool(obtener_opcion_noches()))
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
+            self.mostrar_preview_ingreso(patente)
 
         else:
             self.actualizar_estilo_info("error")
             self.info_label.setText("No fue posible determinar el estado del vehículo.")
             self.boton_ingreso.setEnabled(False)
             self.boton_ingreso_personalizado.setEnabled(False)
+            self.boton_ingreso_noches.setEnabled(False)
             self.boton_salida.setEnabled(False)
             self.boton_espera.setEnabled(False)
             QMessageBox.critical(self, "Error", "Error al consultar la patente.")
@@ -491,6 +681,57 @@ class RegistroWindow(QWidget):
         except ValueError:
             return str(valor)
 
+    def formatear_hora_info(self, valor):
+        if not valor:
+            return "-"
+        if hasattr(valor, "strftime"):
+            return valor.strftime("%H:%M")
+        try:
+            return datetime.strptime(str(valor), "%Y-%m-%d %H:%M:%S").strftime("%H:%M")
+        except ValueError:
+            return str(valor)
+
+    def mostrar_preview_salida(self, preview):
+        lineas = [
+            "VEHÍCULO DENTRO",
+            f"Patente: {preview['patente']}",
+            f"Ingreso: {self.formatear_hora_info(preview['fecha_hora_ingreso'])}",
+            f"Consulta de salida: {self.formatear_hora_info(preview['fecha_hora_salida'])}",
+            f"Tiempo facturable: {preview['minutos']} min",
+            f"Estacionamiento: ${preview['tarifa_estacionamiento']:.0f}",
+        ]
+        if preview["total_lavados"]:
+            lineas.append(f"Lavados: ${preview['total_lavados']:.0f}")
+        for cobro in preview.get("noches_prepagadas", []):
+            lineas.append(f"Noche pagada: ${cobro['monto_snapshot']:.0f}")
+            lineas.append(f"Ventana Noche: {cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']}")
+        if preview.get("minutos_extra_antes_noche"):
+            lineas.append(f"Extra antes de noche: {preview['minutos_extra_antes_noche']} min")
+        if preview.get("minutos_extra_despues_noche"):
+            lineas.append(f"Extra después de noche: {preview['minutos_extra_despues_noche']} min")
+        lineas.extend([
+            f"A COBRAR AHORA: ${preview['tarifa']:.0f}",
+            "El importe se recalcula al registrar la salida.",
+        ])
+        self.hora_consulta_label.setText("\n".join(lineas))
+        self.hora_consulta_label.setObjectName("PreviewSalida")
+        self.hora_consulta_label.style().unpolish(self.hora_consulta_label)
+        self.hora_consulta_label.style().polish(self.hora_consulta_label)
+        self.hora_consulta_label.update()
+
+    def mostrar_preview_ingreso(self, patente):
+        ahora = datetime.now()
+        self.hora_consulta_label.setText("\n".join([
+            "NUEVO INGRESO",
+            f"Patente: {patente}",
+            f"Hora de ingreso: {self.formatear_hora_info(ahora)}",
+            "El ingreso se registra al confirmar la operación.",
+        ]))
+        self.hora_consulta_label.setObjectName("PreviewSalida")
+        self.hora_consulta_label.style().unpolish(self.hora_consulta_label)
+        self.hora_consulta_label.style().polish(self.hora_consulta_label)
+        self.hora_consulta_label.update()
+
     def mostrar_info_patente_navegada(
         self,
         tecla,
@@ -503,18 +744,11 @@ class RegistroWindow(QWidget):
         minutos,
         monto,
     ):
-        self.hora_consulta_label.setText(
-            f"{tecla} {posicion}/{total} | {patente} | {estado}\n"
-            f"Ingreso: {ingreso} | Salida: {salida}\n"
-            f"Tiempo: {minutos} min | Monto: ${monto:.0f}"
-        )
+        self.hora_consulta_label.setText(construir_info_patente_navegada(
+            tecla, posicion, total, patente, estado, ingreso, salida, minutos, monto
+        ))
 
-        if "CERRADO" in estado:
-            self.hora_consulta_label.setObjectName("EstadoInfoOk")
-        elif "LAVADO" in estado or "ESPERA" in estado:
-            self.hora_consulta_label.setObjectName("EstadoInfoWarn")
-        else:
-            self.hora_consulta_label.setObjectName("EstadoInfoNeutro")
+        self.hora_consulta_label.setObjectName("PreviewSalida")
 
         self.hora_consulta_label.style().unpolish(self.hora_consulta_label)
         self.hora_consulta_label.style().polish(self.hora_consulta_label)
@@ -522,31 +756,29 @@ class RegistroWindow(QWidget):
 
     def seleccionar_siguiente_patente_abierta(self):
         try:
-            activos = sorted(
-                obtener_vehiculos_activos(),
-                key=lambda row: str(row.get("patente_base") or row.get("patente") or "").upper(),
-            )
+            activos = obtener_vehiculos_activos()
         except Exception as e:
             self.actualizar_estilo_info("error")
             self.info_label.setText("No se pudieron consultar las patentes abiertas.")
             QMessageBox.critical(self, "Error", f"No se pudieron consultar las patentes abiertas:\n{e}")
             return
 
-        if not activos:
+        patentes = ordenar_patentes_para_busqueda(
+            [{
+                **activo,
+                "patente": activo.get("patente_base") or str(activo.get("patente", "")).split()[0],
+            } for activo in activos],
+            self.busqueda_f3,
+            campo_fecha="hora",
+        )
+        if not patentes:
             self.actualizar_estilo_info("neutro")
-            self.info_label.setText("No hay patentes abiertas en este momento.")
+            self.info_label.setText("No hay patentes abiertas que coincidan con la búsqueda.")
             return
 
-        if activos != self.patentes_f3:
-            patente_actual = self.input_patente.text().strip().upper()
-            self.patentes_f3 = activos
-            self.indice_patente_f3 = next(
-                (
-                    i for i, row in enumerate(activos)
-                    if (row.get("patente_base") or str(row.get("patente", "")).split()[0]) == patente_actual
-                ),
-                -1,
-            )
+        if patentes != self.patentes_f3:
+            self.patentes_f3 = patentes
+            self.indice_patente_f3 = -1
 
         self.indice_patente_f3 = (self.indice_patente_f3 + 1) % len(self.patentes_f3)
         seleccion = self.patentes_f3[self.indice_patente_f3]
@@ -556,7 +788,7 @@ class RegistroWindow(QWidget):
         self.enfocar_patente()
         self.buscar_vehiculo()
 
-        ingreso = self.formatear_fecha_hora_info(seleccion.get("hora"))
+        ingreso = self.formatear_hora_info(seleccion.get("hora"))
         minutos = int(seleccion.get("minutos") or 0)
         monto = float(seleccion.get("monto") or 0)
         extras = []
@@ -599,14 +831,15 @@ class RegistroWindow(QWidget):
 
         self.indice_patente_f4 = (self.indice_patente_f4 + 1) % len(self.patentes_f4)
         seleccion = self.patentes_f4[self.indice_patente_f4]
+        self.seleccion_f4 = seleccion
         patente = str(seleccion["patente"]).upper()
 
         self.input_patente.setText(patente)
         self.enfocar_patente()
         self.buscar_vehiculo()
 
-        ingreso = self.formatear_fecha_hora_info(seleccion.get("fecha_hora_ingreso"))
-        salida = self.formatear_fecha_hora_info(seleccion.get("fecha_hora_salida"))
+        ingreso = self.formatear_hora_info(seleccion.get("fecha_hora_ingreso"))
+        salida = self.formatear_hora_info(seleccion.get("fecha_hora_salida"))
         estado = seleccion.get("estado", "-")
         minutos = int(seleccion.get("minutos") or 0)
         monto = float(seleccion.get("monto") or 0)
@@ -626,7 +859,7 @@ class RegistroWindow(QWidget):
         )
 
     def registrar_ingreso(self):
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
@@ -641,9 +874,7 @@ class RegistroWindow(QWidget):
             QMessageBox.information(
                 self,
                 "Ingreso registrado",
-                "Vehículo ingresado correctamente\n\n"
-                f"Patente: {ingreso['patente']}\n"
-                f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}"
+                construir_mensaje_ingreso(ingreso)
             )
             self.actualizar_lista_patentes()
             self.reset()
@@ -664,7 +895,7 @@ class RegistroWindow(QWidget):
             )
             return
 
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
@@ -713,9 +944,7 @@ class RegistroWindow(QWidget):
             QMessageBox.information(
                 self,
                 "Ingreso registrado",
-                "Vehículo ingresado correctamente con hora personalizada\n\n"
-                f"Patente: {ingreso['patente']}\n"
-                f"Ingreso: {formatear_fecha_hora(ingreso['fecha_hora_ingreso'])}"
+                construir_mensaje_ingreso(ingreso, "Vehículo ingresado correctamente con hora personalizada")
             )
             self.actualizar_lista_patentes()
             self.reset()
@@ -728,9 +957,8 @@ class RegistroWindow(QWidget):
 
         self.actualizar_tabla_activos()
 
-    def registrar_salida(self):
-        patente = self.input_patente.text().strip().upper()
-
+    def registrar_ingreso_con_noches(self):
+        patente = normalizar_patente(self.input_patente.text())
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
             self.actualizar_estilo_info("warn")
@@ -738,22 +966,84 @@ class RegistroWindow(QWidget):
             QMessageBox.warning(self, "Atención", mensaje)
             self.enfocar_patente()
             return
+        opcion = obtener_opcion_noches()
+        if not opcion:
+            QMessageBox.warning(
+                self,
+                "Noches no disponible",
+                "Noches no está disponible para este ingreso. Verifica que esté habilitado y tenga un valor mayor que cero.",
+            )
+            return
+
+        confirmacion = QMessageBox.question(
+            self,
+            "Confirmar ingreso en modo Noche",
+            f"Registrar ingreso para {patente} en modo Noche por ${opcion['monto_snapshot']}\n"
+            f"Ventana base: {opcion['hora_inicio_snapshot']} a {opcion['hora_fin_snapshot']} (gracia 19:00 a 10:00)",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirmacion != QMessageBox.Yes:
+            return
+
+        ingreso = registrar_ingreso_con_noches_detallado(patente, self.usuario)
+        if ingreso:
+            cobro = ingreso["cobro_noche"]
+            QMessageBox.information(
+                self,
+                "Ingreso registrado",
+                construir_mensaje_ingreso(
+                    ingreso,
+                    "Vehículo ingresado en modo Noche.",
+                    f"Noche pagada: ${cobro['monto_snapshot']} ({cobro['hora_inicio_snapshot']} a {cobro['hora_fin_snapshot']})",
+                ),
+            )
+            self.actualizar_lista_patentes()
+            self.reset()
+        else:
+            self.actualizar_estilo_info("error")
+            self.info_label.setText("No se pudo registrar el ingreso con Noches.")
+            QMessageBox.critical(self, "Error", "No se pudo registrar el ingreso con Noches.")
+            self.enfocar_patente()
+        self.actualizar_tabla_activos()
+
+    def registrar_salida(self):
+        patente = self.input_patente.text().strip().upper()
 
         salida = registrar_salida_detallada(patente, self.usuario)
         if salida is not None:
             QMessageBox.information(
                 self,
                 "Salida registrada",
-                "Salida registrada correctamente\n\n"
-                f"Patente: {salida['patente']}\n"
-                f"Ingreso: {formatear_fecha_hora(salida['fecha_hora_ingreso'])}\n"
-                f"Salida: {formatear_fecha_hora(salida['fecha_hora_salida'])}\n"
-                f"Tiempo cobrado: {salida['minutos']} min\n"
-                f"Total: ${salida['tarifa']:.0f}"
+                construir_mensaje_salida(salida),
             )
             self.actualizar_lista_patentes()
             self.reset()
         else:
+            noche = obtener_noche_pendiente_por_patente(patente)
+            if noche:
+                seleccion, confirmado = QInputDialog.getItem(
+                    self,
+                    "Revisar Noche pendiente",
+                    f"{patente} tiene una Noche prepagada pendiente. Selecciona una acción:",
+                    ["Finalizar Noche (retirado)", "Convertir a ingreso normal desde 10:00"],
+                    0,
+                    False,
+                )
+                if not confirmado:
+                    return
+                if seleccion == "Finalizar Noche (retirado)":
+                    exito = finalizar_noche_pendiente(noche["id_ingreso"], self.usuario)
+                    mensaje = "Noche finalizada sin cobro adicional."
+                else:
+                    inicio = convertir_noche_a_ingreso_normal(noche["id_ingreso"], self.usuario)
+                    exito = inicio is not None
+                    mensaje = f"Ingreso normal activo desde {formatear_fecha_hora(inicio)}." if inicio else ""
+                if exito:
+                    QMessageBox.information(self, "Noche revisada", mensaje)
+                    self.actualizar_lista_patentes()
+                    self.reset()
+                    self.actualizar_tabla_activos()
+                    return
             self.actualizar_estilo_info("error")
             self.info_label.setText("No se pudo registrar la salida.")
             QMessageBox.critical(self, "Error", "No se pudo registrar la salida.")
@@ -765,11 +1055,14 @@ class RegistroWindow(QWidget):
         self.input_patente.clear()
         self.patentes_f3 = []
         self.indice_patente_f3 = -1
+        self.busqueda_f3 = ""
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
         self.busqueda_f4 = ""
+        self.seleccion_f4 = None
         self.boton_ingreso.setEnabled(False)
         self.boton_ingreso_personalizado.setEnabled(False)
+        self.boton_ingreso_noches.setEnabled(False)
         self.boton_salida.setEnabled(False)
         self.boton_espera.setEnabled(False)
         self.actualizar_estilo_info("neutro")
@@ -801,7 +1094,8 @@ class RegistroWindow(QWidget):
             monto = vehiculo["monto"]
             minutos = vehiculo.get("minutos", 0)
 
-            patente_mostrar = f"▲ {patente}" if hay_subida_activa else patente
+            estado_noche = " [NOCHE PENDIENTE]" if vehiculo.get("noche_pendiente") else ""
+            patente_mostrar = f"▲ {patente}{estado_noche}" if hay_subida_activa else f"{patente}{estado_noche}"
 
             item_patente = QTableWidgetItem(patente_mostrar)
             item_patente.setData(Qt.UserRole, vehiculo.get("id_ingreso"))
@@ -828,8 +1122,7 @@ class RegistroWindow(QWidget):
             item_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 3, item_monto)
 
-            if vehiculo.get("tipo_fila") != "solo_lavado":
-                total += monto
+            total += monto
 
         fila_total = len(filas)
 
@@ -858,13 +1151,15 @@ class RegistroWindow(QWidget):
 
         resumen_banos = obtener_resumen_banos()
         total_banos = float(resumen_banos["total"])
-        total_pagados_turno = obtener_total_vehiculos_pagados_turno_actual()
-        total_turno = total_pagados_turno + total + total_banos
+        resumen_caja = obtener_resumen_caja_actual()
 
-        self.card_estacionados.label_valor.setText(str(len(datos)))
-        self.card_total_activos.label_valor.setText(f"${total:.0f}")
-        self.card_total_turno.label_valor.setText(f"${total_turno:.0f}")
-        self.card_banos.label_valor.setText(
+        metricas = calcular_metricas_resumen(total, resumen_caja)
+        self.card_estacionados.set_valor(str(len(datos)))
+        self.card_total_activos.set_valor(f"${metricas['estimado_activos']:.0f}")
+        self.card_total_proyectado.set_valor(f"${metricas['total_proyectado']:.0f}")
+        self.card_total_turno.set_valor(f"${metricas['total_turno']:.0f}")
+        self.card_neto_caja.set_valor(f"${metricas['neto_caja']:.0f}")
+        self.card_banos.set_valor(
             f"{resumen_banos['cantidad']} | ${total_banos:.0f}"
         )
 
@@ -954,7 +1249,7 @@ class RegistroWindow(QWidget):
         self.label_subida.update()
 
     def marcar_en_espera(self):
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
         confirm = QMessageBox.question(
             self,
             "Confirmar",
@@ -1109,7 +1404,7 @@ class RegistroWindow(QWidget):
         QMessageBox.critical(self, "Error", "No se pudo iniciar el lavado.")
 
     def iniciar_solo_lavado_desde_patente(self):
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
             QMessageBox.warning(self, "Atención", mensaje)
@@ -1305,7 +1600,7 @@ class RegistroWindow(QWidget):
     def reingresar_vehiculo(self):
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado
 
-        patente = self.input_patente.text().strip().upper()
+        patente = normalizar_patente(self.input_patente.text())
 
         es_valida, mensaje = self.validar_patente(patente)
         if not es_valida:
@@ -1376,7 +1671,35 @@ class RegistroWindow(QWidget):
             QMessageBox.warning(self, "Atención", mensaje)
             return
 
-        exito, mensaje = alternar_estado_espera(patente)
+        seleccion = self.seleccion_f4
+        if isinstance(seleccion, dict) and seleccion.get("estado") == "CERRADO":
+            confirmar = QMessageBox.question(
+                self,
+                "Enviar salida a espera",
+                "Confirma que no se cobró dinero y que la salida debe quedar en espera para revisión administrativa?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if confirmar != QMessageBox.Yes:
+                return
+
+            exito, mensaje = enviar_salida_sin_cobro_a_espera(
+                seleccion["id_ingreso"], self.usuario, True, patente_esperada=seleccion["patente"]
+            )
+            if not exito and "ticket de salida ya fue impreso" in mensaje:
+                confirmar_ticket = QMessageBox.question(
+                    self,
+                    "Ticket de salida impreso",
+                    "Confirma que reconoce que el ticket de salida fue impreso y entregado?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if confirmar_ticket == QMessageBox.Yes:
+                    exito, mensaje = enviar_salida_sin_cobro_a_espera(
+                        seleccion["id_ingreso"], self.usuario, True,
+                        confirma_ticket_impreso=True,
+                        patente_esperada=seleccion["patente"],
+                    )
+        else:
+            exito, mensaje = alternar_estado_espera(patente)
 
         if exito:
             QMessageBox.information(self, "Listo", mensaje)
@@ -1441,30 +1764,31 @@ class RegistroWindow(QWidget):
             else:
                 QMessageBox.warning(self, "Error", "No se pudo registrar la subida.")
 
-    def normalizar_patente(self, texto: str):
-        texto_mayus = texto.upper()
-        if texto != texto_mayus:
+    def normalizar_patente_busqueda(self, texto: str):
+        texto_normalizado = texto.upper()
+        if texto != texto_normalizado:
             cursor_pos = self.input_patente.cursorPosition()
             self.input_patente.blockSignals(True)
-            self.input_patente.setText(texto_mayus)
-            self.input_patente.setCursorPosition(cursor_pos)
+            self.input_patente.setText(texto_normalizado)
+            self.input_patente.setCursorPosition(min(cursor_pos, len(texto_normalizado)))
             self.input_patente.blockSignals(False)
 
     def reiniciar_busqueda_f4(self, texto):
         self.busqueda_f4 = texto
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
+        self.seleccion_f4 = None
+
+    def reiniciar_busqueda_f3(self, texto):
+        self.busqueda_f3 = texto
+        self.patentes_f3 = []
+        self.indice_patente_f3 = -1
 
     def validar_patente(self, patente: str) -> tuple[bool, str]:
-        if not patente:
+        if not normalizar_patente(patente):
             return False, "Ingresa una patente."
-
-        if len(patente) < 4 or len(patente) > 8:
-            return False, "La patente debe tener entre 4 y 8 caracteres."
-
-        if not patente.isalnum():
-            return False, "La patente solo puede contener letras y números."
-
+        if not validar_patente(patente):
+            return False, "Patente inválida. Usa ABCD12, ABC12, AB123CD o ABC123."
         return True, ""
 
     def actualizar_estilo_info(self, tipo: str):
@@ -1506,6 +1830,7 @@ class RegistroWindow(QWidget):
         self.indice_patente_f3 = -1
         self.patentes_f4 = []
         self.indice_patente_f4 = -1
+        self.seleccion_f4 = None
         self.actualizar_tabla_activos()
         self.actualizar_lista_patentes()
         self.actualizar_estado_subida()

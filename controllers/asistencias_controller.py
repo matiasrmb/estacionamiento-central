@@ -62,6 +62,10 @@ def _calcular_totales_turno(cursor, usuario, hora_inicio, hora_fin):
         SELECT COUNT(*) AS cantidad, COALESCE(SUM(tarifa_aplicada), 0) AS total
         FROM ingresos
         WHERE usuario = %s AND fecha_hora_salida BETWEEN %s AND %s
+          AND NOT EXISTS (
+              SELECT 1 FROM ingresos_eliminados ie
+              WHERE ie.id_ingreso_original = ingresos.id_ingreso
+          )
     """, (usuario, hora_inicio, hora_fin))
     salidas = cursor.fetchone()
 

@@ -11,6 +11,7 @@ from controllers.usuarios_controller import (
     eliminar_usuario_seguro,
 )
 from views.dialog_cambiar_clave import CambiarClaveDialog
+from utils.table_filters import filtrar_filas_tabla
 from functools import partial
 
 
@@ -64,6 +65,12 @@ class UsuariosWindow(QWidget):
         # =========================================================
         # TABLA
         # =========================================================
+        self.busqueda = QLineEdit()
+        self.busqueda.setPlaceholderText("Buscar...")
+        self.busqueda.setMinimumHeight(38)
+        self.busqueda.textChanged.connect(self.filtrar_tabla)
+        layout.addWidget(self.busqueda)
+
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(3)
         self.tabla.setHorizontalHeaderLabels(["Usuario", "Rol", "Acciones"])
@@ -189,6 +196,11 @@ class UsuariosWindow(QWidget):
 
             botones.setLayout(layout_btn)
             self.tabla.setCellWidget(i, 2, botones)
+
+        self.filtrar_tabla()
+
+    def filtrar_tabla(self):
+        filtrar_filas_tabla(self.tabla, self.busqueda.text())
 
     def crear_usuario(self):
         usuario = self.input_usuario.text().strip()

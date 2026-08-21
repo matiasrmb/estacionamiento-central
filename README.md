@@ -30,7 +30,7 @@ Su objetivo es modernizar la operación de estacionamientos mediante la automati
 - Reportes exportables a PDF
 - Configuración flexible de tarifas
 - Compatibilidad con impresoras térmicas
-- Funcionamiento completamente local (offline)
+- Operación Desktop conectada a una API local o central
 
 ---
 
@@ -150,7 +150,7 @@ Credenciales internas:
 Ruta:
 
 
-C:\EstacionamientoCentral_internal\config.ini
+C:\EstacionamientoCentral\_internal\config.ini
 
 
 ---
@@ -219,6 +219,18 @@ El instalador permite ejecutar el sistema inmediatamente al finalizar.
 
 ---
 
+### Cierre diario
+
+El cierre diario debe realizarse desde Mobile/API. Desktop no ejecuta cierres
+directamente en la base de datos para respetar el bloqueo central de la API.
+
+Para habilitar el cierre desde Desktop en una versión futura se requiere una
+configuración de URL de API y una sesión autenticada que permita usar
+`POST /api/v1/cierres`. También se debe definir cómo Desktop recibe o genera el
+PDF del cierre; hasta entonces, Desktop no genera ni muestra ese documento.
+
+---
+
 ## Arquitectura del Sistema
 
 El sistema sigue una arquitectura modular basada en el patrón **MVC (Modelo-Vista-Controlador)**:
@@ -235,7 +247,6 @@ El sistema sigue una arquitectura modular basada en el patrón **MVC (Modelo-Vis
 ```graphql
 estacionamiento-central/
 |   config.ini
-|   crear_usuario.py
 |   EstacionamientoCentral.spec
 |   estructura_limpia.txt
 |   main.py
@@ -261,7 +272,6 @@ estacionamiento-central/
 +---reportes
 +---tickets
 +---utils
-|   |   crear_admin.py
 |   |   db.py
 |   |   pdf.py
 |   |   pdf_asistencias.py

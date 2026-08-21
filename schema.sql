@@ -140,6 +140,8 @@ CREATE TABLE IF NOT EXISTS cierres_diarios (
     total_lavados_solos_monto INT NOT NULL DEFAULT 0,
     total_mensualidades INT NOT NULL DEFAULT 0,
     total_mensualidades_monto INT NOT NULL DEFAULT 0,
+    total_noches INT NOT NULL DEFAULT 0,
+    total_noches_monto INT NOT NULL DEFAULT 0,
     total_general INT NOT NULL DEFAULT 0,
     total_gastos INT NOT NULL DEFAULT 0,
     total_neto INT NOT NULL DEFAULT 0,
@@ -163,6 +165,27 @@ CREATE TABLE IF NOT EXISTS pagos_mensuales (
     INDEX idx_pagos_mensuales_cierre (id_cierre),
     INDEX idx_pagos_mensuales_fecha_pago (fecha_pago),
     FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo),
+    FOREIGN KEY (id_cierre) REFERENCES cierres_diarios(id_cierre)
+);
+
+-- Cobros prepagados del modo Noche; cubren la estadía dentro de su ventana de gracia.
+CREATE TABLE IF NOT EXISTS cobros_noches (
+    id_cobro_noche INT AUTO_INCREMENT PRIMARY KEY,
+    id_ingreso INT NOT NULL,
+    monto_snapshot INT NOT NULL,
+    hora_inicio_snapshot TIME NOT NULL,
+    hora_fin_snapshot TIME NOT NULL,
+    fecha_hora_pago DATETIME NOT NULL,
+    usuario VARCHAR(50) NOT NULL,
+    estado ENUM('PAGADO', 'ANULADO') NOT NULL DEFAULT 'PAGADO',
+    estado_operativo ENUM('PENDIENTE', 'RETIRADO', 'CONVERTIDO') NOT NULL DEFAULT 'PENDIENTE',
+    fecha_hora_resolucion DATETIME NULL,
+    id_cierre INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_cobros_noches_ingreso (id_ingreso),
+    INDEX idx_cobros_noches_pendiente_cierre (id_cierre, fecha_hora_pago),
+    INDEX idx_cobros_noches_estado_operativo (estado_operativo, id_ingreso),
+    FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso),
     FOREIGN KEY (id_cierre) REFERENCES cierres_diarios(id_cierre)
 );
 
@@ -285,7 +308,11 @@ INSERT INTO configuracion (clave, valor) VALUES
 ('lavado_minibus', '25000'),
 ('limpieza_automatica_activa', '1'),
 ('dias_conservar_archivos', '30'),
-('ultima_limpieza_archivos', '')
+('ultima_limpieza_archivos', ''),
+('noches_activo', '0'),
+('noches_hora_inicio', '19:30'),
+('noches_hora_fin', '09:30'),
+('noches_valor', '0')
 ON DUPLICATE KEY UPDATE valor = VALUES(valor);
 
 INSERT INTO tipos_lavado (codigo, nombre, activo) VALUES

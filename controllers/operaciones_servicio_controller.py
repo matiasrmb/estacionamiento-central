@@ -8,6 +8,7 @@ from controllers.wash_pricing_controller import (
     ensure_wash_vehicle_type_table,
 )
 from utils.db import db_cursor
+from utils.plates import requerir_patente_valida
 from utils.print_jobs import crear_print_job_solo_lavado
 from controllers.config_controller import obtener_print_jobs_pc_activos
 
@@ -149,7 +150,7 @@ def calcular_duracion_minutos(inicio, fin):
 def iniciar_solo_lavado(patente, id_tipo_vehiculo_lavado, usuario_inicio):
     asegurar_schema_operaciones_servicio()
     ensure_wash_vehicle_type_table()
-    patente_normalizada = str(patente).strip().upper()
+    patente_normalizada = requerir_patente_valida(patente)
     ahora = datetime.now()
 
     with db_cursor(dictionary=True, commit=True) as cursor:
@@ -159,6 +160,10 @@ def iniciar_solo_lavado(patente, id_tipo_vehiculo_lavado, usuario_inicio):
             JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
             WHERE UPPER(v.patente) = UPPER(%s)
               AND i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             LIMIT 1
         """, (patente_normalizada,))
         if cursor.fetchone():

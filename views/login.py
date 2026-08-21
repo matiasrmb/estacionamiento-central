@@ -6,7 +6,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 import sys
 
-from controllers.login_controller import validar_usuario
+from controllers.login_controller import (
+    validar_usuario,
+)
+from utils.api_client import ApiClientError, autenticar
 from views.main_window import MainWindow
 
 
@@ -104,12 +107,22 @@ class LoginWindow(QWidget):
             QMessageBox.warning(self, "Campos requeridos", "Debes ingresar usuario y contraseña.")
             return
 
-        exito, rol = validar_usuario(usuario, clave)
+        exito, rol = validar_usuario(usuario, clave, registrar_asistencia=False)
 
         if exito is True:
+            api_token = None
+            api_warning = None
+            try:
+                api_token = autenticar(usuario, clave).get("access_token")
+            except ApiClientError:
+                api_warning = (
+                    "No fue posible iniciar sesión con la API al ingresar. "
+                    "La asistencia no se registró y el cierre diario no estará disponible hasta volver a iniciar sesión."
+                )
+            self.pass_input.clear()
             QMessageBox.information(self, "Acceso correcto", f"Bienvenido, {usuario}. Rol: {rol}")
             self.hide()
-            self.main = MainWindow(usuario, rol)
+            self.main = MainWindow(usuario, rol, api_token=api_token, api_warning=api_warning)
             self.main.show()
         elif exito == "inactivo":
             QMessageBox.warning(self, "Cuenta inactiva", "Tu cuenta está desactivada. Contacta al administrador.")

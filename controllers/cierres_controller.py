@@ -1,15 +1,10 @@
-"""
-Controlador para la generación de cierres diarios.
-
-Incluye lógica para consolidar ingresos y generar reportes en PDF.
-"""
-
-from datetime import datetime
+"""Soporte de esquema y protección del cierre diario en Desktop."""
 
 import mysql.connector
 
 from controllers.operaciones_servicio_controller import asegurar_schema_operaciones_servicio
 from controllers.mensuales_controller import asegurar_schema_mensuales
+from utils.api_client import ApiClientError, crear_cierre as crear_cierre_api
 from utils.db import db_cursor
 from utils.pdf import generar_pdf_cierre
 
@@ -57,6 +52,8 @@ def asegurar_schema_cierres():
             "ALTER TABLE cierres_diarios ADD COLUMN total_general INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_gastos INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_neto INT NOT NULL DEFAULT 0",
+            "ALTER TABLE cierres_diarios ADD COLUMN total_noches INT NOT NULL DEFAULT 0",
+            "ALTER TABLE cierres_diarios ADD COLUMN total_noches_monto INT NOT NULL DEFAULT 0",
             "ALTER TABLE usos_bano ADD COLUMN id_cierre INT NULL",
             "ALTER TABLE usos_bano ADD INDEX idx_usos_bano_cierre (id_cierre)",
             "ALTER TABLE operaciones_servicio ADD COLUMN cerrado TINYINT(1) NOT NULL DEFAULT 0",
@@ -66,175 +63,54 @@ def asegurar_schema_cierres():
 
     _SCHEMA_CIERRES_ASEGURADO = True
 
-def realizar_cierre_diario(usuario):
-    """
-    Realiza el cierre diario de ingresos y genera un resumen en PDF.
-
-    Args:
-        usuario (str): Usuario que ejecuta el cierre.
-
-    Returns:
-        tuple: (bool, str) indicando si el cierre fue exitoso y un mensaje informativo.
-    """
-    asegurar_schema_cierres()
-    with db_cursor(dictionary=True, commit=True) as cursor:
-        cursor.execute("""
-            SELECT MAX(fecha_cierre) AS ultimo_cierre
-            FROM cierres_diarios
-        """)
-        ultimo = cursor.fetchone() or {}
-        ultimo_cierre = ultimo.get("ultimo_cierre")
-
-        cursor.execute("""
-            SELECT id_ingreso, fecha_hora_ingreso, fecha_hora_salida, tarifa_aplicada
-            FROM ingresos
-            WHERE fecha_hora_salida IS NOT NULL AND cerrado = FALSE
-            FOR UPDATE
-        """)
-        registros = cursor.fetchall()
-
-        fecha_cierre = datetime.now()
-        if ultimo_cierre:
-            fecha_inicio = ultimo_cierre
-        elif registros:
-            fecha_inicio = min([r["fecha_hora_ingreso"] for r in registros])
-        else:
-            fecha_inicio = fecha_cierre.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        total_recaudado = sum(int(r["tarifa_aplicada"] or 0) for r in registros)
-        total_ingresos = len(registros)
-        total_salidas = total_ingresos  # Ingreso con salida registrada
-
-        # Cada fuente pendiente se bloquea y se vincula al cierre creado abajo.
-        cursor.execute("""
-            SELECT id, monto
-            FROM usos_bano
-            WHERE id_cierre IS NULL
-            FOR UPDATE
-        """)
-        banos = cursor.fetchall()
-        total_banos = len(banos)
-        total_banos_monto = sum(int(bano.get("monto") or 0) for bano in banos)
-
-        cursor.execute("""
-            SELECT id_operacion_servicio, valor_lavado_snapshot
-            FROM operaciones_servicio
-            WHERE estado = 'FINALIZADO_COBRADO' AND cerrado = FALSE
-            FOR UPDATE
-        """)
-        lavados_solos = cursor.fetchall()
-        total_lavados_solos = len(lavados_solos)
-        total_lavados_solos_monto = sum(
-            int(lavado.get("valor_lavado_snapshot") or 0)
-            for lavado in lavados_solos
-        )
-
-        cursor.execute("""
-            SELECT id_gasto, monto
-            FROM gastos_operacion
-            WHERE id_cierre IS NULL
-            FOR UPDATE
-        """)
-        gastos = cursor.fetchall()
-        total_gastos = sum(int(gasto.get("monto") or 0) for gasto in gastos)
-
-        cursor.execute("""
-            SELECT id_pago_mensual, monto_snapshot
-            FROM pagos_mensuales
-            WHERE id_cierre IS NULL
-            FOR UPDATE
-        """)
-        mensualidades = cursor.fetchall()
-        total_mensualidades = len(mensualidades)
-        total_mensualidades_monto = sum(
-            int(pago.get("monto_snapshot") or 0) for pago in mensualidades
-        )
-
-        if not registros and not banos and not lavados_solos and not gastos and not mensualidades:
-            return False, "No hay registros para cerrar hoy."
-
-        total_general = total_recaudado + total_banos_monto + total_lavados_solos_monto + total_mensualidades_monto
-        total_neto = total_general - total_gastos
-
-        # Insertar el resumen en la tabla cierres
-        cursor.execute("""
-            INSERT INTO cierres_diarios (
-                fecha_inicio, fecha_cierre, total_recaudado,
-                total_ingresos, total_salidas, total_banos,
-                total_banos_monto, total_lavados_solos, total_lavados_solos_monto,
-                total_mensualidades, total_mensualidades_monto, total_general, total_gastos,
-                total_neto, usuario
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (fecha_inicio, fecha_cierre, total_recaudado,
-               total_ingresos, total_salidas, total_banos,
-                total_banos_monto, total_lavados_solos,
-                total_lavados_solos_monto, total_mensualidades, total_mensualidades_monto,
-                total_general, total_gastos,
-                total_neto, usuario))
-        id_cierre = cursor.lastrowid
-
-        # Marcar ingresos como cerrados
-        ids = [r["id_ingreso"] for r in registros]
-        if ids:
-            formato = ','.join(['%s'] * len(ids))
-            cursor.execute(f"""
-                UPDATE ingresos SET cerrado = TRUE
-                WHERE id_ingreso IN ({formato})
-                  AND fecha_hora_salida IS NOT NULL
-                  AND cerrado = FALSE
-            """, ids)
-
-        ids_banos = [bano["id"] for bano in banos]
-        if ids_banos:
-            formato = ",".join(["%s"] * len(ids_banos))
-            cursor.execute(
-                f"UPDATE usos_bano SET id_cierre = %s WHERE id IN ({formato}) AND id_cierre IS NULL",
-                [id_cierre, *ids_banos],
-            )
-
-        ids_lavados = [lavado["id_operacion_servicio"] for lavado in lavados_solos]
-        if ids_lavados:
-            formato = ",".join(["%s"] * len(ids_lavados))
-            cursor.execute(
-                f"UPDATE operaciones_servicio SET cerrado = TRUE WHERE id_operacion_servicio IN ({formato}) AND cerrado = FALSE",
-                ids_lavados,
-            )
-
-        ids_gastos = [gasto["id_gasto"] for gasto in gastos]
-        if ids_gastos:
-            formato = ",".join(["%s"] * len(ids_gastos))
-            cursor.execute(
-                f"UPDATE gastos_operacion SET id_cierre = %s WHERE id_gasto IN ({formato}) AND id_cierre IS NULL",
-                [id_cierre, *ids_gastos],
-            )
-
-        ids_mensualidades = [pago["id_pago_mensual"] for pago in mensualidades]
-        if ids_mensualidades:
-            formato = ",".join(["%s"] * len(ids_mensualidades))
-            cursor.execute(
-                f"UPDATE pagos_mensuales SET id_cierre = %s WHERE id_pago_mensual IN ({formato}) AND id_cierre IS NULL",
-                [id_cierre, *ids_mensualidades],
-            )
-
-    datos_pdf = {
-        "Fecha de inicio": fecha_inicio.strftime("%Y-%m-%d %H:%M"),
-        "Fecha de cierre": fecha_cierre.strftime("%Y-%m-%d %H:%M"),
-        "Total recaudado vehículos": f"${total_recaudado}",
-        "Total baños registrados": total_banos,
-        "Total recaudado baños": f"${total_banos_monto}",
-        "Lavados solos registrados": total_lavados_solos,
-        "Total recaudado lavados solos": f"${total_lavados_solos_monto}",
-        "Mensualidades cobradas": total_mensualidades,
-        "Total recaudado mensualidades": f"${total_mensualidades_monto}",
-        "Total ingresos": total_ingresos,
-        "Total salidas": total_salidas,
-        "Total general bruto": f"${total_general}",
-        "Total gastos": f"${total_gastos}",
-        "Total neto del día": f"${total_neto}",
-        "Registrado por": usuario
+def _datos_pdf_cierre(cierre):
+    return {
+        "Fecha de inicio": cierre.get("fecha_inicio", ""),
+        "Fecha de cierre": cierre.get("fecha_cierre", ""),
+        "Total recaudado vehículos": f"${cierre.get('total_recaudado', 0)}",
+        "Total baños registrados": cierre.get("total_banos", 0),
+        "Total recaudado baños": f"${cierre.get('total_banos_monto', 0)}",
+        "Lavados solos registrados": cierre.get("total_lavados_solos", 0),
+        "Total recaudado lavados solos": f"${cierre.get('total_lavados_solos_monto', 0)}",
+        "Mensualidades cobradas": cierre.get("total_mensualidades", 0),
+        "Total recaudado mensualidades": f"${cierre.get('total_mensualidades_monto', 0)}",
+        "Noches prepagadas cobradas": cierre.get("total_noches", 0),
+        "Total recaudado noches prepagadas": f"${cierre.get('total_noches_monto', 0)}",
+        "Total ingresos": cierre.get("total_ingresos", 0),
+        "Total salidas": cierre.get("total_salidas", 0),
+        "Total general bruto": f"${cierre.get('total_general', 0)}",
+        "Total gastos": f"${cierre.get('total_gastos', 0)}",
+        "Total neto del día": f"${cierre.get('total_neto', 0)}",
+        "Registrado por": cierre.get("usuario", ""),
     }
-    generar_pdf_cierre("diario", datos_pdf)
 
-    return True, f"Cierre realizado con éxito. Total neto: ${total_neto}"
+
+def realizar_cierre_diario(token, api_warning=None):
+    """Solicita el cierre a la API, única autoridad para cerrar operaciones."""
+    if not token:
+        if api_warning:
+            return False, api_warning
+        return False, "No hay una sesión válida con la API. Inicie sesión nuevamente."
+
+    try:
+        cierre = crear_cierre_api(token)
+    except ApiClientError as exc:
+        if exc.status == 409 and "DAILY_CLOSE_IN_PROGRESS" in (exc.detail or ""):
+            return False, "Hay otro cierre diario en curso. Intente nuevamente cuando finalice."
+        if exc.status == 409 and "NO_PENDING_CLOSURE" in (exc.detail or ""):
+            return False, "No hay registros pendientes para cerrar."
+        if exc.status in (401, 403):
+            return False, "La sesión con la API no es válida o venció. Inicie sesión nuevamente."
+        if exc.detail in ("API_UNAVAILABLE", "API_NOT_CONFIGURED"):
+            return False, "No se pudo conectar con la API. Verifique que el servicio esté disponible e inténtelo nuevamente."
+        return False, "La API no pudo realizar el cierre. Inténtelo nuevamente."
+
+    try:
+        generar_pdf_cierre("diario", _datos_pdf_cierre(cierre))
+    except Exception:
+        return True, (
+            f"Cierre realizado con éxito. Total neto: ${cierre.get('total_neto', 0)}. "
+            "No se pudo generar el PDF del cierre."
+        )
+    return True, f"Cierre realizado con éxito. Total neto: ${cierre.get('total_neto', 0)}"
 

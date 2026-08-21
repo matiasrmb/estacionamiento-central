@@ -92,6 +92,10 @@ def iniciar_lavado(id_ingreso, categoria_lavado, usuario):
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE i.id_ingreso = %s
               AND i.fecha_hora_salida IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM ingresos_eliminados ie
+                  WHERE ie.id_ingreso_original = i.id_ingreso
+              )
             LIMIT 1
         """, (id_ingreso,))
         ingreso = cursor.fetchone()
@@ -206,6 +210,20 @@ def calcular_minutos_lavado(id_ingreso, fecha_hora_salida=None):
             total += int((fin - inicio).total_seconds() / 60)
 
     return total
+
+
+def obtener_intervalos_lavado(id_ingreso, fecha_hora_salida=None):
+    """Retorna los intervalos de lavado acotados al momento de cálculo."""
+    fin_calculo = fecha_hora_salida or datetime.now()
+    intervalos = []
+
+    for lavado in obtener_lavados_por_ingreso(id_ingreso):
+        inicio = lavado["fecha_hora_inicio"]
+        fin = min(lavado["fecha_hora_fin"] or fin_calculo, fin_calculo)
+        if fin > inicio:
+            intervalos.append((inicio, fin))
+
+    return intervalos
 
 
 def calcular_total_lavados(id_ingreso):

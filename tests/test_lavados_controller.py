@@ -89,6 +89,28 @@ class LavadosControllerTests(unittest.TestCase):
         self.assertNotIn("INSERT INTO lavados", consultas)
 
     @patch.object(lavados_controller, "asegurar_schema_lavados")
+    @patch.object(lavados_controller, "obtener_categorias_lavado")
+    @patch.object(lavados_controller, "db_cursor")
+    def test_iniciar_lavado_excluye_ingreso_anulado(
+        self,
+        db_cursor,
+        obtener_categorias,
+        asegurar_schema,
+    ):
+        cursor = FakeCursor(fetchone_results=[None])
+        db_cursor.return_value = fake_db_cursor(cursor)
+        obtener_categorias.return_value = {
+            "lavado_suv": {"label": "SUV", "valor": 8000}
+        }
+
+        resultado = lavados_controller.iniciar_lavado(10, "lavado_suv", "admin")
+
+        self.assertIsNone(resultado)
+        consulta, _ = cursor.executed[0]
+        self.assertIn("FROM ingresos_eliminados ie", consulta)
+        self.assertIn("ie.id_ingreso_original = i.id_ingreso", consulta)
+
+    @patch.object(lavados_controller, "asegurar_schema_lavados")
     @patch.object(lavados_controller, "db_cursor")
     def test_finalizar_lavado_cierra_registro_y_reactiva_ingreso(self, db_cursor, asegurar_schema):
         inicio = datetime(2026, 1, 1, 10, 0)

@@ -19,7 +19,7 @@ from views.asistencias import AsistenciasWindow
 from views.dashboard import DashboardWindow
 from views.gastos import GastosWindow
 from views.admin_edicion import EdicionIngresosWindow
-from controllers.login_controller import registrar_asistencia_salida
+from utils.api_client import ApiClientError, cerrar_sesion, obtener_resumen_sesion
 
 
 class MainWindow(QWidget):
@@ -35,10 +35,12 @@ class MainWindow(QWidget):
     SIDEBAR_COLLAPSED_WIDTH = 78
     ICON_SIZE = QSize(20, 20)
 
-    def __init__(self, usuario, rol):
+    def __init__(self, usuario, rol, api_token=None, api_warning=None):
         super().__init__()
         self.usuario = usuario
         self.rol = rol
+        self.api_token = api_token
+        self.api_warning = api_warning
         self.sidebar_expandido = True
 
         self.base_dir = Path(__file__).resolve().parent.parent
@@ -209,6 +211,8 @@ class MainWindow(QWidget):
         self.dashboard_view = DashboardWindow(
             self.usuario,
             self.rol,
+            api_token=self.api_token,
+            api_warning=self.api_warning,
             on_ir_panel=self.mostrar_dashboard,
             on_ir_registro=self.mostrar_registro,
             on_ir_reportes=self.mostrar_reportes if self.rol == "administrador" else None
@@ -401,13 +405,80 @@ class MainWindow(QWidget):
     # SESIÓN
     # =========================================================
     def cerrar_sesion(self):
-        resumen = registrar_asistencia_salida(self.usuario)
+        resumen = {"hora_inicio": None, "hora_cierre": None, "neto_caja": 0}
+        if not self.api_token:
+            QMessageBox.warning(
+                self,
+                "Sesión sin cerrar",
+                "No hay una sesión válida con la API. Inicie sesión nuevamente para cerrar la sesión actual.",
+            )
+            return
+
+        try:
+            resumen = obtener_resumen_sesion(self.api_token).get("resumen", resumen)
+        except ApiClientError:
+            QMessageBox.warning(
+                self,
+                "Resumen no disponible",
+                "No fue posible obtener el resumen de la sesión. La sesión continúa activa; inténtelo nuevamente cuando se recupere la conexión.",
+            )
+            return
+
+        if QMessageBox.question(
+            self,
+            "Confirmar cierre de sesión",
+            self._texto_resumen_preliminar(resumen),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+
+        try:
+            resumen = cerrar_sesion(self.api_token).get("resumen", resumen)
+        except ApiClientError:
+            QMessageBox.warning(
+                self,
+                "Sesión sin cerrar",
+                "No fue posible cerrar la asistencia en la API. La sesión continúa activa; inténtelo nuevamente cuando se recupere la conexión.",
+            )
+            return
 
         QMessageBox.information(
             self,
-            "Resumen del día",
-            f"Sesión: {resumen['hora_inicio'].strftime('%d-%m-%Y %H:%M') if resumen['hora_inicio'] else 'N/A'} - ahora\n"
-            f"Vehículos cobrados: {resumen['cantidad']}\n"
-            f"Total recaudado: ${resumen['total']:.0f}"
+            "Resumen de sesión",
+            f"Inicio de sesión: {self._formatear_hora_sesion(resumen.get('hora_inicio'))}\n"
+            f"Cierre de sesión: {self._formatear_hora_sesion(resumen.get('hora_cierre'))}\n"
+            f"Neto de la sesión: ${float(resumen.get('neto_caja', 0)):.0f}",
         )
         self.close()
+
+    @staticmethod
+    def _formatear_hora_sesion(valor):
+        if isinstance(valor, str):
+            try:
+                valor = datetime.fromisoformat(valor)
+            except ValueError:
+                valor = None
+        return valor.strftime('%d-%m-%Y %H:%M') if valor else "No disponible"
+
+    @staticmethod
+    def _texto_resumen_preliminar(resumen):
+        filas = [
+            "Revise el resumen antes de cerrar la sesión:",
+            f"Ingresos registrados: {int(resumen.get('ingresos', {}).get('cantidad', 0))} (${float(resumen.get('ingresos', {}).get('total', 0)):.0f})",
+            f"Usos de baño: {int(resumen.get('usos_bano', {}).get('cantidad', 0))} (${float(resumen.get('usos_bano', {}).get('total', 0)):.0f})",
+        ]
+        for etiqueta, clave in (
+            ("Lavados cobrados", "lavados"),
+            ("Mensualidades cobradas", "mensualidades"),
+            ("Noches cobradas", "noches"),
+        ):
+            movimiento = resumen.get(clave, {})
+            if int(movimiento.get("cantidad", 0)) > 0:
+                filas.append(f"{etiqueta}: {int(movimiento['cantidad'])} (${float(movimiento.get('total', 0)):.0f})")
+        filas.append(f"Total de ingresos: ${float(resumen.get('total_ingresos', 0)):.0f}")
+        gastos = int(resumen.get("gastos_asociados", 0))
+        if gastos > 0:
+            filas.append(f"Gastos asociados: -${gastos:.0f}")
+        filas.append(f"Neto en caja: ${float(resumen.get('neto_caja', 0)):.0f}\n\n¿Desea cerrar la sesión?")
+        return "\n".join(filas)

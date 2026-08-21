@@ -8,6 +8,7 @@ from datetime import datetime
 import mysql.connector
 
 from utils.db import db_cursor
+from utils.plates import requerir_patente_valida
 
 
 _SCHEMA_MENSUALES_ASEGURADO = False
@@ -121,6 +122,7 @@ def agregar_mensual(patente, tarifa_mensual=None, dia_vencimiento=None, telefono
     Returns:
         bool: True si la operación fue exitosa.
     """
+    patente = requerir_patente_valida(patente)
     with db_cursor(commit=True) as cursor:
         # Verificar si ya existe como mensual
         cursor.execute("SELECT * FROM vehiculos WHERE patente = %s", (patente,))

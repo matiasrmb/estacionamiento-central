@@ -111,7 +111,7 @@ class ReportesWindow(QWidget):
         resumen_layout.setSpacing(12)
 
         self.card_movimientos = self.crear_tarjeta_resumen("Movimientos encontrados", "0")
-        self.card_total = self.crear_tarjeta_resumen("Total recaudado", "$0")
+        self.card_total = self.crear_tarjeta_resumen("Total neto", "$0")
 
         resumen_layout.addWidget(self.card_movimientos)
         resumen_layout.addWidget(self.card_total)
@@ -226,7 +226,7 @@ class ReportesWindow(QWidget):
         self.tabla.setItem(fila_total, 1, QTableWidgetItem(""))
         self.tabla.setItem(fila_total, 2, QTableWidgetItem(""))
 
-        item_total_label = QTableWidgetItem("TOTAL RECAUDADO:")
+        item_total_label = QTableWidgetItem("TOTAL NETO:")
         item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         item_total_valor = QTableWidgetItem(f"${total:.0f}")

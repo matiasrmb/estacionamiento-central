@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 
-def validar_usuario(usuario, clave_plana):
+def validar_usuario(usuario, clave_plana, registrar_asistencia=True):
     """
     Verifica si las credenciales ingresadas son válidas.
 
@@ -40,8 +40,9 @@ def validar_usuario(usuario, clave_plana):
 
         clave_hash = resultado["clave_hash"].encode("utf-8")
         if bcrypt.checkpw(clave_plana.encode("utf-8"), clave_hash):
-            cerrar_asistencias_activas(usuario)
-            registrar_asistencia_inicio(usuario)  # 👈 se registra aquí
+            if registrar_asistencia:
+                cerrar_asistencias_activas(usuario)
+                registrar_asistencia_inicio(usuario)
             return True, resultado["rol"]
 
     return False, None  # Usuario no existe o clave incorrecta
@@ -137,6 +138,10 @@ def calcular_totales_turno(cursor, usuario, hora_inicio, hora_fin):
         SELECT COUNT(*) AS cantidad, COALESCE(SUM(tarifa_aplicada), 0) AS total
         FROM ingresos
         WHERE usuario = %s AND fecha_hora_salida BETWEEN %s AND %s
+          AND NOT EXISTS (
+              SELECT 1 FROM ingresos_eliminados ie
+              WHERE ie.id_ingreso_original = ingresos.id_ingreso
+          )
     """, (usuario, hora_inicio, hora_fin))
     salidas = cursor.fetchone()
 

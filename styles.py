@@ -54,6 +54,21 @@ QLabel#ValorResumenModulo {
     color: #111827;
 }
 
+QLabel#AyudaResumenModulo {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+QLabel#IconoResumenModulo {
+    font-size: 17px;
+}
+
+QLabel#IconoPrivacidadResumenModulo {
+    font-size: 32px;
+    font-weight: 700;
+    color: #374151;
+}
+
 QLabel#TituloAcceso {
     font-size: 24px;
     font-weight: 700;
@@ -418,6 +433,16 @@ QLabel#EstadoInfoError {
     padding: 10px 12px;
     color: #991b1b;
     font-size: 13px;
+}
+
+QLabel#PreviewSalida {
+    background-color: #ecfdf5;
+    border: 2px solid #86efac;
+    border-radius: 8px;
+    padding: 12px;
+    color: #14532d;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 QLabel#EstadoSubidaActiva {

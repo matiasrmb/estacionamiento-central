@@ -29,6 +29,11 @@ from utils.printer_manager import (obtener_impresoras_instaladas,
                                    guardar_impresora_tickets,
 )
 from utils.printer_diagnostics import SUPPORTED_PRINT_PATH
+from utils.table_filters import filtrar_filas_tabla
+from utils.local_preferences import (
+    guardar_modo_privacidad_metricas,
+    obtener_modo_privacidad_metricas,
+)
 
 class ConfiguracionWindow(QWidget):
     """
@@ -84,6 +89,22 @@ class ConfiguracionWindow(QWidget):
         self.print_jobs_pc_activos_label.setWordWrap(True)
         layout_print_jobs_pc.addWidget(self.print_jobs_pc_activos_label)
         layout.addWidget(panel_print_jobs_pc)
+
+        panel_privacidad = QFrame()
+        panel_privacidad.setObjectName("PanelFormulario")
+        layout_privacidad = QVBoxLayout(panel_privacidad)
+        layout_privacidad.setContentsMargins(14, 14, 14, 14)
+        layout_privacidad.setSpacing(6)
+        self.modo_privacidad_metricas_check = QCheckBox("Modo privacidad en métricas")
+        self.modo_privacidad_metricas_check.setChecked(obtener_modo_privacidad_metricas())
+        layout_privacidad.addWidget(self.modo_privacidad_metricas_check)
+        descripcion_privacidad = QLabel(
+            "Oculta los valores de las tarjetas hasta pasar el mouse o tocar."
+        )
+        descripcion_privacidad.setObjectName("SubtituloSeccion")
+        descripcion_privacidad.setWordWrap(True)
+        layout_privacidad.addWidget(descripcion_privacidad)
+        layout.addWidget(panel_privacidad)
 
         # =========================================================
         # CONFIGURACIÓN GENERAL
@@ -148,6 +169,43 @@ class ConfiguracionWindow(QWidget):
 
         layout_general_wrapper.addLayout(layout_general)
         layout.addWidget(panel_general)
+
+        # =========================================================
+        # NOCHES
+        # =========================================================
+        panel_noches = QFrame()
+        panel_noches.setObjectName("PanelFormulario")
+        layout_noches_wrapper = QVBoxLayout(panel_noches)
+        layout_noches_wrapper.setContentsMargins(14, 14, 14, 14)
+        layout_noches_wrapper.setSpacing(10)
+
+        titulo_noches = QLabel("Noches")
+        titulo_noches.setObjectName("EtiquetaFormulario")
+        layout_noches_wrapper.addWidget(titulo_noches)
+
+        descripcion_noches = QLabel(
+            "Configura el valor prepagado del modo Noche (19:30 a 09:30; gracia 19:00 a 10:00)."
+        )
+        descripcion_noches.setObjectName("SubtituloSeccion")
+        descripcion_noches.setWordWrap(True)
+        layout_noches_wrapper.addWidget(descripcion_noches)
+
+        layout_noches = QGridLayout()
+        layout_noches.setHorizontalSpacing(14)
+        layout_noches.setVerticalSpacing(12)
+
+        self.noches_activo_check = QCheckBox("Habilitar noches")
+        self.noches_activo_check.setChecked(self.config.get("noches_activo", "0") == "1")
+        self.noches_valor_input = QLineEdit(self.config.get("noches_valor", "0"))
+        self.noches_valor_input.setMinimumHeight(38)
+        self.noches_valor_input.returnPressed.connect(self.guardar)
+
+        layout_noches.addWidget(self.noches_activo_check, 0, 0, 1, 2)
+        layout_noches.addWidget(QLabel("Valor modo Noche (CLP)"), 1, 0)
+        layout_noches.addWidget(self.noches_valor_input, 1, 1)
+        layout_noches.setColumnStretch(1, 1)
+        layout_noches_wrapper.addLayout(layout_noches)
+        layout.addWidget(panel_noches)
 
         # =========================================================
         # LAVADOS
@@ -298,6 +356,12 @@ class ConfiguracionWindow(QWidget):
         titulo_fallidos.setObjectName("EtiquetaFormulario")
         layout_impresion_wrapper.addWidget(titulo_fallidos)
 
+        self.busqueda_trabajos_impresion = QLineEdit()
+        self.busqueda_trabajos_impresion.setPlaceholderText("Buscar...")
+        self.busqueda_trabajos_impresion.setMinimumHeight(38)
+        self.busqueda_trabajos_impresion.textChanged.connect(self.filtrar_trabajos_impresion)
+        layout_impresion_wrapper.addWidget(self.busqueda_trabajos_impresion)
+
         self.tabla_trabajos_fallidos = QTableWidget()
         self.tabla_trabajos_fallidos.setColumnCount(8)
         self.tabla_trabajos_fallidos.setHorizontalHeaderLabels(
@@ -414,6 +478,8 @@ class ConfiguracionWindow(QWidget):
         self.minuto_input.setText(self.config.get("valor_minuto", "25"))
         self.hora_input.setText(self.config.get("tarifa_hora", "1300"))
         self.bano_input.setText(self.config.get("valor_bano", "300"))
+        self.noches_activo_check.setChecked(self.config.get("noches_activo", "0") == "1")
+        self.noches_valor_input.setText(self.config.get("noches_valor", "0"))
         for clave, input_valor in self.lavado_inputs.items():
             valor_default = next(
                 (default for item_clave, _label, default in LAVADO_CATEGORIAS if item_clave == clave),
@@ -425,6 +491,7 @@ class ConfiguracionWindow(QWidget):
         self.print_jobs_pc_activos_check.setChecked(
             self.config.get("pc_print_jobs_activos", "1") == "1"
         )
+        self.modo_privacidad_metricas_check.setChecked(obtener_modo_privacidad_metricas())
         self.cargar_impresoras_en_combo()
         self.actualizar_trabajos_impresion_fallidos()
         self.actualizar_trabajos_impresion_impresos()
@@ -456,6 +523,7 @@ class ConfiguracionWindow(QWidget):
                 if columna == 7:
                     item.setToolTip(str(valor))
                 self.tabla_trabajos_fallidos.setItem(fila, columna, item)
+        self.filtrar_trabajos_impresion()
 
     def reintentar_trabajo_impresion_seleccionado(self):
         fila = self.tabla_trabajos_fallidos.currentRow()
@@ -527,6 +595,12 @@ class ConfiguracionWindow(QWidget):
             ]
             for columna, valor in enumerate(valores):
                 self.tabla_trabajos_impresos.setItem(fila, columna, QTableWidgetItem(str(valor)))
+        self.filtrar_trabajos_impresion()
+
+    def filtrar_trabajos_impresion(self):
+        texto = self.busqueda_trabajos_impresion.text()
+        filtrar_filas_tabla(self.tabla_trabajos_fallidos, texto)
+        filtrar_filas_tabla(self.tabla_trabajos_impresos, texto)
 
     def reimprimir_trabajo_impresion_seleccionado(self):
         fila = self.tabla_trabajos_impresos.currentRow()
@@ -725,6 +799,7 @@ class ConfiguracionWindow(QWidget):
         valor_minuto = self.minuto_input.text().strip()
         tarifa_hora = self.hora_input.text().strip()
         valor_bano = self.bano_input.text().strip()
+        noches_valor = self.noches_valor_input.text().strip()
         valores_lavado = {
             clave: input_valor.text().strip()
             for clave, input_valor in self.lavado_inputs.items()
@@ -736,10 +811,11 @@ class ConfiguracionWindow(QWidget):
             or not valor_minuto.isdigit() 
             or not tarifa_hora.isdigit() 
             or not valor_bano.isdigit()
+            or not noches_valor.isdigit()
             or any(not valor.isdigit() for valor in valores_lavado.values())
             or not dias_limpieza.isdigit()
         ):
-            QMessageBox.warning(self, "Error", "Tarifas, valores de lavado y días de limpieza deben ser números enteros.")
+            QMessageBox.warning(self, "Error", "Tarifas, valores de lavado, noches y días de limpieza deben ser números enteros.")
             return
 
         actualizar_configuracion("modo_cobro", modo)
@@ -747,6 +823,8 @@ class ConfiguracionWindow(QWidget):
         actualizar_configuracion("tarifa_hora", tarifa_hora)
         actualizar_configuracion("valor_minuto", valor_minuto)
         actualizar_configuracion("valor_bano", valor_bano)
+        actualizar_configuracion("noches_activo", 1 if self.noches_activo_check.isChecked() else 0)
+        actualizar_configuracion("noches_valor", noches_valor)
         for clave, valor in valores_lavado.items():
             actualizar_configuracion(clave, valor)
         actualizar_configuracion("limpieza_automatica_activa", 1 if self.limpieza_activa_check.isChecked() else 0)
@@ -755,6 +833,7 @@ class ConfiguracionWindow(QWidget):
             "pc_print_jobs_activos",
             1 if self.print_jobs_pc_activos_check.isChecked() else 0,
         )
+        guardar_modo_privacidad_metricas(self.modo_privacidad_metricas_check.isChecked())
 
         QMessageBox.information(self, "Guardado", "Configuración actualizada correctamente.")
 
