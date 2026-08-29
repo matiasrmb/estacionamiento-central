@@ -561,6 +561,20 @@ class ObtenerIngresoActivoPriorizadoTests(unittest.TestCase):
 
 class BuscarEstadoVehiculoTests(unittest.TestCase):
     @patch.object(registro_controller, "db_cursor")
+    def test_obtener_ingresos_activos_consulta_sin_guardia_ddl_lavados(self, db_cursor):
+        ingresos = [{"id_ingreso": 10, "patente": "ABC123", "en_lavado": 0}]
+        cursor = FakeCursor(fetchall_results=[ingresos])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.obtener_ingresos_activos_por_patente("ABC123")
+
+        self.assertEqual(resultado, ingresos)
+        consulta, params = cursor.executed[0]
+        self.assertEqual(params, ("ABC123",))
+        self.assertNotIn("CREATE", consulta.upper())
+        self.assertNotIn("ALTER", consulta.upper())
+
+    @patch.object(registro_controller, "db_cursor")
     def test_retorna_no_registrado_si_no_existe_vehiculo(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[None])
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -1768,7 +1782,6 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertIn("'CERRADO' AS estado", consultas)
         self.assertIn("i.cerrado = FALSE", consultas)
 
-    @patch.object(registro_controller, "asegurar_schema_lavados")
     @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos")
     @patch.object(registro_controller, "obtener_contexto_tarifa")
     @patch.object(registro_controller, "calcular_tarifa_con_contexto")
@@ -1779,7 +1792,6 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         calcular_tarifa_con_contexto,
         obtener_contexto_tarifa,
         obtener_minutos_lavado_por_ingresos,
-        asegurar_schema,
     ):
         fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
         filas = [
@@ -1818,7 +1830,6 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertEqual(resultado[1]["monto"], 0)
         self.assertTrue(resultado[1]["en_espera"])
 
-    @patch.object(registro_controller, "asegurar_schema_lavados")
     @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos")
     @patch.object(registro_controller, "obtener_contexto_tarifa")
     @patch.object(registro_controller, "calcular_tarifa_con_contexto")
@@ -1829,7 +1840,6 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         calcular_tarifa_con_contexto,
         obtener_contexto_tarifa,
         obtener_minutos_lavado_por_ingresos,
-        asegurar_schema,
     ):
         fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
         filas = [
@@ -1857,7 +1867,6 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         for call in calcular_tarifa_con_contexto.call_args_list:
             self.assertIs(call.args[3], contexto)
 
-    @patch.object(registro_controller, "asegurar_schema_lavados")
     @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos")
     @patch.object(registro_controller, "obtener_contexto_tarifa")
     @patch.object(registro_controller, "calcular_tarifa_con_contexto")
@@ -1868,7 +1877,6 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         calcular_tarifa_con_contexto,
         obtener_contexto_tarifa,
         obtener_minutos_lavado_por_ingresos,
-        asegurar_schema,
     ):
         fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
         filas = [{

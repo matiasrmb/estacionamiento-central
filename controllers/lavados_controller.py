@@ -7,51 +7,8 @@ mantienen el valor aplicado en el momento de inicio para auditoría histórica.
 
 from datetime import datetime
 
-import mysql.connector
-
 from controllers.config_controller import LAVADO_CATEGORIAS, obtener_valores_lavado
 from utils.db import db_cursor
-
-
-_SCHEMA_LAVADOS_ASEGURADO = False
-
-
-def asegurar_schema_lavados():
-    """
-    Crea la tabla de lavados y agrega el flag en ingresos si no existe.
-
-    Es idempotente para instalaciones existentes que ya tengan datos.
-    """
-    global _SCHEMA_LAVADOS_ASEGURADO
-    if _SCHEMA_LAVADOS_ASEGURADO:
-        return
-
-    with db_cursor(commit=True) as cursor:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS lavados (
-                id_lavado INT AUTO_INCREMENT PRIMARY KEY,
-                id_ingreso INT NOT NULL,
-                id_vehiculo INT NOT NULL,
-                patente VARCHAR(10) NOT NULL,
-                categoria_lavado VARCHAR(50) NOT NULL,
-                valor_lavado INT NOT NULL,
-                fecha_hora_inicio DATETIME NOT NULL,
-                fecha_hora_fin DATETIME DEFAULT NULL,
-                usuario_inicio VARCHAR(50) NOT NULL,
-                usuario_fin VARCHAR(50) DEFAULT NULL,
-                estado ENUM('activo', 'finalizado') NOT NULL DEFAULT 'activo',
-                FOREIGN KEY (id_ingreso) REFERENCES ingresos(id_ingreso),
-                FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo)
-            )
-        """)
-
-        try:
-            cursor.execute("ALTER TABLE ingresos ADD COLUMN en_lavado TINYINT(1) DEFAULT 0")
-        except mysql.connector.Error as exc:
-            if getattr(exc, "errno", None) != 1060:  # duplicate column
-                raise
-
-    _SCHEMA_LAVADOS_ASEGURADO = True
 
 
 def obtener_categorias_lavado(configuracion=None):
@@ -80,7 +37,6 @@ def iniciar_lavado(id_ingreso, categoria_lavado, usuario):
     if not _categoria_valida(categoria_lavado):
         raise ValueError("Categoría de lavado inválida.")
 
-    asegurar_schema_lavados()
     valores = obtener_categorias_lavado()
     valor_lavado = valores[categoria_lavado]["valor"]
     ahora = datetime.now()
@@ -138,7 +94,6 @@ def finalizar_lavado(id_ingreso, usuario):
     """
     Finaliza el lavado activo de un ingreso y reactiva el cobro normal.
     """
-    asegurar_schema_lavados()
     ahora = datetime.now()
 
     with db_cursor(dictionary=True, commit=True) as cursor:
@@ -183,7 +138,6 @@ def obtener_lavados_por_ingreso(id_ingreso):
     """
     Obtiene todos los lavados asociados a un ingreso.
     """
-    asegurar_schema_lavados()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT id_lavado, id_ingreso, categoria_lavado, valor_lavado,
@@ -246,7 +200,6 @@ def obtener_minutos_lavado_por_ingresos(id_ingresos, fecha_hora_salida=None):
     if not id_ingresos:
         return {}
 
-    asegurar_schema_lavados()
     fin_calculo = fecha_hora_salida or datetime.now()
     placeholders = ", ".join(["%s"] * len(id_ingresos))
 
@@ -275,7 +228,6 @@ def obtener_totales_lavado_por_ingresos(id_ingresos):
     if not id_ingresos:
         return {}
 
-    asegurar_schema_lavados()
     placeholders = ", ".join(["%s"] * len(id_ingresos))
 
     with db_cursor(dictionary=True) as cursor:
