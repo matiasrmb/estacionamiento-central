@@ -22,7 +22,6 @@ from controllers.config_controller import (
     obtener_print_jobs_pc_activos,
 )
 from controllers.lavados_controller import (
-    asegurar_schema_lavados,
     calcular_minutos_lavado,
     calcular_total_lavados,
     obtener_intervalos_lavado,
@@ -176,7 +175,6 @@ def obtener_ingresos_activos_por_patente(patente, incluir_noches=False):
     Returns:
         list[dict]: Lista de ingresos activos de la patente.
     """
-    asegurar_schema_lavados()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT
@@ -758,7 +756,6 @@ def obtener_vehiculos_activos():
     Returns:
         list[dict]: Lista con patente, hora de ingreso y monto acumulado.
     """
-    asegurar_schema_lavados()
     asegurar_schema_noches()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
