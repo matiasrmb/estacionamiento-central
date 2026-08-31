@@ -5,7 +5,6 @@ import mysql.connector
 from controllers.wash_pricing_controller import (
     SOLO_LAVADO_PRICE_CONFIG_MESSAGE,
     build_wash_price_snapshot,
-    ensure_wash_vehicle_type_table,
 )
 from utils.db import db_cursor
 from utils.plates import requerir_patente_valida
@@ -149,7 +148,6 @@ def calcular_duracion_minutos(inicio, fin):
 
 def iniciar_solo_lavado(patente, id_tipo_vehiculo_lavado, usuario_inicio):
     asegurar_schema_operaciones_servicio()
-    ensure_wash_vehicle_type_table()
     patente_normalizada = requerir_patente_valida(patente)
     ahora = datetime.now()
 
