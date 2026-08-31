@@ -7,12 +7,12 @@ from controllers.wash_pricing_controller import (
     SOLO_LAVADO_PRICE_CONFIG_MESSAGE,
     build_wash_price_snapshot,
     build_wash_vehicle_type_payload,
+    create_wash_vehicle_type,
     delete_wash_vehicle_type,
-    ensure_wash_vehicle_type_table,
     list_wash_vehicle_types,
     resolve_wash_type_delete_action,
+    update_wash_vehicle_type,
 )
-from controllers import wash_pricing_controller
 
 
 class FakeCursor:
@@ -42,9 +42,6 @@ def fake_db_cursor(cursor):
 
 
 class WashPricingContractsTests(unittest.TestCase):
-    def setUp(self):
-        wash_pricing_controller._WASH_TYPES_ENSURED = False
-
     def test_active_type_snapshots_label_and_price(self):
         snapshot = build_wash_price_snapshot({
             "id_tipo_vehiculo_lavado": 7,
@@ -109,9 +106,6 @@ class WashPricingContractsTests(unittest.TestCase):
     @patch("controllers.wash_pricing_controller.db_cursor")
     def test_desktop_lists_wash_vehicle_types_without_parking_tariffs(self, db_cursor):
         cursor = FakeCursor(fetchall_results=[[{
-            "clave": "lavado_suv",
-            "valor": "9000",
-        }], [{
             "id_tipo_vehiculo_lavado": 1,
             "codigo": "suv",
             "nombre": "SUV",
@@ -124,6 +118,8 @@ class WashPricingContractsTests(unittest.TestCase):
 
         self.assertEqual(items[0]["valor_lavado"], 9000)
         self.assertNotIn("tarifa_hora", items[0])
+        self.assertEqual(len(cursor.executed), 1)
+        self.assertIn("FROM tipos_vehiculo_lavado", cursor.executed[0][0])
 
     @patch("controllers.wash_pricing_controller.db_cursor")
     def test_desktop_deactivates_referenced_wash_vehicle_type(self, db_cursor):
@@ -134,22 +130,30 @@ class WashPricingContractsTests(unittest.TestCase):
 
         self.assertEqual(action, "deactivated")
         self.assertIn("UPDATE tipos_vehiculo_lavado", "\n".join(query for query, _ in cursor.executed))
+        self.assertFalse(any("CREATE" in query or "ALTER" in query for query, _ in cursor.executed))
 
     @patch("controllers.wash_pricing_controller.db_cursor")
-    def test_ensure_wash_vehicle_type_table_seeds_legacy_config_and_copies_plural(self, db_cursor):
-        cursor = FakeCursor(fetchall_results=[[{"clave": "lavado_citycar", "valor": "5000"}]])
+    def test_wash_price_crud_uses_only_intended_canonical_statements(self, db_cursor):
+        cursor = FakeCursor(scalar_results=[0], rowcount=1)
         db_cursor.side_effect = lambda **_: fake_db_cursor(cursor)
 
-        ensure_wash_vehicle_type_table()
+        payload = {"codigo": "suv", "nombre": "SUV", "valor_lavado": 9000}
+        create_wash_vehicle_type(payload)
+        update_wash_vehicle_type(7, payload)
+        delete_wash_vehicle_type(7)
 
-        sql = "\n".join(query for query, _ in cursor.executed)
-        self.assertIn("CREATE TABLE IF NOT EXISTS tipos_vehiculo_lavado", sql)
-        self.assertIn("FROM tipos_vehiculos_lavado", sql)
-        self.assertIn("ON DUPLICATE KEY UPDATE", sql)
+        sql = "\n".join(query for query, _ in cursor.executed).upper()
+        self.assertIn("INSERT INTO TIPOS_VEHICULO_LAVADO", sql)
+        self.assertIn("UPDATE TIPOS_VEHICULO_LAVADO", sql)
+        self.assertIn("DELETE FROM TIPOS_VEHICULO_LAVADO", sql)
+        self.assertNotIn("CREATE", sql)
+        self.assertNotIn("ALTER", sql)
+        self.assertNotIn("TIPOS_VEHICULOS_LAVADO", sql)
+        self.assertNotIn("CONFIGURACION", sql)
 
     @patch("controllers.wash_pricing_controller.db_cursor")
     def test_list_wash_vehicle_types_shows_clear_message_without_config(self, db_cursor):
-        cursor = FakeCursor(fetchall_results=[[], []])
+        cursor = FakeCursor(fetchall_results=[[]])
         db_cursor.side_effect = lambda **_: fake_db_cursor(cursor)
 
         with self.assertRaises(RuntimeError) as raised:

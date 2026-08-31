@@ -98,6 +98,11 @@ class SoloLavadoDesktopControllerTests(unittest.TestCase):
         self.assertIn("FROM ingresos i", consultas)
         self.assertIn("FROM tipos_vehiculo_lavado", consultas)
         self.assertIn("INSERT INTO operaciones_servicio", consultas)
+        self.assertFalse(any(
+            ("CREATE" in query.upper() or "ALTER" in query.upper())
+            and "TIPOS_VEHICULO_LAVADO" in query.upper()
+            for query, _ in cursor.executed
+        ))
 
     @patch.object(solo_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(solo_controller, "db_cursor")
