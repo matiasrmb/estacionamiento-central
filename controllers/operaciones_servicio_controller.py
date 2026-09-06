@@ -1,7 +1,5 @@
 from datetime import datetime
 
-import mysql.connector
-
 from controllers.wash_pricing_controller import (
     SOLO_LAVADO_PRICE_CONFIG_MESSAGE,
     build_wash_price_snapshot,
@@ -17,83 +15,6 @@ ESTADO_FINALIZADO_COBRADO = "FINALIZADO_COBRADO"
 ESTADO_CONVERTIDO_ESTADIA = "CONVERTIDO_ESTADIA"
 
 _ESTADOS_FINALES = {ESTADO_FINALIZADO_COBRADO, ESTADO_CONVERTIDO_ESTADIA}
-_SCHEMA_ENSURED = False
-_DUPLICATE_SCHEMA_ERROR_CODES = {1060, 1061}
-SOLO_LAVADO_SCHEMA_ERROR_MESSAGE = (
-    "No se pudo preparar la base de datos para Solo lavado. "
-    "Verificá permisos de ALTER/CREATE y que la actualización de BD se haya aplicado."
-)
-
-
-def _execute_schema(cursor, statement):
-    try:
-        cursor.execute(statement)
-    except mysql.connector.Error as exc:
-        if getattr(exc, "errno", None) in _DUPLICATE_SCHEMA_ERROR_CODES:
-            return
-        raise
-
-
-def asegurar_schema_operaciones_servicio():
-    """Crea/actualiza columnas requeridas por Solo lavado en bases ya desplegadas."""
-    global _SCHEMA_ENSURED
-    if _SCHEMA_ENSURED:
-        return
-
-    try:
-        with db_cursor(commit=True) as cursor:
-            _execute_schema(cursor, """
-                CREATE TABLE IF NOT EXISTS operaciones_servicio (
-                    id_operacion_servicio INT AUTO_INCREMENT PRIMARY KEY,
-                    patente VARCHAR(10) NOT NULL,
-                    id_tipo_vehiculo_lavado INT NULL,
-                    tipo_vehiculo_lavado_snapshot VARCHAR(80) NOT NULL,
-                    valor_lavado_snapshot INT NOT NULL,
-                    fecha_hora_inicio DATETIME NOT NULL,
-                    fecha_hora_fin DATETIME NULL,
-                    duracion_minutos INT NULL,
-                    usuario_inicio VARCHAR(50) NOT NULL,
-                    usuario_fin VARCHAR(50) NULL,
-                    estado ENUM('ACTIVO', 'FINALIZADO_COBRADO', 'CONVERTIDO_ESTADIA') NOT NULL DEFAULT 'ACTIVO',
-                    id_ingreso_generado INT NULL,
-                    cerrado TINYINT(1) NOT NULL DEFAULT 0,
-                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX idx_operaciones_servicio_estado_fecha (estado, fecha_hora_inicio),
-                    INDEX idx_operaciones_servicio_patente (patente),
-                    INDEX idx_operaciones_servicio_ingreso_generado (id_ingreso_generado),
-                    INDEX idx_operaciones_servicio_cierre (cerrado, estado, fecha_hora_fin)
-                )
-            """)
-            for statement in [
-                "ALTER TABLE operaciones_servicio ADD COLUMN id_tipo_vehiculo_lavado INT NULL",
-                "ALTER TABLE operaciones_servicio ADD COLUMN tipo_vehiculo_lavado_snapshot VARCHAR(80) NULL",
-                "ALTER TABLE operaciones_servicio ADD COLUMN valor_lavado_snapshot INT NOT NULL DEFAULT 0",
-                "ALTER TABLE operaciones_servicio ADD COLUMN fecha_hora_fin DATETIME NULL",
-                "ALTER TABLE operaciones_servicio ADD COLUMN duracion_minutos INT NULL",
-                "ALTER TABLE operaciones_servicio ADD COLUMN usuario_fin VARCHAR(50) NULL",
-                "ALTER TABLE operaciones_servicio ADD COLUMN estado ENUM('ACTIVO', 'FINALIZADO_COBRADO', 'CONVERTIDO_ESTADIA') NOT NULL DEFAULT 'ACTIVO'",
-                "ALTER TABLE operaciones_servicio ADD COLUMN id_ingreso_generado INT NULL",
-                "ALTER TABLE operaciones_servicio ADD COLUMN cerrado TINYINT(1) NOT NULL DEFAULT 0",
-                "ALTER TABLE operaciones_servicio ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-                "ALTER TABLE operaciones_servicio ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-                "ALTER TABLE operaciones_servicio ADD INDEX idx_operaciones_servicio_estado_fecha (estado, fecha_hora_inicio)",
-                "ALTER TABLE operaciones_servicio ADD INDEX idx_operaciones_servicio_patente (patente)",
-                "ALTER TABLE operaciones_servicio ADD INDEX idx_operaciones_servicio_ingreso_generado (id_ingreso_generado)",
-                "ALTER TABLE operaciones_servicio ADD INDEX idx_operaciones_servicio_cierre (cerrado, estado, fecha_hora_fin)",
-                "ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos INT NOT NULL DEFAULT 0",
-                "ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos_monto INT NOT NULL DEFAULT 0",
-                "ALTER TABLE cierres_diarios ADD COLUMN total_general INT NOT NULL DEFAULT 0",
-            ]:
-                _execute_schema(cursor, statement)
-    except RuntimeError as exc:
-        if str(exc) == SOLO_LAVADO_SCHEMA_ERROR_MESSAGE:
-            raise
-        raise RuntimeError(SOLO_LAVADO_SCHEMA_ERROR_MESSAGE) from exc
-    except Exception as exc:
-        raise RuntimeError(SOLO_LAVADO_SCHEMA_ERROR_MESSAGE) from exc
-
-    _SCHEMA_ENSURED = True
 
 
 def build_operacion_servicio_inicio(patente, wash_snapshot, usuario_inicio, fecha_hora_inicio):
@@ -147,7 +68,6 @@ def calcular_duracion_minutos(inicio, fin):
 
 
 def iniciar_solo_lavado(patente, id_tipo_vehiculo_lavado, usuario_inicio):
-    asegurar_schema_operaciones_servicio()
     patente_normalizada = requerir_patente_valida(patente)
     ahora = datetime.now()
 
@@ -221,7 +141,6 @@ def obtener_operacion_servicio_activa(id_operacion_servicio, cursor):
 
 
 def finalizar_solo_lavado_cobrando(id_operacion_servicio, usuario_fin):
-    asegurar_schema_operaciones_servicio()
     ahora = datetime.now()
 
     with db_cursor(dictionary=True, commit=True) as cursor:
@@ -262,7 +181,6 @@ def finalizar_solo_lavado_cobrando(id_operacion_servicio, usuario_fin):
 
 
 def finalizar_solo_lavado_como_estadia(id_operacion_servicio, usuario_fin):
-    asegurar_schema_operaciones_servicio()
     ahora = datetime.now()
 
     with db_cursor(dictionary=True, commit=True) as cursor:
@@ -324,7 +242,6 @@ def finalizar_solo_lavado_como_estadia(id_operacion_servicio, usuario_fin):
 
 def obtener_operacion_convertida_por_ingreso(id_ingreso):
     try:
-        asegurar_schema_operaciones_servicio()
         with db_cursor(dictionary=True) as cursor:
             cursor.execute("""
                 SELECT id_operacion_servicio, patente, tipo_vehiculo_lavado_snapshot,
@@ -342,7 +259,6 @@ def obtener_operacion_convertida_por_ingreso(id_ingreso):
 
 
 def obtener_solo_lavados_activos():
-    asegurar_schema_operaciones_servicio()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT id_operacion_servicio, patente, tipo_vehiculo_lavado_snapshot,

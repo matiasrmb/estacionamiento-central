@@ -75,9 +75,8 @@ class SoloLavadoPrintJobTests(unittest.TestCase):
         }
 
     @patch.object(operaciones_servicio_controller, "obtener_print_jobs_pc_activos", return_value=True)
-    @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(operaciones_servicio_controller, "db_cursor")
-    def test_finalizar_cobrando_crea_un_job_durable(self, db_cursor, _ensure, _obtener_print_jobs_pc_activos):
+    def test_finalizar_cobrando_crea_un_job_durable(self, db_cursor, _obtener_print_jobs_pc_activos):
         cursor = FakeCursor(self.operation)
         db_cursor.return_value = fake_db_cursor(cursor)
 
@@ -95,8 +94,7 @@ class SoloLavadoPrintJobTests(unittest.TestCase):
         self.assertEqual(result["id_operacion_servicio"], 31)
 
     @patch.object(operaciones_servicio_controller, "obtener_print_jobs_pc_activos", return_value=True)
-    @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
-    def test_job_failure_rolls_back_service_finalization(self, _ensure, _obtener_print_jobs_pc_activos):
+    def test_job_failure_rolls_back_service_finalization(self, _obtener_print_jobs_pc_activos):
         connection = FakeConnection(FailingPrintJobCursor(self.operation))
 
         with patch.object(operaciones_servicio_controller, "db_cursor", db_utils.db_cursor), patch.object(
@@ -108,10 +106,7 @@ class SoloLavadoPrintJobTests(unittest.TestCase):
         self.assertFalse(connection.committed)
         self.assertTrue(connection.rolled_back)
 
-    @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
-    def test_finalizar_cobrando_confirma_y_crea_job_si_falla_la_lectura_de_configuracion(
-        self, _ensure
-    ):
+    def test_finalizar_cobrando_confirma_y_crea_job_si_falla_la_lectura_de_configuracion(self):
         cursor = FailingConfigLookupCursor(self.operation)
         connection = FakeConnection(cursor)
 
@@ -128,10 +123,9 @@ class SoloLavadoPrintJobTests(unittest.TestCase):
         self.assertIn("INSERT INTO print_jobs", consultas)
 
     @patch.object(operaciones_servicio_controller, "obtener_print_jobs_pc_activos", return_value=False)
-    @patch.object(operaciones_servicio_controller, "asegurar_schema_operaciones_servicio")
     @patch.object(operaciones_servicio_controller, "db_cursor")
     def test_finalizar_cobrando_no_crea_job_cuando_la_impresion_pc_esta_desactivada(
-        self, db_cursor, _ensure, _obtener_print_jobs_pc_activos
+        self, db_cursor, _obtener_print_jobs_pc_activos
     ):
         cursor = FakeCursor(self.operation)
         db_cursor.return_value = fake_db_cursor(cursor)
