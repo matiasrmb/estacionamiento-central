@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from controllers import cierres_controller
@@ -6,6 +7,14 @@ from utils.api_client import ApiClientError
 
 
 class RealizarCierreDiarioTests(unittest.TestCase):
+    def test_cierre_ensure_no_crea_schema_de_operaciones_ni_totales_de_solo_lavado(self):
+        source = Path("controllers/cierres_controller.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("asegurar_schema_operaciones_servicio", source)
+        self.assertNotIn("ALTER TABLE operaciones_servicio", source)
+        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos", source)
+        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_general", source)
+
     def test_schema_declara_vinculos_y_totales_canonicos_de_cierre(self):
         with open("schema.sql", encoding="utf-8") as schema_file:
             schema = schema_file.read()
@@ -17,6 +26,7 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         self.assertIn("total_mensualidades_monto INT NOT NULL DEFAULT 0", schema)
         self.assertIn("total_noches INT NOT NULL DEFAULT 0", schema)
         self.assertIn("total_noches_monto INT NOT NULL DEFAULT 0", schema)
+        self.assertIn("total_lavados_solos_monto INT NOT NULL DEFAULT 0", schema)
         self.assertIn("CREATE TABLE IF NOT EXISTS pagos_mensuales", schema)
         self.assertIn("UNIQUE KEY uq_pagos_mensuales_vehiculo_periodo", schema)
         self.assertIn("id_cierre INT NULL", schema)

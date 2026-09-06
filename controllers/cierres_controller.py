@@ -2,7 +2,6 @@
 
 import mysql.connector
 
-from controllers.operaciones_servicio_controller import asegurar_schema_operaciones_servicio
 from controllers.mensuales_controller import asegurar_schema_mensuales
 from utils.api_client import ApiClientError, crear_cierre as crear_cierre_api
 from utils.db import db_cursor
@@ -27,8 +26,6 @@ def asegurar_schema_cierres():
     if _SCHEMA_CIERRES_ASEGURADO:
         return
 
-    # Mantiene operativos los cierres en instalaciones anteriores a Solo lavado.
-    asegurar_schema_operaciones_servicio()
     asegurar_schema_mensuales()
     with db_cursor(commit=True) as cursor:
         _ejecutar_schema(cursor, """
@@ -47,17 +44,12 @@ def asegurar_schema_cierres():
             )
         """)
         for sentencia in (
-            "ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos INT NOT NULL DEFAULT 0",
-            "ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos_monto INT NOT NULL DEFAULT 0",
-            "ALTER TABLE cierres_diarios ADD COLUMN total_general INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_gastos INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_neto INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_noches INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_noches_monto INT NOT NULL DEFAULT 0",
             "ALTER TABLE usos_bano ADD COLUMN id_cierre INT NULL",
             "ALTER TABLE usos_bano ADD INDEX idx_usos_bano_cierre (id_cierre)",
-            "ALTER TABLE operaciones_servicio ADD COLUMN cerrado TINYINT(1) NOT NULL DEFAULT 0",
-            "ALTER TABLE operaciones_servicio ADD INDEX idx_operaciones_servicio_cierre (cerrado, estado, fecha_hora_fin)",
         ):
             _ejecutar_schema(cursor, sentencia)
 
