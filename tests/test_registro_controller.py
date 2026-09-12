@@ -1,6 +1,7 @@
 import json
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from controllers import registro_controller
@@ -626,9 +627,8 @@ class PreviewSalidaTests(unittest.TestCase):
 
 
 class NochesPendientesTests(unittest.TestCase):
-    @patch.object(registro_controller, "asegurar_schema_noches")
     @patch.object(registro_controller, "db_cursor")
-    def test_busqueda_noche_pendiente_excluye_ingreso_anulado(self, db_cursor, _asegurar_schema):
+    def test_busqueda_noche_pendiente_excluye_ingreso_anulado(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[None])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
@@ -640,9 +640,8 @@ class NochesPendientesTests(unittest.TestCase):
         self.assertIn("ie.id_ingreso_original = i.id_ingreso", consulta)
         self.assertEqual(params, ("ABC123",))
 
-    @patch.object(registro_controller, "asegurar_schema_noches")
     @patch.object(registro_controller, "db_cursor")
-    def test_busqueda_noche_pendiente_normal_se_mantiene_disponible(self, db_cursor, _asegurar_schema):
+    def test_busqueda_noche_pendiente_normal_se_mantiene_disponible(self, db_cursor):
         pendiente = {"id_ingreso": 10, "patente": "ABC123", "fecha_hora_pago": datetime(2026, 7, 30, 20, 0)}
         cursor = FakeCursor(fetchone_results=[pendiente])
         db_cursor.return_value = FakeDbCursorContext(cursor)
@@ -651,9 +650,8 @@ class NochesPendientesTests(unittest.TestCase):
 
         self.assertEqual(resultado, pendiente)
 
-    @patch.object(registro_controller, "asegurar_schema_noches")
     @patch.object(registro_controller, "db_cursor")
-    def test_finalizar_noche_pendiente_cierra_sin_cobro_adicional(self, db_cursor, _asegurar_schema):
+    def test_finalizar_noche_pendiente_cierra_sin_cobro_adicional(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[{"id_cobro_noche": 7}])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
@@ -671,9 +669,8 @@ class NochesPendientesTests(unittest.TestCase):
         self.assertEqual(salida[0], estado_noche[0])
         self.assertEqual(salida[1:], ("operador", 10))
 
-    @patch.object(registro_controller, "asegurar_schema_noches")
     @patch.object(registro_controller, "db_cursor")
-    def test_no_finaliza_noche_pendiente_de_ingreso_anulado(self, db_cursor, _asegurar_schema):
+    def test_no_finaliza_noche_pendiente_de_ingreso_anulado(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[None])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
@@ -685,11 +682,10 @@ class NochesPendientesTests(unittest.TestCase):
         self.assertNotIn("estado_operativo = 'RETIRADO'", consultas)
         self.assertNotIn("tarifa_aplicada = 0", consultas)
 
-    @patch.object(registro_controller, "asegurar_schema_noches")
     @patch.object(registro_controller, "db_cursor")
     @patch.object(registro_controller, "datetime", wraps=datetime)
     def test_convertir_noche_a_ingreso_normal_ancla_en_el_fin_de_la_noche_pagada(
-        self, mocked_datetime, db_cursor, _asegurar_schema
+        self, mocked_datetime, db_cursor
     ):
         for pago, resolucion, esperado in (
             (datetime(2026, 7, 30, 9, 30), datetime(2026, 7, 31, 12, 0), datetime(2026, 7, 30, 10, 0)),
@@ -715,9 +711,8 @@ class NochesPendientesTests(unittest.TestCase):
                 self.assertEqual(estado_noche, (resolucion, 7))
                 self.assertEqual(ingreso, (esperado, "operador", 10))
 
-    @patch.object(registro_controller, "asegurar_schema_noches")
     @patch.object(registro_controller, "db_cursor")
-    def test_no_convierte_noche_pendiente_de_ingreso_anulado(self, db_cursor, _asegurar_schema):
+    def test_no_convierte_noche_pendiente_de_ingreso_anulado(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[None])
         db_cursor.return_value = FakeDbCursorContext(cursor)
 
@@ -753,7 +748,6 @@ class NochesPendientesTests(unittest.TestCase):
             60, inicio, datetime(2026, 7, 31, 11, 0), devolver_flag=True
         )
 
-    @patch.object(registro_controller, "asegurar_schema_noches")
     @patch.object(registro_controller, "obtener_totales_lavado_por_ingresos", return_value={})
     @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos", return_value={})
     @patch.object(registro_controller, "obtener_contexto_tarifa")
@@ -766,7 +760,6 @@ class NochesPendientesTests(unittest.TestCase):
         _obtener_contexto,
         _minutos_lavado,
         _totales_lavado,
-        _asegurar_schema,
     ):
         cursor = FakeCursor(fetchall_results=[[{
             "id_ingreso": 10,
@@ -784,6 +777,17 @@ class NochesPendientesTests(unittest.TestCase):
         self.assertEqual(resultado[0]["monto"], 0)
         self.assertTrue(resultado[0]["noche_pendiente"])
         calcular_tarifa.assert_not_called()
+
+    def test_noches_no_repara_schema_en_runtime_y_conserva_dml_de_negocio(self):
+        source = Path("controllers/registro_controller.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("asegurar_schema_noches", source)
+        self.assertNotIn("_schema_noches_asegurado", source)
+        self.assertNotIn("ALTER TABLE cobros_noches", source)
+        self.assertIn("INSERT INTO cobros_noches", source)
+        self.assertIn("UPDATE cobros_noches SET estado_operativo = 'RETIRADO'", source)
+        self.assertIn("UPDATE cobros_noches SET estado_operativo = 'CONVERTIDO'", source)
+        self.assertIn("FOR UPDATE", source)
 
     def test_modo_noche_factura_solo_minutos_fuera_de_la_gracia(self):
         for ingreso, salida, esperado in (

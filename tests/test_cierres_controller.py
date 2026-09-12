@@ -14,6 +14,12 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         self.assertNotIn("ALTER TABLE operaciones_servicio", source)
         self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos", source)
         self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_general", source)
+        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_noches", source)
+        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_noches_monto", source)
+        self.assertIn("CREATE TABLE IF NOT EXISTS gastos_operacion", source)
+        self.assertIn("ALTER TABLE cierres_diarios ADD COLUMN total_gastos", source)
+        self.assertIn("ALTER TABLE cierres_diarios ADD COLUMN total_neto", source)
+        self.assertIn("ALTER TABLE usos_bano ADD COLUMN id_cierre", source)
 
     def test_schema_declara_vinculos_y_totales_canonicos_de_cierre(self):
         with open("schema.sql", encoding="utf-8") as schema_file:

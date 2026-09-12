@@ -46,8 +46,6 @@ def asegurar_schema_cierres():
         for sentencia in (
             "ALTER TABLE cierres_diarios ADD COLUMN total_gastos INT NOT NULL DEFAULT 0",
             "ALTER TABLE cierres_diarios ADD COLUMN total_neto INT NOT NULL DEFAULT 0",
-            "ALTER TABLE cierres_diarios ADD COLUMN total_noches INT NOT NULL DEFAULT 0",
-            "ALTER TABLE cierres_diarios ADD COLUMN total_noches_monto INT NOT NULL DEFAULT 0",
             "ALTER TABLE usos_bano ADD COLUMN id_cierre INT NULL",
             "ALTER TABLE usos_bano ADD INDEX idx_usos_bano_cierre (id_cierre)",
         ):
