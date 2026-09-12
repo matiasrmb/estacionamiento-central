@@ -33,31 +33,6 @@ from controllers.accounting_contracts import build_accounting_summary
 from utils.slowlog import slow_operation
 from utils.plates import requerir_patente_valida
 
-_schema_noches_asegurado = False
-
-
-def asegurar_schema_noches():
-    """Agrega el estado operativo de Noches sin modificar cobros ya registrados."""
-    global _schema_noches_asegurado
-    if _schema_noches_asegurado:
-        return
-    try:
-        with db_cursor(commit=True) as cursor:
-            for statement in (
-                "ALTER TABLE cobros_noches ADD COLUMN estado_operativo ENUM('PENDIENTE', 'RETIRADO', 'CONVERTIDO') NOT NULL DEFAULT 'PENDIENTE'",
-                "ALTER TABLE cobros_noches ADD COLUMN fecha_hora_resolucion DATETIME NULL",
-                "ALTER TABLE cobros_noches ADD INDEX idx_cobros_noches_estado_operativo (estado_operativo, id_ingreso)",
-            ):
-                try:
-                    cursor.execute(statement)
-                except Exception as exc:
-                    if getattr(exc, "errno", None) not in (1060, 1061):
-                        raise
-    except Exception as exc:
-        raise RuntimeError("No se pudo actualizar el estado operativo de Noches.") from exc
-    _schema_noches_asegurado = True
-
-
 def calcular_minutos_estadia(fecha_hora_ingreso, fecha_hora_salida=None):
     """
     Calcula los minutos de estadía entre ingreso y salida.
@@ -287,7 +262,6 @@ def obtener_opcion_noches(configuracion=None, ahora=None):
 
 def obtener_noches_prepagadas(id_ingreso):
     """Obtiene los cobros Noches pagados que pertenecen a una estadia."""
-    asegurar_schema_noches()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT monto_snapshot, hora_inicio_snapshot, hora_fin_snapshot, estado_operativo
@@ -311,7 +285,6 @@ def es_noche_pendiente(ingreso):
 
 
 def obtener_noche_pendiente_por_patente(patente):
-    asegurar_schema_noches()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT i.id_ingreso, v.patente, cn.fecha_hora_pago
@@ -341,7 +314,6 @@ def _inicio_normal_desde_diez(fecha_hora_pago):
 
 
 def finalizar_noche_pendiente(id_ingreso, usuario):
-    asegurar_schema_noches()
     ahora = datetime.now()
     with db_cursor(dictionary=True, commit=True) as cursor:
         cursor.execute("""
@@ -370,7 +342,6 @@ def finalizar_noche_pendiente(id_ingreso, usuario):
 
 
 def convertir_noche_a_ingreso_normal(id_ingreso, usuario):
-    asegurar_schema_noches()
     ahora = datetime.now()
     with db_cursor(dictionary=True, commit=True) as cursor:
         cursor.execute("""
@@ -756,7 +727,6 @@ def obtener_vehiculos_activos():
     Returns:
         list[dict]: Lista con patente, hora de ingreso y monto acumulado.
     """
-    asegurar_schema_noches()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT
