@@ -11,56 +11,6 @@ from utils.db import db_cursor
 from utils.plates import requerir_patente_valida
 
 
-_SCHEMA_MENSUALES_ASEGURADO = False
-_DUPLICATE_SCHEMA_ERROR_CODES = {1060, 1061}
-
-
-def _ejecutar_schema(cursor, sentencia):
-    try:
-        cursor.execute(sentencia)
-    except mysql.connector.Error as exc:
-        if getattr(exc, "errno", None) not in _DUPLICATE_SCHEMA_ERROR_CODES:
-            raise
-
-
-def asegurar_schema_mensuales():
-    """Agrega las estructuras de mensualidades en instalaciones existentes."""
-    global _SCHEMA_MENSUALES_ASEGURADO
-    if _SCHEMA_MENSUALES_ASEGURADO:
-        return
-
-    with db_cursor(commit=True) as cursor:
-        _ejecutar_schema(
-            cursor,
-            "ALTER TABLE vehiculos ADD COLUMN dia_vencimiento TINYINT UNSIGNED NOT NULL DEFAULT 1",
-        )
-        _ejecutar_schema(cursor, "ALTER TABLE vehiculos ADD COLUMN telefono VARCHAR(30) NULL")
-        _ejecutar_schema(cursor, "ALTER TABLE cierres_diarios ADD COLUMN total_mensualidades INT NOT NULL DEFAULT 0")
-        _ejecutar_schema(cursor, "ALTER TABLE cierres_diarios ADD COLUMN total_mensualidades_monto INT NOT NULL DEFAULT 0")
-        _ejecutar_schema(cursor, """
-            CREATE TABLE IF NOT EXISTS pagos_mensuales (
-                id_pago_mensual INT AUTO_INCREMENT PRIMARY KEY,
-                id_vehiculo INT NOT NULL,
-                periodo DATE NOT NULL,
-                fecha_pago DATETIME NOT NULL,
-                monto_snapshot INT NOT NULL,
-                dia_vencimiento_snapshot TINYINT UNSIGNED NOT NULL,
-                usuario VARCHAR(50) NOT NULL,
-                metodo_pago VARCHAR(50) NULL,
-                observacion VARCHAR(500) NULL,
-                id_cierre INT NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uq_pagos_mensuales_vehiculo_periodo (id_vehiculo, periodo),
-                INDEX idx_pagos_mensuales_cierre (id_cierre),
-                INDEX idx_pagos_mensuales_fecha_pago (fecha_pago),
-                FOREIGN KEY (id_vehiculo) REFERENCES vehiculos(id_vehiculo),
-                FOREIGN KEY (id_cierre) REFERENCES cierres_diarios(id_cierre)
-            )
-        """)
-
-    _SCHEMA_MENSUALES_ASEGURADO = True
-
-
 def fecha_vencimiento_efectiva(periodo, dia_vencimiento):
     """Devuelve el vencimiento ajustado al último día real del mes."""
     return periodo.replace(day=min(int(dia_vencimiento), monthrange(periodo.year, periodo.month)[1]))
@@ -86,7 +36,6 @@ def obtener_mensuales(ahora=None):
     Returns:
         list: Lista de diccionarios con 'id_vehiculo', 'patente' y 'tarifa_mensual'.
     """
-    asegurar_schema_mensuales()
     periodo = _periodo_actual(ahora)
     query = """
         SELECT v.id_vehiculo, v.patente, v.tarifa_mensual, v.dia_vencimiento, v.telefono,
@@ -202,7 +151,6 @@ def actualizar_tarifa(id_vehiculo, nueva_tarifa, dia_vencimiento=None, telefono=
 
 def registrar_pago_mensual(id_vehiculo, usuario, metodo_pago=None, observacion=None, ahora=None):
     """Registra un único cobro mensual para el período actual."""
-    asegurar_schema_mensuales()
     ahora = ahora or datetime.now()
     periodo = _periodo_actual(ahora).date()
     with db_cursor(dictionary=True, commit=True) as cursor:

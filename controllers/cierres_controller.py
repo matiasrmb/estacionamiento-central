@@ -1,8 +1,6 @@
 """Soporte de esquema y protección del cierre diario en Desktop."""
 
 import mysql.connector
-
-from controllers.mensuales_controller import asegurar_schema_mensuales
 from utils.api_client import ApiClientError, crear_cierre as crear_cierre_api
 from utils.db import db_cursor
 from utils.pdf import generar_pdf_cierre
@@ -26,7 +24,6 @@ def asegurar_schema_cierres():
     if _SCHEMA_CIERRES_ASEGURADO:
         return
 
-    asegurar_schema_mensuales()
     with db_cursor(commit=True) as cursor:
         _ejecutar_schema(cursor, """
             CREATE TABLE IF NOT EXISTS gastos_operacion (

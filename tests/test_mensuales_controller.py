@@ -1,7 +1,10 @@
 import unittest
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
+
+import mysql.connector
 
 from controllers import mensuales_controller
 
@@ -32,9 +35,18 @@ def fake_db_cursor(cursor):
 
 
 class MensualesControllerTests(unittest.TestCase):
+    def test_no_repara_schema_mensual_en_runtime(self):
+        source = Path("controllers/mensuales_controller.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("asegurar_schema_mensuales", source)
+        self.assertNotIn("_SCHEMA_MENSUALES_ASEGURADO", source)
+        self.assertNotIn("ALTER TABLE", source)
+        self.assertNotIn("CREATE TABLE IF NOT EXISTS pagos_mensuales", source)
+        self.assertIn("INSERT INTO pagos_mensuales", source)
+        self.assertIn("FOR UPDATE", source)
+
     @patch.object(mensuales_controller, "db_cursor")
-    @patch.object(mensuales_controller, "asegurar_schema_mensuales")
-    def test_obtener_mensuales_retorna_clientes_activos(self, asegurar_schema, db_cursor):
+    def test_obtener_mensuales_retorna_clientes_activos(self, db_cursor):
         mensuales = [{"id_vehiculo": 1, "patente": "ABC123", "tarifa_mensual": 50000, "dia_vencimiento": 10, "telefono": "1122334455"}]
         cursor = FakeCursor(fetchall_results=[mensuales])
         db_cursor.return_value = fake_db_cursor(cursor)
@@ -42,7 +54,6 @@ class MensualesControllerTests(unittest.TestCase):
         resultado = mensuales_controller.obtener_mensuales()
 
         self.assertEqual(resultado, mensuales)
-        asegurar_schema.assert_called_once_with()
         db_cursor.assert_called_once_with(dictionary=True)
 
     @patch.object(mensuales_controller, "db_cursor")
@@ -137,8 +148,7 @@ class MensualesControllerTests(unittest.TestCase):
         )
 
     @patch.object(mensuales_controller, "db_cursor")
-    @patch.object(mensuales_controller, "asegurar_schema_mensuales")
-    def test_registrar_pago_guarda_snapshots_del_periodo_actual(self, asegurar_schema, db_cursor):
+    def test_registrar_pago_guarda_snapshots_del_periodo_actual(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[{
             "id_vehiculo": 4,
             "tipo_cliente": "mensual",
@@ -152,13 +162,35 @@ class MensualesControllerTests(unittest.TestCase):
         resultado = mensuales_controller.registrar_pago_mensual(4, "operador", "efectivo", "febrero", ahora)
 
         self.assertEqual(resultado, (True, "Pago mensual registrado."))
-        asegurar_schema.assert_called_once_with()
         insercion = next((params for query, params in cursor.executed if "INSERT INTO pagos_mensuales" in query), None)
         self.assertEqual(insercion, (4, datetime(2026, 2, 1).date(), ahora, 50000, 31, "operador", "efectivo", "febrero"))
 
     @patch.object(mensuales_controller, "db_cursor")
-    @patch.object(mensuales_controller, "asegurar_schema_mensuales")
-    def test_registrar_pago_rechaza_duplicado_y_configuraciones_invalidas(self, asegurar_schema, db_cursor):
+    def test_registrar_pago_rechaza_duplicado_en_carrera_al_insertar(self, db_cursor):
+        cursor = FakeCursor(fetchone_results=[{
+            "id_vehiculo": 4,
+            "tipo_cliente": "mensual",
+            "activo": 1,
+            "tarifa_mensual": 50000,
+            "dia_vencimiento": 10,
+        }, None])
+        execute = cursor.execute
+
+        def duplicate_on_insert(query, params=None):
+            execute(query, params)
+            if "INSERT INTO pagos_mensuales" in query:
+                raise mysql.connector.Error(msg="Duplicate entry", errno=1062)
+
+        cursor.execute = duplicate_on_insert
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        self.assertEqual(
+            mensuales_controller.registrar_pago_mensual(4, "operador", ahora=datetime(2026, 2, 15)),
+            (False, "El período actual ya fue pagado."),
+        )
+
+    @patch.object(mensuales_controller, "db_cursor")
+    def test_registrar_pago_rechaza_duplicado_y_configuraciones_invalidas(self, db_cursor):
         duplicado = FakeCursor(fetchone_results=[{
             "id_vehiculo": 4,
             "tipo_cliente": "mensual",
