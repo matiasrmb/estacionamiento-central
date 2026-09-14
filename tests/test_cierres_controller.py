@@ -7,11 +7,14 @@ from utils.api_client import ApiClientError
 
 
 class RealizarCierreDiarioTests(unittest.TestCase):
-    def test_cierre_ensure_no_crea_schema_de_operaciones_ni_totales_de_solo_lavado(self):
+    def test_cierre_ensure_no_crea_schema_de_operaciones_mensualidades_ni_totales_de_solo_lavado(self):
         source = Path("controllers/cierres_controller.py").read_text(encoding="utf-8")
 
         self.assertNotIn("asegurar_schema_operaciones_servicio", source)
+        self.assertNotIn("asegurar_schema_mensuales", source)
         self.assertNotIn("ALTER TABLE operaciones_servicio", source)
+        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_mensualidades", source)
+        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_mensualidades_monto", source)
         self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos", source)
         self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_general", source)
         self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_noches", source)
