@@ -1,6 +1,7 @@
 import unittest
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 from controllers import gastos_controller
@@ -32,9 +33,13 @@ def fake_db_cursor(cursor):
 
 
 class GastosControllerTests(unittest.TestCase):
-    @patch.object(gastos_controller, "asegurar_schema_cierres")
+    def test_gastos_no_repara_schema_en_runtime(self):
+        source = Path("controllers/gastos_controller.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("asegurar_schema_cierres", source)
+
     @patch.object(gastos_controller, "db_cursor")
-    def test_registrar_gasto_valido_guarda_fecha_usuario_y_monto(self, db_cursor, asegurar_schema):
+    def test_registrar_gasto_valido_guarda_fecha_usuario_y_monto(self, db_cursor):
         cursor = FakeCursor(lastrowid=23)
         db_cursor.return_value = fake_db_cursor(cursor)
 
@@ -47,7 +52,6 @@ class GastosControllerTests(unittest.TestCase):
         query, params = cursor.executed[0]
         self.assertIn("INSERT INTO gastos_operacion", query)
         self.assertEqual(params[1:], ("Insumos", "Jabón", 1500, "cajero"))
-        asegurar_schema.assert_called_once_with()
 
     @patch.object(gastos_controller, "db_cursor")
     def test_registrar_gasto_valida_campos_y_no_accede_a_base(self, db_cursor):
@@ -57,9 +61,8 @@ class GastosControllerTests(unittest.TestCase):
                     gastos_controller.registrar_gasto(*args)
         db_cursor.assert_not_called()
 
-    @patch.object(gastos_controller, "asegurar_schema_cierres")
     @patch.object(gastos_controller, "db_cursor")
-    def test_lista_pendientes_y_total(self, db_cursor, asegurar_schema):
+    def test_lista_pendientes_y_total(self, db_cursor):
         lista_cursor = FakeCursor(fetchall_result=[{"id_gasto": 1, "monto": 500}])
         total_cursor = FakeCursor(fetchone_result={"total": 500})
         db_cursor.side_effect = [fake_db_cursor(lista_cursor), fake_db_cursor(total_cursor)]
@@ -71,7 +74,6 @@ class GastosControllerTests(unittest.TestCase):
         self.assertEqual(total, 500)
         self.assertIn("WHERE id_cierre IS NULL", lista_cursor.executed[0][0])
         self.assertIn("WHERE id_cierre IS NULL", total_cursor.executed[0][0])
-        self.assertEqual(asegurar_schema.call_count, 2)
 
 
 if __name__ == "__main__":

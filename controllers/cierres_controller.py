@@ -1,54 +1,8 @@
-"""Soporte de esquema y protección del cierre diario en Desktop."""
+"""Protección del cierre diario en Desktop."""
 
-import mysql.connector
 from utils.api_client import ApiClientError, crear_cierre as crear_cierre_api
-from utils.db import db_cursor
 from utils.pdf import generar_pdf_cierre
 
-
-_SCHEMA_CIERRES_ASEGURADO = False
-_DUPLICATE_SCHEMA_ERROR_CODES = {1060, 1061}
-
-
-def _ejecutar_schema(cursor, sentencia):
-    try:
-        cursor.execute(sentencia)
-    except mysql.connector.Error as exc:
-        if getattr(exc, "errno", None) not in _DUPLICATE_SCHEMA_ERROR_CODES:
-            raise
-
-
-def asegurar_schema_cierres():
-    """Agrega de forma idempotente los campos requeridos por el cierre actual."""
-    global _SCHEMA_CIERRES_ASEGURADO
-    if _SCHEMA_CIERRES_ASEGURADO:
-        return
-
-    with db_cursor(commit=True) as cursor:
-        _ejecutar_schema(cursor, """
-            CREATE TABLE IF NOT EXISTS gastos_operacion (
-                id_gasto INT AUTO_INCREMENT PRIMARY KEY,
-                fecha_hora DATETIME NOT NULL,
-                categoria VARCHAR(80) NOT NULL,
-                descripcion VARCHAR(500) NOT NULL,
-                monto INT NOT NULL,
-                usuario VARCHAR(50) NOT NULL,
-                id_cierre INT NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_gastos_operacion_cierre (id_cierre),
-                INDEX idx_gastos_operacion_fecha (fecha_hora),
-                FOREIGN KEY (id_cierre) REFERENCES cierres_diarios(id_cierre)
-            )
-        """)
-        for sentencia in (
-            "ALTER TABLE cierres_diarios ADD COLUMN total_gastos INT NOT NULL DEFAULT 0",
-            "ALTER TABLE cierres_diarios ADD COLUMN total_neto INT NOT NULL DEFAULT 0",
-            "ALTER TABLE usos_bano ADD COLUMN id_cierre INT NULL",
-            "ALTER TABLE usos_bano ADD INDEX idx_usos_bano_cierre (id_cierre)",
-        ):
-            _ejecutar_schema(cursor, sentencia)
-
-    _SCHEMA_CIERRES_ASEGURADO = True
 
 def _datos_pdf_cierre(cierre):
     return {

@@ -2,7 +2,6 @@
 
 from datetime import datetime
 
-from controllers.cierres_controller import asegurar_schema_cierres
 from utils.db import db_cursor
 
 
@@ -32,8 +31,6 @@ def registrar_gasto(categoria, descripcion, monto, usuario):
     usuario = _texto_requerido(usuario, "El usuario")
     monto = _monto_positivo(monto)
     fecha_hora = datetime.now()
-    asegurar_schema_cierres()
-
     with db_cursor(commit=True) as cursor:
         cursor.execute("""
             INSERT INTO gastos_operacion (
@@ -55,7 +52,6 @@ def registrar_gasto(categoria, descripcion, monto, usuario):
 
 def obtener_gastos_pendientes():
     """Retorna gastos aún no vinculados a un cierre, del más reciente al más antiguo."""
-    asegurar_schema_cierres()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT id_gasto, fecha_hora, categoria, descripcion, monto, usuario
@@ -68,7 +64,6 @@ def obtener_gastos_pendientes():
 
 def obtener_total_gastos_pendientes():
     """Retorna el total de gastos pendientes para el período actual."""
-    asegurar_schema_cierres()
     with db_cursor(dictionary=True) as cursor:
         cursor.execute("""
             SELECT COALESCE(SUM(monto), 0) AS total
