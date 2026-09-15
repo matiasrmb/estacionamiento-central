@@ -219,10 +219,13 @@ CREATE TABLE IF NOT EXISTS gastos_operacion (
 CREATE TABLE IF NOT EXISTS asistencias (
     id_asistencia INT AUTO_INCREMENT PRIMARY KEY,
     usuario VARCHAR(50) NOT NULL,
+    device_id VARCHAR(128) NULL,
+    session_id VARCHAR(64) NULL,
     hora_inicio DATETIME NOT NULL,
     hora_salida DATETIME DEFAULT NULL,
     cantidad_movimientos INT DEFAULT 0,
-    total_recaudado DECIMAL(10,2) DEFAULT 0
+    total_recaudado DECIMAL(10,2) DEFAULT 0,
+    INDEX idx_asistencias_sesion_activa (usuario, session_id, hora_salida)
 );
 
 -- Tabla para registrar subidas temporales de precios
