@@ -7,22 +7,13 @@ from utils.api_client import ApiClientError
 
 
 class RealizarCierreDiarioTests(unittest.TestCase):
-    def test_cierre_ensure_no_crea_schema_de_operaciones_mensualidades_ni_totales_de_solo_lavado(self):
+    def test_cierre_no_repara_schema_en_runtime(self):
         source = Path("controllers/cierres_controller.py").read_text(encoding="utf-8")
 
-        self.assertNotIn("asegurar_schema_operaciones_servicio", source)
-        self.assertNotIn("asegurar_schema_mensuales", source)
-        self.assertNotIn("ALTER TABLE operaciones_servicio", source)
-        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_mensualidades", source)
-        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_mensualidades_monto", source)
-        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_lavados_solos", source)
-        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_general", source)
-        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_noches", source)
-        self.assertNotIn("ALTER TABLE cierres_diarios ADD COLUMN total_noches_monto", source)
-        self.assertIn("CREATE TABLE IF NOT EXISTS gastos_operacion", source)
-        self.assertIn("ALTER TABLE cierres_diarios ADD COLUMN total_gastos", source)
-        self.assertIn("ALTER TABLE cierres_diarios ADD COLUMN total_neto", source)
-        self.assertIn("ALTER TABLE usos_bano ADD COLUMN id_cierre", source)
+        self.assertNotIn("asegurar_schema_cierres", source)
+        self.assertNotIn("CREATE TABLE", source)
+        self.assertNotIn("ALTER TABLE cierres_diarios", source)
+        self.assertNotIn("ALTER TABLE usos_bano", source)
 
     def test_schema_declara_vinculos_y_totales_canonicos_de_cierre(self):
         with open("schema.sql", encoding="utf-8") as schema_file:
@@ -42,10 +33,7 @@ class RealizarCierreDiarioTests(unittest.TestCase):
 
     @patch.object(cierres_controller, "generar_pdf_cierre")
     @patch.object(cierres_controller, "crear_cierre_api")
-    @patch.object(cierres_controller, "db_cursor")
-    def test_cierre_exitoso_usa_api_y_generar_pdf_sin_acceder_a_base_de_datos(
-        self, db_cursor, crear_cierre_api, generar_pdf
-    ):
+    def test_cierre_exitoso_usa_api_y_generar_pdf(self, crear_cierre_api, generar_pdf):
         crear_cierre_api.return_value = {
             "fecha_inicio": "2026-08-03T08:00:00",
             "fecha_cierre": "2026-08-03T20:00:00",
@@ -65,18 +53,15 @@ class RealizarCierreDiarioTests(unittest.TestCase):
         crear_cierre_api.assert_called_once_with("token-api")
         generar_pdf.assert_called_once()
         self.assertEqual(generar_pdf.call_args.args[1]["Total neto del día"], "$1100")
-        db_cursor.assert_not_called()
 
     @patch.object(cierres_controller, "crear_cierre_api")
-    @patch.object(cierres_controller, "db_cursor")
-    def test_informa_conflicto_de_cierre_en_curso_sin_acceder_a_base_de_datos(self, db_cursor, crear_cierre_api):
+    def test_informa_conflicto_de_cierre_en_curso(self, crear_cierre_api):
         crear_cierre_api.side_effect = ApiClientError(409, "DAILY_CLOSE_IN_PROGRESS")
 
         exito, mensaje = cierres_controller.realizar_cierre_diario("token-api")
 
         self.assertFalse(exito)
         self.assertEqual(mensaje, "Hay otro cierre diario en curso. Intente nuevamente cuando finalice.")
-        db_cursor.assert_not_called()
 
     @patch.object(cierres_controller, "crear_cierre_api")
     def test_informa_sesion_api_invalida(self, crear_cierre_api):
@@ -99,23 +84,19 @@ class RealizarCierreDiarioTests(unittest.TestCase):
             "No se pudo conectar con la API. Verifique que el servicio esté disponible e inténtelo nuevamente.",
         )
 
-    @patch.object(cierres_controller, "db_cursor")
-    def test_rechaza_cierre_sin_token_sin_acceder_a_base_de_datos(self, db_cursor):
+    def test_rechaza_cierre_sin_token(self):
         exito, mensaje = cierres_controller.realizar_cierre_diario(None)
 
         self.assertFalse(exito)
         self.assertEqual(mensaje, "No hay una sesión válida con la API. Inicie sesión nuevamente.")
-        db_cursor.assert_not_called()
 
-    @patch.object(cierres_controller, "db_cursor")
-    def test_informa_advertencia_de_login_api_sin_acceder_a_base_de_datos(self, db_cursor):
+    def test_informa_advertencia_de_login_api(self):
         warning = "No fue posible iniciar sesión con la API al ingresar."
 
         exito, mensaje = cierres_controller.realizar_cierre_diario(None, warning)
 
         self.assertFalse(exito)
         self.assertEqual(mensaje, warning)
-        db_cursor.assert_not_called()
 
 
 if __name__ == "__main__":
