@@ -9,7 +9,11 @@ eliminar y calcular tarifas según los modos configurados por el administrador
 from utils.db import db_cursor
 from datetime import datetime
 from controllers.config_controller import obtener_configuracion
-from controllers.subida_controller import obtener_subida_activa, calcular_minutos_en_subida
+from controllers.subida_controller import (
+    obtener_subida_activa,
+    calcular_minutos_en_subida,
+    materializar_ventana_subida,
+)
 
 def obtener_tarifas_personalizadas():
     """
@@ -228,15 +232,11 @@ def calcular_tarifa_con_contexto(
             hora_inicio_str = str(subida["hora_inicio"])[:8]
             hora_fin_str = str(subida["hora_fin"])[:8]
 
-            h_inicio_time = datetime.strptime(hora_inicio_str, "%H:%M:%S").time()
-            h_fin_time = datetime.strptime(hora_fin_str, "%H:%M:%S").time()
-
-            h_inicio = datetime.combine(hora_actual.date(), h_inicio_time)
-            h_fin = datetime.combine(hora_actual.date(), h_fin_time)
-
-            if h_fin <= h_inicio:
-                from datetime import timedelta
-                h_fin += timedelta(days=1)
+            h_inicio, h_fin = materializar_ventana_subida(
+                hora_actual,
+                hora_inicio_str,
+                hora_fin_str,
+            )
 
             if h_inicio <= hora_actual <= h_fin:
                 subida_vigente = True
