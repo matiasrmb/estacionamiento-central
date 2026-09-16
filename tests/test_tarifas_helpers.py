@@ -111,6 +111,50 @@ class TarifaContextoTests(unittest.TestCase):
 
         self.assertEqual(tarifa, 900)
 
+    def test_calcular_tarifa_con_contexto_aplica_subida_nocturna_personalizada(self):
+        contexto = {
+            "config": {"modo_cobro": "personalizado", "tarifa_minima": "0"},
+            "subida": {"hora_inicio": "23:00:00", "hora_fin": "02:00:00", "monto_adicional": 7},
+            "tramos": [{"minuto_inicio": 0, "minuto_fin": 59, "valor": 100}],
+        }
+
+        for salida in [
+            datetime(2026, 1, 2, 0, 1),
+            datetime(2026, 1, 2, 1, 0),
+            datetime(2026, 1, 2, 2, 0),
+        ]:
+            with self.subTest(salida=salida):
+                tarifa, subida_aplicada, monto_extra = calcular_tarifa_con_contexto(
+                    10,
+                    fecha_hora_ingreso=salida,
+                    fecha_hora_salida=salida,
+                    contexto=contexto,
+                    devolver_flag=True,
+                )
+
+                self.assertEqual(tarifa, 107)
+                self.assertTrue(subida_aplicada)
+                self.assertEqual(monto_extra, 7)
+
+    def test_calcular_tarifa_con_contexto_no_aplica_subida_personalizada_post_fin(self):
+        contexto = {
+            "config": {"modo_cobro": "personalizado", "tarifa_minima": "0"},
+            "subida": {"hora_inicio": "23:00:00", "hora_fin": "02:00:00", "monto_adicional": 7},
+            "tramos": [{"minuto_inicio": 0, "minuto_fin": 59, "valor": 100}],
+        }
+
+        tarifa, subida_aplicada, monto_extra = calcular_tarifa_con_contexto(
+            10,
+            fecha_hora_ingreso=datetime(2026, 1, 2, 2, 1),
+            fecha_hora_salida=datetime(2026, 1, 2, 2, 1),
+            contexto=contexto,
+            devolver_flag=True,
+        )
+
+        self.assertEqual(tarifa, 100)
+        self.assertFalse(subida_aplicada)
+        self.assertEqual(monto_extra, 0)
+
     @patch.object(tarifas_controller, "obtener_contexto_tarifa")
     @patch.object(tarifas_controller, "calcular_tarifa_con_contexto")
     def test_calcular_tarifa_sigue_usando_api_publica_existente(

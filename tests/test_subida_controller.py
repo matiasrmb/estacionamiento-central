@@ -66,6 +66,28 @@ class SubidaControllerTests(unittest.TestCase):
 
         self.assertEqual(minutos, 0)
 
+    def test_calcular_minutos_en_subida_cruzando_medianoche(self):
+        casos = [
+            (datetime(2026, 1, 1, 9, 30), datetime(2026, 1, 1, 18, 0), 0),
+            (datetime(2026, 1, 1, 23, 30), datetime(2026, 1, 1, 23, 59), 29),
+            (datetime(2026, 1, 1, 23, 30), datetime(2026, 1, 2, 0, 0), 30),
+            (datetime(2026, 1, 1, 23, 30), datetime(2026, 1, 2, 0, 1), 31),
+            (datetime(2026, 1, 2, 0, 10), datetime(2026, 1, 2, 1, 0), 50),
+            (datetime(2026, 1, 2, 1, 30), datetime(2026, 1, 2, 2, 0), 30),
+            (datetime(2026, 1, 2, 2, 0), datetime(2026, 1, 2, 2, 30), 0),
+        ]
+
+        for ingreso, salida, esperado in casos:
+            with self.subTest(ingreso=ingreso, salida=salida):
+                minutos = subida_controller.calcular_minutos_en_subida(
+                    ingreso,
+                    salida,
+                    "23:00",
+                    "02:00",
+                )
+
+                self.assertEqual(minutos, esperado)
+
 
 if __name__ == "__main__":
     unittest.main()
