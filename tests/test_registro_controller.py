@@ -1903,6 +1903,130 @@ class FuncionesSimplesDbCursorTests(unittest.TestCase):
         self.assertTrue(resultado[0]["en_lavado"])
         self.assertGreaterEqual(resultado[0]["minutos"], 0)
 
+    @patch.object(registro_controller, "obtener_totales_lavado_por_ingresos", return_value={})
+    @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos")
+    @patch.object(registro_controller, "obtener_contexto_tarifa")
+    @patch.object(registro_controller, "calcular_tarifa_con_contexto")
+    @patch.object(registro_controller, "db_cursor")
+    def test_obtener_vehiculos_activos_incluye_solo_lavado_convertido_con_subida_temporal(
+        self,
+        db_cursor,
+        calcular_tarifa_con_contexto,
+        obtener_contexto_tarifa,
+        obtener_minutos_lavado_por_ingresos,
+        _obtener_totales_lavado_por_ingresos,
+    ):
+        fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
+        filas = [{
+            "id_ingreso": 88,
+            "patente": "LAV123",
+            "fecha_hora_ingreso": fecha_ingreso,
+            "en_espera": 0,
+            "en_lavado": 0,
+            "total_lavado_convertido": 9000,
+        }]
+        cursor = FakeCursor(fetchall_results=[filas])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        contexto = {
+            "config": {"modo_cobro": "minuto"},
+            "subida": {"hora_inicio": "10:00:00", "hora_fin": "12:00:00", "monto_adicional": 1000},
+            "tramos": [],
+        }
+        obtener_contexto_tarifa.return_value = contexto
+        obtener_minutos_lavado_por_ingresos.return_value = {88: 0}
+        calcular_tarifa_con_contexto.return_value = 4500
+
+        resultado = registro_controller.obtener_vehiculos_activos()
+
+        self.assertEqual(resultado[0]["monto"], 13500)
+        self.assertEqual(resultado[0]["total_lavados"], 9000)
+        self.assertIs(calcular_tarifa_con_contexto.call_args.args[3], contexto)
+        consultas = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("operaciones_servicio os", consultas)
+        self.assertIn("CONVERTIDO_ESTADIA", consultas)
+        self.assertIn("SUM(os.valor_lavado_snapshot)", consultas)
+        self.assertNotIn("LIMIT 1", consultas)
+
+    @patch.object(registro_controller, "obtener_totales_lavado_por_ingresos")
+    @patch.object(registro_controller, "obtener_minutos_lavado_por_ingresos")
+    @patch.object(registro_controller, "obtener_contexto_tarifa")
+    @patch.object(registro_controller, "calcular_tarifa_con_contexto")
+    @patch.object(registro_controller, "db_cursor")
+    def test_obtener_vehiculos_activos_muestra_importes_visuales_por_estado(
+        self,
+        db_cursor,
+        calcular_tarifa_con_contexto,
+        obtener_contexto_tarifa,
+        obtener_minutos_lavado_por_ingresos,
+        obtener_totales_lavado_por_ingresos,
+    ):
+        fecha_ingreso = datetime(2026, 1, 1, 10, 0, 0)
+        filas = [
+            {
+                "id_ingreso": 1,
+                "patente": "EST001",
+                "fecha_hora_ingreso": fecha_ingreso,
+                "en_espera": 0,
+                "en_lavado": 0,
+                "total_lavado_convertido": 0,
+            },
+            {
+                "id_ingreso": 2,
+                "patente": "SUB002",
+                "fecha_hora_ingreso": fecha_ingreso,
+                "en_espera": 0,
+                "en_lavado": 0,
+                "total_lavado_convertido": 0,
+            },
+            {
+                "id_ingreso": 3,
+                "patente": "CON003",
+                "fecha_hora_ingreso": fecha_ingreso,
+                "en_espera": 0,
+                "en_lavado": 0,
+                "total_lavado_convertido": 9000,
+            },
+            {
+                "id_ingreso": 4,
+                "patente": "COS004",
+                "fecha_hora_ingreso": fecha_ingreso,
+                "en_espera": 0,
+                "en_lavado": 0,
+                "total_lavado_convertido": 9000,
+            },
+            {
+                "id_ingreso": 5,
+                "patente": "LAV005",
+                "fecha_hora_ingreso": fecha_ingreso,
+                "en_espera": 0,
+                "en_lavado": 0,
+                "total_lavado_convertido": 0,
+            },
+        ]
+        cursor = FakeCursor(fetchall_results=[filas])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+        obtener_contexto_tarifa.return_value = {
+            "config": {"modo_cobro": "minuto"},
+            "subida": {"hora_inicio": "10:00:00", "hora_fin": "12:00:00", "monto_adicional": 1000},
+            "tramos": [],
+        }
+        obtener_minutos_lavado_por_ingresos.return_value = {index: 0 for index in range(1, 6)}
+        obtener_totales_lavado_por_ingresos.return_value = {5: 6000}
+        calcular_tarifa_con_contexto.side_effect = [1200, 4500, 1200, 4500, 1200]
+
+        resultado = registro_controller.obtener_vehiculos_activos()
+
+        self.assertEqual(
+            [(item["id_ingreso"], item["monto"], item["total_lavados"]) for item in resultado],
+            [
+                (1, 1200, 0),      # estadía normal
+                (2, 4500, 0),      # estadía + subida temporal
+                (3, 10200, 9000),  # solo lavado -> estadía
+                (4, 13500, 9000),  # solo lavado -> estadía + subida temporal
+                (5, 7200, 6000),   # estadía -> iniciar lavado -> finalizar lavado
+            ],
+        )
+
     @patch.object(registro_controller, "db_cursor")
     def test_obtener_total_vehiculos_pagados_turno_actual_suma_no_cerrados(self, db_cursor):
         cursor = FakeCursor(fetchone_results=[{"total": 3500}])

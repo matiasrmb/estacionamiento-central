@@ -740,7 +740,13 @@ def obtener_vehiculos_activos():
                     WHERE cn.id_ingreso = i.id_ingreso
                       AND cn.estado = 'PAGADO'
                       AND cn.estado_operativo = 'PENDIENTE'
-                ) AS modo_noche
+                ) AS modo_noche,
+                COALESCE((
+                    SELECT SUM(os.valor_lavado_snapshot)
+                    FROM operaciones_servicio os
+                    WHERE os.id_ingreso_generado = i.id_ingreso
+                      AND os.estado = 'CONVERTIDO_ESTADIA'
+                ), 0) AS total_lavado_convertido
             FROM ingresos i
             JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
             WHERE i.fecha_hora_salida IS NULL
@@ -776,7 +782,10 @@ def obtener_vehiculos_activos():
             tarifa = 0
         else:
             tarifa = calcular_tarifa_con_contexto(minutos, fecha_ingreso, ahora, contexto_tarifa)
-        total_lavados = totales_lavado_por_ingreso.get(r["id_ingreso"], 0)
+        total_lavados = (
+            totales_lavado_por_ingreso.get(r["id_ingreso"], 0)
+            + int(r.get("total_lavado_convertido") or 0)
+        )
         monto = tarifa + total_lavados
 
         lista.append({
