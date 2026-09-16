@@ -92,6 +92,7 @@ def editar_gasto(id_gasto, categoria, descripcion, monto, usuario, rol):
             raise LookupError("Gasto no encontrado.")
         if gasto.get("id_cierre") is not None:
             raise ValueError("No se puede editar un gasto ya asociado a un cierre.")
+        _asegurar_auditoria_disponible(cursor)
 
         nuevo = dict(gasto)
         nuevo.update({"categoria": categoria, "descripcion": descripcion, "monto": monto})
@@ -114,6 +115,7 @@ def eliminar_gasto(id_gasto, usuario, rol):
             raise LookupError("Gasto no encontrado.")
         if gasto.get("id_cierre") is not None:
             raise ValueError("No se puede eliminar un gasto ya asociado a un cierre.")
+        _asegurar_auditoria_disponible(cursor)
         cursor.execute("""
             DELETE FROM gastos_operacion
             WHERE id_gasto = %s AND id_cierre IS NULL
@@ -130,6 +132,15 @@ def _obtener_gasto_bloqueado(cursor, id_gasto):
         FOR UPDATE
     """, (id_gasto,))
     return cursor.fetchone()
+
+
+def _asegurar_auditoria_disponible(cursor):
+    try:
+        cursor.execute("SELECT 1 FROM gastos_operacion_auditoria LIMIT 1")
+    except Exception as exc:
+        raise RuntimeError(
+            "Falta aplicar la migración de auditoría de gastos (tabla gastos_operacion_auditoria)."
+        ) from exc
 
 
 def _auditar(cursor, id_gasto, accion, usuario, anterior, nuevo):

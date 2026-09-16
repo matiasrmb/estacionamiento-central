@@ -8,14 +8,17 @@ from controllers import gastos_controller
 
 
 class FakeCursor:
-    def __init__(self, fetchall_result=None, fetchone_result=None, lastrowid=12):
+    def __init__(self, fetchall_result=None, fetchone_result=None, lastrowid=12, fail_audit_check=False):
         self.fetchall_result = fetchall_result or []
         self.fetchone_result = fetchone_result
         self.lastrowid = lastrowid
         self.executed = []
+        self.fail_audit_check = fail_audit_check
 
     def execute(self, query, params=None):
         self.executed.append((query, params))
+        if self.fail_audit_check and "gastos_operacion_auditoria" in query:
+            raise RuntimeError("missing audit table")
 
     def fetchall(self):
         return self.fetchall_result
@@ -150,6 +153,26 @@ class GastosControllerTests(unittest.TestCase):
             sql = "\n".join(query for query, _ in cursor.executed)
             self.assertNotIn("UPDATE gastos_operacion", sql)
             self.assertNotIn("DELETE FROM gastos_operacion", sql)
+
+    @patch.object(gastos_controller, "db_cursor")
+    def test_rechaza_editar_si_falta_tabla_de_auditoria_antes_de_mutar(self, db_cursor):
+        cursor = FakeCursor(fetchone_result={
+            "id_gasto": 9,
+            "fecha_hora": datetime(2026, 7, 1, 10, 0),
+            "categoria": "Insumos",
+            "descripcion": "Agua",
+            "monto": 250,
+            "usuario": "operador",
+            "id_cierre": None,
+        }, fail_audit_check=True)
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        with self.assertRaisesRegex(RuntimeError, "Falta aplicar la migración"):
+            gastos_controller.editar_gasto(9, "Servicios", "Luz", "500", "admin", "admin")
+
+        sql = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("gastos_operacion_auditoria", sql)
+        self.assertNotIn("UPDATE gastos_operacion", sql)
 
 
 if __name__ == "__main__":
