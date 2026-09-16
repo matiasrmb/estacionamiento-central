@@ -90,13 +90,12 @@ class GastosWindow(QWidget):
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabla.verticalHeader().setDefaultSectionSize(48)
+        self.tabla.verticalHeader().setDefaultSectionSize(58)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         for columna in (0, 1, 3, 4):
             self.tabla.horizontalHeader().setSectionResizeMode(columna, QHeaderView.ResizeToContents)
         if self.es_admin:
-            self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
-            self.tabla.setColumnWidth(5, 190)
+            self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         layout.addWidget(self.tabla, 1)
 
     def registrar(self):
@@ -144,13 +143,19 @@ class GastosWindow(QWidget):
             if self.es_admin:
                 acciones = QWidget()
                 layout = QHBoxLayout(acciones)
-                layout.setContentsMargins(6, 4, 6, 4)
-                layout.setSpacing(6)
+                layout.setContentsMargins(8, 6, 8, 6)
+                layout.setSpacing(8)
+                layout.setAlignment(Qt.AlignCenter)
                 btn_editar = QPushButton("Editar")
+                btn_editar.setObjectName("BotonTabla")
+                btn_editar.setMinimumHeight(34)
+                btn_editar.setMinimumWidth(90)
+
                 btn_eliminar = QPushButton("Eliminar")
-                for boton in (btn_editar, btn_eliminar):
-                    boton.setMinimumWidth(78)
-                    boton.setMinimumHeight(30)
+                btn_eliminar.setObjectName("BotonTablaPeligro")
+                btn_eliminar.setMinimumHeight(34)
+                btn_eliminar.setMinimumWidth(90)
+
                 btn_editar.clicked.connect(lambda _checked=False, g=gasto: self.editar(g))
                 btn_eliminar.clicked.connect(lambda _checked=False, g=gasto: self.eliminar(g))
                 layout.addWidget(btn_editar)
