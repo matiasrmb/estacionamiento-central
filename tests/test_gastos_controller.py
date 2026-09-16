@@ -8,14 +8,17 @@ from controllers import gastos_controller
 
 
 class FakeCursor:
-    def __init__(self, fetchall_result=None, fetchone_result=None, lastrowid=12):
+    def __init__(self, fetchall_result=None, fetchone_result=None, lastrowid=12, fail_audit_check=False):
         self.fetchall_result = fetchall_result or []
         self.fetchone_result = fetchone_result
         self.lastrowid = lastrowid
         self.executed = []
+        self.fail_audit_check = fail_audit_check
 
     def execute(self, query, params=None):
         self.executed.append((query, params))
+        if self.fail_audit_check and "gastos_operacion_auditoria" in query:
+            raise RuntimeError("missing audit table")
 
     def fetchall(self):
         return self.fetchall_result
@@ -74,6 +77,102 @@ class GastosControllerTests(unittest.TestCase):
         self.assertEqual(total, 500)
         self.assertIn("WHERE id_cierre IS NULL", lista_cursor.executed[0][0])
         self.assertIn("WHERE id_cierre IS NULL", total_cursor.executed[0][0])
+
+    @patch.object(gastos_controller, "db_cursor")
+    def test_admin_edita_gasto_pendiente_con_auditoria(self, db_cursor):
+        cursor = FakeCursor(fetchone_result={
+            "id_gasto": 9,
+            "fecha_hora": datetime(2026, 7, 1, 10, 0),
+            "categoria": "Insumos",
+            "descripcion": "Agua",
+            "monto": 250,
+            "usuario": "operador",
+            "id_cierre": None,
+        })
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        gasto = gastos_controller.editar_gasto(9, "Servicios", "Luz", "500", "admin", "administrador")
+
+        sql = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("FOR UPDATE", sql)
+        self.assertIn("UPDATE gastos_operacion", sql)
+        self.assertIn("INSERT INTO gastos_operacion_auditoria", sql)
+        self.assertEqual(gasto["categoria"], "Servicios")
+        self.assertIn('"categoria": "Insumos"', cursor.executed[-1][1][4])
+        self.assertIn('"categoria": "Servicios"', cursor.executed[-1][1][5])
+
+    @patch.object(gastos_controller, "db_cursor")
+    def test_admin_elimina_gasto_pendiente_con_auditoria(self, db_cursor):
+        cursor = FakeCursor(fetchone_result={
+            "id_gasto": 9,
+            "fecha_hora": datetime(2026, 7, 1, 10, 0),
+            "categoria": "Insumos",
+            "descripcion": "Agua",
+            "monto": 250,
+            "usuario": "operador",
+            "id_cierre": None,
+        })
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        result = gastos_controller.eliminar_gasto(9, "admin", "admin")
+
+        sql = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("DELETE FROM gastos_operacion", sql)
+        self.assertIn("INSERT INTO gastos_operacion_auditoria", sql)
+        self.assertEqual(result, {"ok": True, "id_gasto": 9})
+        self.assertIn('"id_gasto": 9', cursor.executed[-1][1][4])
+        self.assertIsNone(cursor.executed[-1][1][5])
+
+    @patch.object(gastos_controller, "db_cursor")
+    def test_operador_no_edita_ni_elimina_y_no_accede_a_base(self, db_cursor):
+        with self.assertRaises(PermissionError):
+            gastos_controller.editar_gasto(9, "Servicios", "Luz", "500", "operador", "operador")
+        with self.assertRaises(PermissionError):
+            gastos_controller.eliminar_gasto(9, "operador", "operador")
+        db_cursor.assert_not_called()
+
+    @patch.object(gastos_controller, "db_cursor")
+    def test_rechaza_editar_o_eliminar_gasto_cerrado(self, db_cursor):
+        closed = {
+            "id_gasto": 9,
+            "fecha_hora": datetime(2026, 7, 1, 10, 0),
+            "categoria": "Insumos",
+            "descripcion": "Agua",
+            "monto": 250,
+            "usuario": "operador",
+            "id_cierre": 3,
+        }
+        for action in (
+            lambda: gastos_controller.editar_gasto(9, "Servicios", "Luz", "500", "admin", "admin"),
+            lambda: gastos_controller.eliminar_gasto(9, "admin", "admin"),
+        ):
+            cursor = FakeCursor(fetchone_result=closed)
+            db_cursor.return_value = fake_db_cursor(cursor)
+            with self.subTest(action=action), self.assertRaises(ValueError):
+                action()
+            sql = "\n".join(query for query, _ in cursor.executed)
+            self.assertNotIn("UPDATE gastos_operacion", sql)
+            self.assertNotIn("DELETE FROM gastos_operacion", sql)
+
+    @patch.object(gastos_controller, "db_cursor")
+    def test_rechaza_editar_si_falta_tabla_de_auditoria_antes_de_mutar(self, db_cursor):
+        cursor = FakeCursor(fetchone_result={
+            "id_gasto": 9,
+            "fecha_hora": datetime(2026, 7, 1, 10, 0),
+            "categoria": "Insumos",
+            "descripcion": "Agua",
+            "monto": 250,
+            "usuario": "operador",
+            "id_cierre": None,
+        }, fail_audit_check=True)
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        with self.assertRaisesRegex(RuntimeError, "Falta aplicar la migración"):
+            gastos_controller.editar_gasto(9, "Servicios", "Luz", "500", "admin", "admin")
+
+        sql = "\n".join(query for query, _ in cursor.executed)
+        self.assertIn("gastos_operacion_auditoria", sql)
+        self.assertNotIn("UPDATE gastos_operacion", sql)
 
 
 if __name__ == "__main__":

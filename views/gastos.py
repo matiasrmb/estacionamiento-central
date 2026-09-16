@@ -1,11 +1,13 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QWidget, QHeaderView,
+    QInputDialog, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
+    QVBoxLayout, QWidget, QHeaderView,
 )
 
 from controllers.gastos_controller import (
+    editar_gasto,
+    eliminar_gasto,
     obtener_gastos_pendientes,
     obtener_total_gastos_pendientes,
     registrar_gasto,
@@ -18,11 +20,16 @@ class GastosWindow(QWidget):
 
     CATEGORIAS = ("Insumos", "Mantención", "Servicios", "Otros")
 
-    def __init__(self, usuario):
+    def __init__(self, usuario, rol="operador"):
         super().__init__()
         self.usuario = usuario
+        self.rol = rol
         self.init_ui()
         self.cargar_gastos()
+
+    @property
+    def es_admin(self):
+        return str(self.rol or "").strip().lower() in {"admin", "administrador"}
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -75,17 +82,29 @@ class GastosWindow(QWidget):
         layout.addWidget(self.busqueda)
 
         self.tabla = QTableWidget()
-        self.tabla.setColumnCount(5)
-        self.tabla.setHorizontalHeaderLabels(["Fecha", "Categoría", "Descripción", "Monto", "Usuario"])
+        columnas = ["Fecha", "Categoría", "Descripción", "Monto", "Usuario"]
+        if self.es_admin:
+            columnas.append("Acciones")
+        self.tabla.setColumnCount(len(columnas))
+        self.tabla.setHorizontalHeaderLabels(columnas)
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.verticalHeader().setDefaultSectionSize(58)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         for columna in (0, 1, 3, 4):
             self.tabla.horizontalHeader().setSectionResizeMode(columna, QHeaderView.ResizeToContents)
+        if self.es_admin:
+            self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         layout.addWidget(self.tabla, 1)
 
     def registrar(self):
+        if QMessageBox.question(
+            self,
+            "Confirmar gasto",
+            "¿Registrar este gasto operacional?",
+        ) != QMessageBox.Yes:
+            return
         try:
             registrar_gasto(
                 self.categoria.currentText(),
@@ -121,8 +140,58 @@ class GastosWindow(QWidget):
                 if columna == 3:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabla.setItem(fila, columna, item)
+            if self.es_admin:
+                acciones = QWidget()
+                layout = QHBoxLayout(acciones)
+                layout.setContentsMargins(8, 6, 8, 6)
+                layout.setSpacing(8)
+                layout.setAlignment(Qt.AlignCenter)
+                btn_editar = QPushButton("Editar")
+                btn_editar.setObjectName("BotonTabla")
+                btn_editar.setMinimumHeight(34)
+                btn_editar.setMinimumWidth(90)
+
+                btn_eliminar = QPushButton("Eliminar")
+                btn_eliminar.setObjectName("BotonTablaPeligro")
+                btn_eliminar.setMinimumHeight(34)
+                btn_eliminar.setMinimumWidth(90)
+
+                btn_editar.clicked.connect(lambda _checked=False, g=gasto: self.editar(g))
+                btn_eliminar.clicked.connect(lambda _checked=False, g=gasto: self.eliminar(g))
+                layout.addWidget(btn_editar)
+                layout.addWidget(btn_eliminar)
+                self.tabla.setCellWidget(fila, 5, acciones)
         self.total.setText(f"${total:,}")
         self.filtrar_tabla()
+
+    def editar(self, gasto):
+        categoria, ok = QInputDialog.getItem(self, "Editar gasto", "Categoría", self.CATEGORIAS, self.CATEGORIAS.index(gasto["categoria"]) if gasto.get("categoria") in self.CATEGORIAS else 0, False)
+        if not ok:
+            return
+        descripcion, ok = QInputDialog.getText(self, "Editar gasto", "Descripción", text=str(gasto.get("descripcion") or ""))
+        if not ok:
+            return
+        monto, ok = QInputDialog.getText(self, "Editar gasto", "Monto", text=str(gasto.get("monto") or ""))
+        if not ok:
+            return
+        if QMessageBox.question(self, "Confirmar edición", "¿Guardar los cambios del gasto?") != QMessageBox.Yes:
+            return
+        try:
+            editar_gasto(gasto["id_gasto"], categoria, descripcion, monto, self.usuario, self.rol)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", f"No se pudo editar el gasto.\n{exc}")
+            return
+        self.cargar_gastos()
+
+    def eliminar(self, gasto):
+        if QMessageBox.question(self, "Confirmar eliminación", "¿Eliminar este gasto operacional?") != QMessageBox.Yes:
+            return
+        try:
+            eliminar_gasto(gasto["id_gasto"], self.usuario, self.rol)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", f"No se pudo eliminar el gasto.\n{exc}")
+            return
+        self.cargar_gastos()
 
     def filtrar_tabla(self):
         filtrar_filas_tabla(self.tabla, self.busqueda.text())

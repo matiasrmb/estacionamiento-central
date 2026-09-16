@@ -238,7 +238,7 @@ class MainWindow(QWidget):
         )
         self.usuarios_view = UsuariosWindow(self.usuario)
         self.asistencias_view = AsistenciasWindow()
-        self.gastos_view = GastosWindow(self.usuario)
+        self.gastos_view = GastosWindow(self.usuario, self.rol)
 
         self.dashboard_page = self.crear_pagina_scrollable(self.dashboard_view)
         self.registro_page = self.crear_pagina_scrollable(self.registro_view)
