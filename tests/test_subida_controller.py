@@ -1,6 +1,6 @@
 import unittest
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from controllers import subida_controller
@@ -87,6 +87,26 @@ class SubidaControllerTests(unittest.TestCase):
                 )
 
                 self.assertEqual(minutos, esperado)
+
+    def test_calcular_minutos_en_subida_acepta_time_de_db_sin_cero_inicial(self):
+        minutos = subida_controller.calcular_minutos_en_subida(
+            datetime(2026, 1, 2, 0, 10),
+            datetime(2026, 1, 2, 1, 0),
+            timedelta(hours=23),
+            timedelta(hours=2),
+        )
+
+        self.assertEqual(minutos, 50)
+
+    def test_calcular_minutos_en_subida_acepta_strings_time_de_db_sin_cero_inicial(self):
+        minutos = subida_controller.calcular_minutos_en_subida(
+            datetime(2026, 1, 2, 1, 30),
+            datetime(2026, 1, 2, 2, 0),
+            "23:00:00",
+            "2:00:00",
+        )
+
+        self.assertEqual(minutos, 30)
 
 
 if __name__ == "__main__":

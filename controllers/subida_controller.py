@@ -3,8 +3,16 @@ from datetime import datetime, time, timedelta
 
 
 def _time_as_hhmm(value):
+    if isinstance(value, timedelta):
+        total_seconds = int(value.total_seconds()) % (24 * 60 * 60)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours:02}:{minutes:02}"
     if hasattr(value, "strftime"):
         return value.strftime("%H:%M")
+    parts = str(value).split(":")
+    if len(parts) >= 2:
+        return f"{int(parts[0]):02}:{int(parts[1]):02}"
     return str(value)[:5]
 
 
