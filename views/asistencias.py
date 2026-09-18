@@ -8,6 +8,7 @@ from PySide6.QtCore import QDate, Qt
 
 from controllers.asistencias_controller import obtener_asistencias
 from utils.pdf_asistencias import exportar_asistencias_pdf
+from utils.table_filters import create_sortable_item, sort_table_from_header_click
 
 
 class AsistenciasWindow(QWidget):
@@ -138,6 +139,8 @@ class AsistenciasWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSortIndicatorShown(True)
+        self.tabla.horizontalHeader().sectionClicked.connect(self.ordenar_tabla)
 
         layout.addWidget(self.tabla, 1)
 
@@ -201,11 +204,11 @@ class AsistenciasWindow(QWidget):
                 total_fila = float(fila["total_recaudado"])
                 total_recaudado += total_fila
 
-                item_usuario = QTableWidgetItem(fila["usuario"])
-                item_inicio = QTableWidgetItem(str(fila["hora_inicio"]))
-                item_salida = QTableWidgetItem(str(fila["hora_salida"] or "Activo"))
-                item_movs = QTableWidgetItem(str(fila["cantidad_movimientos"]))
-                item_total = QTableWidgetItem(f"${total_fila:.0f}")
+                item_usuario = create_sortable_item(fila["usuario"], sort_value=fila["usuario"])
+                item_inicio = create_sortable_item(str(fila["hora_inicio"]), sort_value=fila["hora_inicio"])
+                item_salida = create_sortable_item(str(fila["hora_salida"] or "Activo"), sort_value=fila["hora_salida"] or "")
+                item_movs = create_sortable_item(str(fila["cantidad_movimientos"]), sort_value=fila["cantidad_movimientos"])
+                item_total = create_sortable_item(f"${total_fila:.0f}", sort_value=total_fila)
 
                 item_usuario.setTextAlignment(Qt.AlignCenter)
                 item_movs.setTextAlignment(Qt.AlignCenter)
@@ -223,6 +226,9 @@ class AsistenciasWindow(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ocurrió un error:\n{e}")
+
+    def ordenar_tabla(self, columna):
+        sort_table_from_header_click(self.tabla, columna)
 
     def exportar_pdf(self):
         try:
