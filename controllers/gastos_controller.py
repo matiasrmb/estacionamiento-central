@@ -137,6 +137,7 @@ def _obtener_gasto_bloqueado(cursor, id_gasto):
 def _asegurar_auditoria_disponible(cursor):
     try:
         cursor.execute("SELECT 1 FROM gastos_operacion_auditoria LIMIT 1")
+        cursor.fetchone()
     except Exception as exc:
         raise RuntimeError(
             "Falta aplicar la migración de auditoría de gastos (tabla gastos_operacion_auditoria)."
