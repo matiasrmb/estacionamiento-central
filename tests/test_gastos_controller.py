@@ -30,6 +30,23 @@ class FakeCursor:
         pass
 
 
+class UnreadSensitiveCursor(FakeCursor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.audit_result_pending = False
+
+    def execute(self, query, params=None):
+        if self.audit_result_pending:
+            raise RuntimeError("Unread result found")
+        super().execute(query, params)
+        if "SELECT 1 FROM gastos_operacion_auditoria" in query:
+            self.audit_result_pending = True
+
+    def fetchone(self):
+        self.audit_result_pending = False
+        return super().fetchone()
+
+
 @contextmanager
 def fake_db_cursor(cursor):
     yield cursor
@@ -122,6 +139,28 @@ class GastosControllerTests(unittest.TestCase):
         self.assertEqual(result, {"ok": True, "id_gasto": 9})
         self.assertIn('"id_gasto": 9', cursor.executed[-1][1][4])
         self.assertIsNone(cursor.executed[-1][1][5])
+
+    @patch.object(gastos_controller, "db_cursor")
+    def test_editar_y_eliminar_consumen_chequeo_de_auditoria_antes_de_mutar(self, db_cursor):
+        for action in (
+            lambda: gastos_controller.editar_gasto(9, "Servicios", "Luz", "500", "admin", "admin"),
+            lambda: gastos_controller.eliminar_gasto(9, "admin", "admin"),
+        ):
+            cursor = UnreadSensitiveCursor(fetchone_result={
+                "id_gasto": 9,
+                "fecha_hora": datetime(2026, 7, 1, 10, 0),
+                "categoria": "Insumos",
+                "descripcion": "Agua",
+                "monto": 250,
+                "usuario": "operador",
+                "id_cierre": None,
+            })
+            db_cursor.return_value = fake_db_cursor(cursor)
+
+            with self.subTest(action=action):
+                action()
+
+            self.assertFalse(cursor.audit_result_pending)
 
     @patch.object(gastos_controller, "db_cursor")
     def test_operador_no_edita_ni_elimina_y_no_accede_a_base(self, db_cursor):
