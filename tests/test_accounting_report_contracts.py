@@ -110,6 +110,40 @@ class AccountingReportContractsTests(unittest.TestCase):
         self.assertEqual(summary["total_noches_monto"], 5000)
         self.assertEqual(summary["total_general"], 6200)
 
+    def test_report_totals_include_all_accounting_categories_and_movement_count(self):
+        totals = build_report_totals(
+            items=[
+                {"tipo": "vehiculo", "tarifa_aplicada": 10000},
+                {"tipo": "bano", "tarifa_aplicada": 300},
+                {"tipo": "lavado_solo", "tarifa_aplicada": 8000},
+                {"tipo": "mensualidad", "tarifa_aplicada": 50000},
+                {"tipo": "noche", "tarifa_aplicada": 5000},
+                {"tipo": "gasto", "tarifa_aplicada": -2500},
+            ],
+            bathroom_uses=[{"monto": 300}],
+            wash_only_operations=[
+                {"estado": "FINALIZADO_COBRADO", "valor_lavado_snapshot": 8000},
+                {"estado": "CONVERTIDO_ESTADIA", "valor_lavado_snapshot": 9000},
+            ],
+            monthly_payments=[{"monto_snapshot": 50000}],
+            night_charges=[{"monto_snapshot": 5000}],
+            expenses=[{"monto": 2500}],
+        )
+
+        self.assertEqual(totals["total_recaudado"], 10000)
+        self.assertEqual(totals["total_banos"], 1)
+        self.assertEqual(totals["total_banos_monto"], 300)
+        self.assertEqual(totals["total_lavados_solos"], 1)
+        self.assertEqual(totals["total_lavados_solos_monto"], 8000)
+        self.assertEqual(totals["total_mensualidades"], 1)
+        self.assertEqual(totals["total_mensualidades_monto"], 50000)
+        self.assertEqual(totals["total_noches"], 1)
+        self.assertEqual(totals["total_noches_monto"], 5000)
+        self.assertEqual(totals["total_gastos"], 2500)
+        self.assertEqual(totals["total_general"], 73300)
+        self.assertEqual(totals["total_neto"], 70800)
+        self.assertEqual(totals["total_movimientos"], 6)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,8 +12,40 @@ from utils.pdf_utils import ReportePDF, abrir_pdf
 from datetime import datetime, time
 from fpdf import FPDF
 import os
+from controllers.accounting_contracts import build_report_totals
 
-def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
+
+CATEGORY_LABELS = {
+    "vehiculo": "Vehículo",
+    "bano": "Baño",
+    "lavado_solo": "Lavado solo",
+    "mensualidad": "Mensualidad",
+    "noche": "Noche",
+    "gasto": "Gasto",
+}
+
+
+class ReportPayload(dict):
+    """Structured report payload with legacy list-like access for old callers."""
+
+    def __len__(self):
+        return len(dict.__getitem__(self, "items"))
+
+    def __iter__(self):
+        return (_legacy_item(item) for item in dict.__getitem__(self, "items"))
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return dict.__getitem__(self, "items")[key]
+        return dict.__getitem__(self, key)
+
+    def __eq__(self, other):
+        if isinstance(other, list):
+            return dict.__getitem__(self, "items") == other
+        return dict.__eq__(self, other)
+
+
+def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora_fin=None, usuario=""):
     """
     Obtiene los registros de ingresos y salidas de vehículos dentro de un rango de fechas.
 
@@ -23,7 +55,7 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
         patente (str, opcional): Patente del vehículo para filtrar resultados. Por defecto, devuelve todos.
 
     Returns:
-        list[dict]: Lista de movimientos con campos: patente, ingreso, salida, minutos y tarifa_aplicada.
+        dict: Payload con items normalizados y totales contables.
     """
     query = """
         SELECT 
@@ -31,7 +63,8 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
             i.fecha_hora_ingreso,
             i.fecha_hora_salida,
             TIMESTAMPDIFF(MINUTE, i.fecha_hora_ingreso, i.fecha_hora_salida) AS minutos,
-            i.tarifa_aplicada
+            i.tarifa_aplicada,
+            i.usuario
         FROM ingresos i
         JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
         WHERE i.fecha_hora_salida IS NOT NULL
@@ -46,10 +79,20 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
     if patente:
         query += " AND v.patente = %s"
         params.append(patente)
+    if hora_inicio:
+        query += " AND TIME(i.fecha_hora_salida) >= %s"
+        params.append(hora_inicio)
+    if hora_fin:
+        query += " AND TIME(i.fecha_hora_salida) <= %s"
+        params.append(hora_fin)
+    if usuario:
+        query += " AND i.usuario = %s"
+        params.append(usuario)
 
     with db_cursor(dictionary=True) as cursor:
         cursor.execute(query, tuple(params))
-        resultados = cursor.fetchall()
+        movimientos = cursor.fetchall()
+        resultados = [_normalizar_vehiculo(row) for row in movimientos]
 
         # Usos de baños (solo si no se filtró patente)
         if not patente:
@@ -57,78 +100,59 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
                 SELECT fecha_hora, monto, usuario
                 FROM usos_bano
                 WHERE DATE(fecha_hora) BETWEEN %s AND %s
-            """, (fecha_inicio, fecha_fin))
+            """ + _time_user_clause("fecha_hora", "usuario", hora_inicio, hora_fin, usuario),
+                tuple([fecha_inicio, fecha_fin] + _time_user_params(hora_inicio, hora_fin, usuario))
+            )
             banos = cursor.fetchall()
             for b in banos:
-                resultados.append({
-                    "patente": "[BAÑO]",
-                    "fecha_hora_ingreso": b["fecha_hora"],
-                    "fecha_hora_salida": b["fecha_hora"],
-                    "minutos": 0,
-                    "tarifa_aplicada": b["monto"]
-                })
+                resultados.append(_normalizar_bano(b))
 
             cursor.execute("""
                 SELECT patente, fecha_hora_inicio, fecha_hora_fin,
                        TIMESTAMPDIFF(MINUTE, fecha_hora_inicio, fecha_hora_fin) AS minutos,
-                       valor_lavado_snapshot
+                       valor_lavado_snapshot, usuario_fin
                 FROM operaciones_servicio
                 WHERE estado = 'FINALIZADO_COBRADO'
                   AND id_ingreso_generado IS NULL
                   AND fecha_hora_fin IS NOT NULL
                   AND DATE(fecha_hora_fin) BETWEEN %s AND %s
+            """ + _time_user_clause("fecha_hora_fin", "usuario_fin", hora_inicio, hora_fin, usuario) + """
                 ORDER BY fecha_hora_fin
-            """, (fecha_inicio, fecha_fin))
-            for lavado in cursor.fetchall():
-                resultados.append({
-                    "tipo": "lavado_solo",
-                    "patente": lavado["patente"],
-                    "fecha_hora_ingreso": lavado["fecha_hora_inicio"],
-                    "fecha_hora_salida": lavado["fecha_hora_fin"],
-                    "minutos": lavado["minutos"] or 0,
-                    "tarifa_aplicada": lavado["valor_lavado_snapshot"] or 0,
-                })
+            """, tuple([fecha_inicio, fecha_fin] + _time_user_params(hora_inicio, hora_fin, usuario)))
+            lavados = cursor.fetchall()
+            for lavado in lavados:
+                resultados.append(_normalizar_lavado(lavado))
 
             cursor.execute("""
-                SELECT fecha_hora, monto, descripcion
+                SELECT fecha_hora, monto, descripcion, usuario
                 FROM gastos_operacion
                 WHERE DATE(fecha_hora) BETWEEN %s AND %s
+            """ + _time_user_clause("fecha_hora", "usuario", hora_inicio, hora_fin, usuario) + """
                 ORDER BY fecha_hora
-            """, (fecha_inicio, fecha_fin))
-            for gasto in cursor.fetchall():
-                resultados.append({
-                    "tipo": "gasto",
-                    "patente": "[GASTO]",
-                    "fecha_hora_ingreso": gasto["fecha_hora"],
-                    "fecha_hora_salida": gasto["fecha_hora"],
-                    "minutos": 0,
-                    "tarifa_aplicada": -(gasto["monto"] or 0),
-                })
+            """, tuple([fecha_inicio, fecha_fin] + _time_user_params(hora_inicio, hora_fin, usuario)))
+            gastos = cursor.fetchall()
+            for gasto in gastos:
+                resultados.append(_normalizar_gasto(gasto))
         else:
             cursor.execute("""
                 SELECT patente, fecha_hora_inicio, fecha_hora_fin,
                        TIMESTAMPDIFF(MINUTE, fecha_hora_inicio, fecha_hora_fin) AS minutos,
-                       valor_lavado_snapshot
+                       valor_lavado_snapshot, usuario_fin
                 FROM operaciones_servicio
                 WHERE patente = %s
                   AND estado = 'FINALIZADO_COBRADO'
                   AND id_ingreso_generado IS NULL
                   AND fecha_hora_fin IS NOT NULL
                   AND DATE(fecha_hora_fin) BETWEEN %s AND %s
+            """ + _time_user_clause("fecha_hora_fin", "usuario_fin", hora_inicio, hora_fin, usuario) + """
                 ORDER BY fecha_hora_fin
-            """, (patente, fecha_inicio, fecha_fin))
-            for lavado in cursor.fetchall():
-                resultados.append({
-                    "tipo": "lavado_solo",
-                    "patente": lavado["patente"],
-                    "fecha_hora_ingreso": lavado["fecha_hora_inicio"],
-                    "fecha_hora_salida": lavado["fecha_hora_fin"],
-                    "minutos": lavado["minutos"] or 0,
-                    "tarifa_aplicada": lavado["valor_lavado_snapshot"] or 0,
-                })
+            """, tuple([patente, fecha_inicio, fecha_fin] + _time_user_params(hora_inicio, hora_fin, usuario)))
+            lavados = cursor.fetchall()
+            for lavado in lavados:
+                resultados.append(_normalizar_lavado(lavado))
 
         pagos_query = """
-            SELECT v.patente, p.periodo, p.fecha_pago, p.monto_snapshot
+            SELECT v.patente, p.periodo, p.fecha_pago, p.monto_snapshot, p.usuario
             FROM pagos_mensuales p
             JOIN vehiculos v ON p.id_vehiculo = v.id_vehiculo
             WHERE DATE(p.fecha_pago) BETWEEN %s AND %s
@@ -137,20 +161,23 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
         if patente:
             pagos_query += " AND v.patente = %s"
             pagos_params.append(patente)
+        if hora_inicio:
+            pagos_query += " AND TIME(p.fecha_pago) >= %s"
+            pagos_params.append(hora_inicio)
+        if hora_fin:
+            pagos_query += " AND TIME(p.fecha_pago) <= %s"
+            pagos_params.append(hora_fin)
+        if usuario:
+            pagos_query += " AND p.usuario = %s"
+            pagos_params.append(usuario)
         pagos_query += " ORDER BY p.fecha_pago"
         cursor.execute(pagos_query, tuple(pagos_params))
-        for pago in cursor.fetchall():
-            resultados.append({
-                "tipo": "mensualidad",
-                "patente": f"[MENSUAL] {pago['patente']}",
-                "fecha_hora_ingreso": pago["fecha_pago"],
-                "fecha_hora_salida": pago["fecha_pago"],
-                "minutos": 0,
-                "tarifa_aplicada": pago["monto_snapshot"],
-            })
+        pagos = cursor.fetchall()
+        for pago in pagos:
+            resultados.append(_normalizar_mensualidad(pago))
 
         noches_query = """
-            SELECT v.patente, c.fecha_hora_pago, c.monto_snapshot
+            SELECT v.patente, c.fecha_hora_pago, c.monto_snapshot, c.usuario
             FROM cobros_noches c
             JOIN ingresos i ON i.id_ingreso = c.id_ingreso
             JOIN vehiculos v ON v.id_vehiculo = i.id_vehiculo
@@ -165,20 +192,135 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente=""):
         if patente:
             noches_query += " AND v.patente = %s"
             noches_params.append(patente)
+        if hora_inicio:
+            noches_query += " AND TIME(c.fecha_hora_pago) >= %s"
+            noches_params.append(hora_inicio)
+        if hora_fin:
+            noches_query += " AND TIME(c.fecha_hora_pago) <= %s"
+            noches_params.append(hora_fin)
+        if usuario:
+            noches_query += " AND c.usuario = %s"
+            noches_params.append(usuario)
         noches_query += " ORDER BY c.fecha_hora_pago, c.id_cobro_noche"
         cursor.execute(noches_query, tuple(noches_params))
-        for cobro in cursor.fetchall():
-            resultados.append({
-                "tipo": "noche",
-                "patente": f"[NOCHES] {cobro['patente']}",
-                "fecha_hora_ingreso": cobro["fecha_hora_pago"],
-                "fecha_hora_salida": cobro["fecha_hora_pago"],
-                "minutos": 0,
-                "tarifa_aplicada": cobro["monto_snapshot"],
-            })
+        noches = cursor.fetchall()
+        for cobro in noches:
+            resultados.append(_normalizar_noche(cobro))
 
     resultados.sort(key=lambda item: item["fecha_hora_salida"])
-    return resultados
+    return ReportPayload({
+        "items": resultados,
+        "totals": build_report_totals(resultados),
+    })
+
+
+def _time_user_clause(event_column, user_column, hora_inicio=None, hora_fin=None, usuario=""):
+    clause = ""
+    if hora_inicio:
+        clause += f" AND TIME({event_column}) >= %s"
+    if hora_fin:
+        clause += f" AND TIME({event_column}) <= %s"
+    if usuario:
+        clause += f" AND {user_column} = %s"
+    return clause
+
+
+def _time_user_params(hora_inicio=None, hora_fin=None, usuario=""):
+    params = []
+    if hora_inicio:
+        params.append(hora_inicio)
+    if hora_fin:
+        params.append(hora_fin)
+    if usuario:
+        params.append(usuario)
+    return params
+
+
+def _legacy_item(item):
+    legacy = dict(item)
+    if legacy.get("tipo") == "mensualidad":
+        legacy["patente"] = f"[MENSUAL] {legacy['patente']}"
+    elif legacy.get("tipo") == "noche":
+        legacy["patente"] = f"[NOCHES] {legacy['patente']}"
+    return legacy
+
+
+def _normalizar_vehiculo(row):
+    return {
+        "tipo": "vehiculo",
+        "categoria": CATEGORY_LABELS["vehiculo"],
+        "patente": row["patente"],
+        "fecha_hora_ingreso": row["fecha_hora_ingreso"],
+        "fecha_hora_salida": row["fecha_hora_salida"],
+        "minutos": row.get("minutos") or 0,
+        "tarifa_aplicada": row.get("tarifa_aplicada") or 0,
+        "usuario": row.get("usuario"),
+    }
+
+
+def _normalizar_bano(row):
+    return {
+        "tipo": "bano",
+        "categoria": CATEGORY_LABELS["bano"],
+        "patente": "[BAÑO]",
+        "fecha_hora_ingreso": row["fecha_hora"],
+        "fecha_hora_salida": row["fecha_hora"],
+        "minutos": 0,
+        "tarifa_aplicada": row.get("monto") or 0,
+        "usuario": row.get("usuario"),
+    }
+
+
+def _normalizar_lavado(row):
+    return {
+        "tipo": "lavado_solo",
+        "categoria": CATEGORY_LABELS["lavado_solo"],
+        "patente": row["patente"],
+        "fecha_hora_ingreso": row["fecha_hora_inicio"],
+        "fecha_hora_salida": row["fecha_hora_fin"],
+        "minutos": row.get("minutos") or 0,
+        "tarifa_aplicada": row.get("valor_lavado_snapshot") or 0,
+        "usuario": row.get("usuario_fin") or row.get("usuario"),
+    }
+
+
+def _normalizar_gasto(row):
+    return {
+        "tipo": "gasto",
+        "categoria": CATEGORY_LABELS["gasto"],
+        "patente": "[GASTO]",
+        "fecha_hora_ingreso": row["fecha_hora"],
+        "fecha_hora_salida": row["fecha_hora"],
+        "minutos": 0,
+        "tarifa_aplicada": -(row.get("monto") or 0),
+        "usuario": row.get("usuario"),
+    }
+
+
+def _normalizar_mensualidad(row):
+    return {
+        "tipo": "mensualidad",
+        "categoria": CATEGORY_LABELS["mensualidad"],
+        "patente": row["patente"],
+        "fecha_hora_ingreso": row["fecha_pago"],
+        "fecha_hora_salida": row["fecha_pago"],
+        "minutos": 0,
+        "tarifa_aplicada": row.get("monto_snapshot") or 0,
+        "usuario": row.get("usuario"),
+    }
+
+
+def _normalizar_noche(row):
+    return {
+        "tipo": "noche",
+        "categoria": CATEGORY_LABELS["noche"],
+        "patente": row["patente"],
+        "fecha_hora_ingreso": row["fecha_hora_pago"],
+        "fecha_hora_salida": row["fecha_hora_pago"],
+        "minutos": 0,
+        "tarifa_aplicada": row.get("monto_snapshot") or 0,
+        "usuario": row.get("usuario"),
+    }
 
 def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, patente=""):
     """
@@ -195,18 +337,24 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
     pdf.add_page()
     pdf.set_font("Arial", size=11)
 
-    total = 0
-    total_banos = 0
-    monto_banos = 0
-    lavados_solos = [row for row in datos if row.get("tipo") == "lavado_solo"]
-    total_lavados = len(lavados_solos)
-    monto_lavados = sum(row.get("tarifa_aplicada") or 0 for row in lavados_solos)
-    total_mensualidades = 0
-    monto_mensualidades = 0
-    total_noches = 0
-    monto_noches = 0
+    if isinstance(datos, dict) and "items" in datos:
+        items = datos.get("items") or []
+        totals = datos.get("totals") or build_report_totals(items)
+    else:
+        items = datos
+        totals = None
 
-    if fecha_inicio and fecha_fin:
+    total = 0
+    total_banos = totals.get("total_banos", 0) if totals else 0
+    monto_banos = totals.get("total_banos_monto", 0) if totals else 0
+    total_lavados = totals.get("total_lavados_solos", 0) if totals else len([row for row in items if row.get("tipo") == "lavado_solo"])
+    monto_lavados = totals.get("total_lavados_solos_monto", 0) if totals else sum(row.get("tarifa_aplicada") or 0 for row in items if row.get("tipo") == "lavado_solo")
+    total_mensualidades = totals.get("total_mensualidades", 0) if totals else 0
+    monto_mensualidades = totals.get("total_mensualidades_monto", 0) if totals else 0
+    total_noches = totals.get("total_noches", 0) if totals else 0
+    monto_noches = totals.get("total_noches_monto", 0) if totals else 0
+
+    if totals is None and fecha_inicio and fecha_fin:
         with db_cursor(dictionary=True) as cursor:
             if incluir_banos:
                 cursor.execute("""
@@ -254,7 +402,7 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
             total_noches = resultado_noches["cantidad"] or 0
             monto_noches = resultado_noches["total"] or 0
 
-    for row in datos:
+    for row in items:
         ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
         salida = row["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M")
         tarifa = row["tarifa_aplicada"]
@@ -264,7 +412,9 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
 
     pdf.ln(5)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, f"Total neto: ${total:.0f}", ln=True)
+    total_neto = totals.get("total_neto", total) if totals else total
+    total_general = totals.get("total_general", total) if totals else total
+    pdf.cell(0, 10, f"Total neto: ${total_neto:.0f}", ln=True)
 
     pdf.set_font("Arial", "", 11)
     pdf.cell(0, 8, f"Mensualidades cobradas: {total_mensualidades}", ln=True)
@@ -279,7 +429,7 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
         pdf.cell(0, 8, f"Lavados independientes registrados: {total_lavados}", ln=True)
         pdf.cell(0, 8, f"Total por lavados independientes: ${monto_lavados:.0f}", ln=True)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Total neto (vehículos, baños, lavados, mensualidades y noches): ${total:.0f}", ln=True)
+        pdf.cell(0, 10, f"Total bruto (vehículos, baños, lavados, mensualidades y noches): ${total_general:.0f}", ln=True)
         pdf.set_font("Arial", "", 9)
         pdf.cell(0, 6, "Nota: los lavados vinculados a una estadía se incluyen en el importe del vehículo.", ln=True)
 
