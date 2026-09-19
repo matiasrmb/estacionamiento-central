@@ -1,6 +1,6 @@
 import unittest
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, time
 from unittest.mock import Mock, patch
 
 from controllers import reportes_controller
@@ -104,6 +104,151 @@ class ObtenerReportesTests(unittest.TestCase):
         )
         for _, params in cursor.executed[2:]:
             self.assertEqual(params, (date(2026, 1, 1), date(2026, 1, 31), "ABC123"))
+
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_filters_plate_time_and_user_across_categories(self, db_cursor):
+        parking = {
+            "tipo": "vehiculo",
+            "categoria": "Vehículo",
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 10, 9, 0),
+            "fecha_hora_salida": datetime(2026, 1, 10, 11, 30),
+            "minutos": 150,
+            "tarifa_aplicada": 4000,
+            "usuario": "admin",
+        }
+        wash = {
+            "tipo": "lavado_solo",
+            "categoria": "Lavado solo",
+            "patente": "ABC123",
+            "fecha_hora_inicio": datetime(2026, 1, 10, 10, 0),
+            "fecha_hora_fin": datetime(2026, 1, 10, 12, 0),
+            "minutos": 120,
+            "valor_lavado_snapshot": 8000,
+            "usuario": "admin",
+        }
+        monthly = {
+            "tipo": "mensualidad",
+            "categoria": "Mensualidad",
+            "patente": "ABC123",
+            "periodo": date(2026, 1, 1),
+            "fecha_pago": datetime(2026, 1, 10, 12, 30),
+            "monto_snapshot": 50000,
+            "usuario": "admin",
+        }
+        night = {
+            "tipo": "noche",
+            "categoria": "Noche",
+            "patente": "ABC123",
+            "fecha_hora_pago": datetime(2026, 1, 10, 13, 0),
+            "monto_snapshot": 5000,
+            "usuario": "admin",
+        }
+        cursor = FakeCursor(fetchall_results=[[parking], [wash], [monthly], [night]])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(
+            date(2026, 1, 10),
+            date(2026, 1, 10),
+            patente="ABC123",
+            hora_inicio=time(10, 0),
+            hora_fin=time(13, 0),
+            usuario="admin",
+        )
+
+        self.assertIsInstance(payload, dict)
+        self.assertIn("items", payload)
+        self.assertIn("totals", payload)
+        self.assertEqual(
+            [item["tipo"] for item in payload["items"]],
+            ["vehiculo", "lavado_solo", "mensualidad", "noche"],
+        )
+        self.assertEqual({item["patente"] for item in payload["items"]}, {"ABC123"})
+        self.assertTrue(
+            all(time(10, 0) <= item["fecha_hora_salida"].time() <= time(13, 0) for item in payload["items"])
+        )
+        self.assertEqual({item["usuario"] for item in payload["items"]}, {"admin"})
+        self.assertNotIn("bano", {item["tipo"] for item in payload["items"]})
+        self.assertNotIn("gasto", {item["tipo"] for item in payload["items"]})
+
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_returns_category_labels_and_user_context(self, db_cursor):
+        parking = {
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 10, 9, 0),
+            "fecha_hora_salida": datetime(2026, 1, 10, 10, 0),
+            "minutos": 60,
+            "tarifa_aplicada": 3000,
+            "usuario": "cashier",
+        }
+        bathroom = {
+            "fecha_hora": datetime(2026, 1, 10, 10, 30),
+            "monto": 300,
+            "usuario": "cashier",
+        }
+        wash = {
+            "patente": "WASH1",
+            "fecha_hora_inicio": datetime(2026, 1, 10, 11, 0),
+            "fecha_hora_fin": datetime(2026, 1, 10, 12, 0),
+            "minutos": 60,
+            "valor_lavado_snapshot": 8000,
+            "usuario_fin": "washer",
+        }
+        expense = {
+            "fecha_hora": datetime(2026, 1, 10, 12, 30),
+            "monto": 1500,
+            "descripcion": "Supplies",
+            "usuario": "manager",
+        }
+        monthly = {
+            "patente": "MONTH1",
+            "periodo": date(2026, 1, 1),
+            "fecha_pago": datetime(2026, 1, 10, 13, 0),
+            "monto_snapshot": 50000,
+            "usuario": "cashier",
+        }
+        night = {
+            "patente": "NIGHT1",
+            "fecha_hora_pago": datetime(2026, 1, 10, 14, 0),
+            "monto_snapshot": 5000,
+            "usuario": "cashier",
+        }
+        cursor = FakeCursor(fetchall_results=[
+            [parking], [bathroom], [wash], [expense], [monthly], [night],
+        ])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(date(2026, 1, 10), date(2026, 1, 10))
+
+        self.assertIsInstance(payload, dict)
+        items_by_type = {item["tipo"]: item for item in payload["items"]}
+        self.assertEqual(items_by_type["vehiculo"]["categoria"], "Vehículo")
+        self.assertEqual(items_by_type["bano"]["categoria"], "Baño")
+        self.assertEqual(items_by_type["lavado_solo"]["categoria"], "Lavado solo")
+        self.assertEqual(items_by_type["mensualidad"]["categoria"], "Mensualidad")
+        self.assertEqual(items_by_type["noche"]["categoria"], "Noche")
+        self.assertEqual(items_by_type["gasto"]["categoria"], "Gasto")
+        self.assertEqual(items_by_type["vehiculo"]["usuario"], "cashier")
+        self.assertEqual(items_by_type["lavado_solo"]["usuario"], "washer")
+        self.assertEqual(items_by_type["gasto"]["usuario"], "manager")
+
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_returns_explicit_empty_payload_when_no_rows_match(self, db_cursor):
+        cursor = FakeCursor(fetchall_results=[[], [], [], [], [], []])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(date(2026, 1, 10), date(2026, 1, 10))
+
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(payload["totals"]["total_recaudado"], 0)
+        self.assertEqual(payload["totals"]["total_banos_monto"], 0)
+        self.assertEqual(payload["totals"]["total_lavados_solos_monto"], 0)
+        self.assertEqual(payload["totals"]["total_mensualidades_monto"], 0)
+        self.assertEqual(payload["totals"]["total_noches_monto"], 0)
+        self.assertEqual(payload["totals"]["total_gastos"], 0)
+        self.assertEqual(payload["totals"]["total_general"], 0)
+        self.assertEqual(payload["totals"]["total_neto"], 0)
+        self.assertEqual(payload["totals"]["total_movimientos"], 0)
 
 
 class ExportarPdfTests(unittest.TestCase):

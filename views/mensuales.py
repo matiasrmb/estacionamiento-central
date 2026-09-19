@@ -12,7 +12,7 @@ from controllers.mensuales_controller import (
     actualizar_tarifa, eliminar_mensual, registrar_pago_mensual
 )
 from utils.plates import normalizar_patente, validar_patente
-from utils.table_filters import filtrar_filas_tabla
+from utils.table_filters import create_sortable_item, filtrar_filas_tabla, sort_table_from_header_click
 
 
 class MensualesWindow(QWidget):
@@ -122,6 +122,8 @@ class MensualesWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(7, QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setSortIndicatorShown(True)
+        self.tabla.horizontalHeader().sectionClicked.connect(self.ordenar_tabla)
 
         layout.addWidget(self.tabla, 1)
 
@@ -135,16 +137,16 @@ class MensualesWindow(QWidget):
         for i, row in enumerate(datos):
             self.tabla.insertRow(i)
 
-            item_id = QTableWidgetItem(str(row["id_vehiculo"]))
-            item_patente = QTableWidgetItem(row["patente"])
-            item_telefono = QTableWidgetItem(row.get("telefono") or "-")
-            item_tarifa = QTableWidgetItem(str(row.get("tarifa_mensual") or "0"))
-            item_vencimiento = QTableWidgetItem(f"Día {row.get('dia_vencimiento') or 1}")
+            item_id = create_sortable_item(str(row["id_vehiculo"]), sort_value=row["id_vehiculo"])
+            item_patente = create_sortable_item(row["patente"], sort_value=row["patente"])
+            item_telefono = create_sortable_item(row.get("telefono") or "-", sort_value=row.get("telefono") or "")
+            item_tarifa = create_sortable_item(str(row.get("tarifa_mensual") or "0"), sort_value=row.get("tarifa_mensual") or 0)
+            item_vencimiento = create_sortable_item(f"Día {row.get('dia_vencimiento') or 1}", sort_value=row.get("dia_vencimiento") or 1)
             estado = row.get("estado_pago") or "pendiente"
-            item_estado = QTableWidgetItem(estado.capitalize())
+            item_estado = create_sortable_item(estado.capitalize(), sort_value=estado)
             fecha_pago = row.get("fecha_pago")
             pago_texto = fecha_pago.strftime("%d/%m/%Y") if hasattr(fecha_pago, "strftime") else str(fecha_pago or "Sin pago")
-            item_pago = QTableWidgetItem(pago_texto)
+            item_pago = create_sortable_item(pago_texto, sort_value=fecha_pago or "")
 
             item_id.setTextAlignment(Qt.AlignCenter)
             item_patente.setTextAlignment(Qt.AlignCenter)
@@ -193,7 +195,16 @@ class MensualesWindow(QWidget):
         self.filtrar_tabla()
 
     def filtrar_tabla(self):
-        filtrar_filas_tabla(self.tabla, self.busqueda.text())
+        filtrar_filas_tabla(self.tabla, self.busqueda.text(), action_columns={7})
+
+    def ordenar_tabla(self, columna):
+        if columna == 7:
+            return
+        sort_table_from_header_click(
+            self.tabla,
+            columna,
+            action_columns={7},
+        )
 
     def agregar_mensual(self):
         patente = normalizar_patente(self.patente_input.text())

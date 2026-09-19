@@ -48,6 +48,7 @@ from controllers.cotizaciones_controller import (
 from views.subida_dialog import SubidaDialog
 from utils.plates import normalizar_patente, validar_patente
 from utils.local_preferences import obtener_modo_privacidad_metricas
+from utils.table_filters import create_sortable_item, sort_table_from_header_click
 
 
 def formatear_fecha_hora(valor):
@@ -557,6 +558,8 @@ class RegistroWindow(QWidget):
         self.tabla_activos.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.tabla_activos.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.tabla_activos.horizontalHeader().setSortIndicatorShown(True)
+        self.tabla_activos.horizontalHeader().sectionClicked.connect(self.ordenar_tabla_activos)
 
         self.tabla_activos.cellDoubleClicked.connect(self.cargar_patente_desde_tabla)
         self.tabla_activos.verticalScrollBar().valueChanged.connect(
@@ -1097,28 +1100,28 @@ class RegistroWindow(QWidget):
             estado_noche = " [NOCHE PENDIENTE]" if vehiculo.get("noche_pendiente") else ""
             patente_mostrar = f"▲ {patente}{estado_noche}" if hay_subida_activa else f"{patente}{estado_noche}"
 
-            item_patente = QTableWidgetItem(patente_mostrar)
+            item_patente = create_sortable_item(patente_mostrar, sort_value=vehiculo.get("patente_base", patente))
             item_patente.setData(Qt.UserRole, vehiculo.get("id_ingreso"))
             item_patente.setData(Qt.UserRole + 1, vehiculo.get("patente_base", patente))
             item_patente.setData(Qt.UserRole + 2, vehiculo.get("en_lavado", False))
             item_patente.setData(Qt.UserRole + 3, vehiculo.get("tipo_fila", "ingreso"))
             item_patente.setData(Qt.UserRole + 4, vehiculo.get("id_operacion_servicio"))
-            item_patente.setFlags(item_patente.flags() ^ Qt.ItemIsEditable)
+            item_patente.setFlags(item_patente.flags() & ~Qt.ItemIsEditable)
             item_patente.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 0, item_patente)
 
-            item_hora = QTableWidgetItem(str(hora))
-            item_hora.setFlags(item_hora.flags() ^ Qt.ItemIsEditable)
+            item_hora = create_sortable_item(str(hora), sort_value=hora)
+            item_hora.setFlags(item_hora.flags() & ~Qt.ItemIsEditable)
             item_hora.setTextAlignment(Qt.AlignCenter)
             self.tabla_activos.setItem(i, 1, item_hora)
 
-            item_minutos = QTableWidgetItem(f"{minutos} min")
-            item_minutos.setFlags(item_minutos.flags() ^ Qt.ItemIsEditable)
+            item_minutos = create_sortable_item(f"{minutos} min", sort_value=minutos)
+            item_minutos.setFlags(item_minutos.flags() & ~Qt.ItemIsEditable)
             item_minutos.setTextAlignment(Qt.AlignCenter)
             self.tabla_activos.setItem(i, 2, item_minutos)
 
-            item_monto = QTableWidgetItem(f"${monto:.0f}")
-            item_monto.setFlags(item_monto.flags() ^ Qt.ItemIsEditable)
+            item_monto = create_sortable_item(f"${monto:.0f}", sort_value=monto)
+            item_monto.setFlags(item_monto.flags() & ~Qt.ItemIsEditable)
             item_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tabla_activos.setItem(i, 3, item_monto)
 
@@ -1165,6 +1168,14 @@ class RegistroWindow(QWidget):
 
         self.tabla_activos.setUpdatesEnabled(True)
         self.tabla_activos.viewport().update()
+
+    def ordenar_tabla_activos(self, columna):
+        fila_total = self.tabla_activos.rowCount() - 1
+        sort_table_from_header_click(
+            self.tabla_activos,
+            columna,
+            protected_rows={fila_total} if fila_total >= 0 else set(),
+        )
 
     def _fila_solo_lavado(self, operacion):
         return {

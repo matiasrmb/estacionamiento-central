@@ -2,11 +2,14 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QTableWidget,
     QTableWidgetItem, QHeaderView, QDateEdit,
-    QMessageBox, QFrame, QGridLayout, QSizePolicy
+    QMessageBox, QFrame, QGridLayout, QSizePolicy,
+    QComboBox, QTimeEdit
 )
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, QTime, Qt
 
 from controllers.reportes_controller import obtener_reportes, exportar_pdf
+from controllers.usuarios_controller import obtener_usuarios
+from utils.table_filters import create_sortable_item, sort_table_from_header_click
 
 
 class ReportesWindow(QWidget):
@@ -18,7 +21,7 @@ class ReportesWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setMinimumSize(900, 600)
-        self.resultados = []
+        self.resultados = {"items": [], "totals": {}}
         self.ultimos_filtros = None
         self.init_ui()
 
@@ -59,12 +62,32 @@ class ReportesWindow(QWidget):
         self.fecha_fin.setCalendarPopup(True)
         self.fecha_fin.setMinimumHeight(38)
 
+        label_hora_inicio = QLabel("Hora desde")
+        label_hora_inicio.setObjectName("EtiquetaFormulario")
+        self.hora_inicio = QTimeEdit()
+        self.hora_inicio.setDisplayFormat("HH:mm")
+        self.hora_inicio.setTime(QTime(0, 0))
+        self.hora_inicio.setMinimumHeight(38)
+
+        label_hora_fin = QLabel("Hora hasta")
+        label_hora_fin.setObjectName("EtiquetaFormulario")
+        self.hora_fin = QTimeEdit()
+        self.hora_fin.setDisplayFormat("HH:mm")
+        self.hora_fin.setTime(QTime(23, 59))
+        self.hora_fin.setMinimumHeight(38)
+
         label_patente = QLabel("Patente")
         label_patente.setObjectName("EtiquetaFormulario")
         self.input_patente = QLineEdit()
         self.input_patente.setPlaceholderText("Opcional")
         self.input_patente.setMinimumHeight(38)
         self.input_patente.returnPressed.connect(self.filtrar)
+
+        label_usuario = QLabel("Usuario")
+        label_usuario.setObjectName("EtiquetaFormulario")
+        self.combo_usuario = QComboBox()
+        self.combo_usuario.setMinimumHeight(38)
+        self.cargar_usuarios()
 
         self.boton_filtrar = QPushButton("Buscar")
         self.boton_filtrar.setMinimumHeight(40)
@@ -93,6 +116,13 @@ class ReportesWindow(QWidget):
         filtros_layout.addWidget(self.input_patente, 0, 5)
         filtros_layout.addWidget(self.boton_filtrar, 0, 6)
 
+        filtros_layout.addWidget(label_hora_inicio, 1, 0)
+        filtros_layout.addWidget(self.hora_inicio, 1, 1)
+        filtros_layout.addWidget(label_hora_fin, 1, 2)
+        filtros_layout.addWidget(self.hora_fin, 1, 3)
+
+        filtros_layout.addWidget(label_usuario, 2, 0)
+        filtros_layout.addWidget(self.combo_usuario, 2, 1)
         filtros_layout.addWidget(self.boton_limpiar, 1, 4)
         filtros_layout.addWidget(self.boton_actualizar, 1, 5)
         filtros_layout.addWidget(self.boton_exportar, 1, 6)
@@ -111,10 +141,14 @@ class ReportesWindow(QWidget):
         resumen_layout.setSpacing(12)
 
         self.card_movimientos = self.crear_tarjeta_resumen("Movimientos encontrados", "0")
-        self.card_total = self.crear_tarjeta_resumen("Total neto", "$0")
+        self.card_total = self.crear_tarjeta_resumen("Total bruto", "$0")
+        self.card_gastos = self.crear_tarjeta_resumen("Gastos", "$0")
+        self.card_neto = self.crear_tarjeta_resumen("Total neto", "$0")
 
         resumen_layout.addWidget(self.card_movimientos)
         resumen_layout.addWidget(self.card_total)
+        resumen_layout.addWidget(self.card_gastos)
+        resumen_layout.addWidget(self.card_neto)
         resumen_layout.addStretch()
 
         layout.addLayout(resumen_layout)
@@ -123,8 +157,8 @@ class ReportesWindow(QWidget):
         # TABLA
         # =========================================================
         self.tabla = QTableWidget()
-        self.tabla.setColumnCount(5)
-        self.tabla.setHorizontalHeaderLabels(["Patente", "Ingreso", "Salida", "Minutos", "Monto"])
+        self.tabla.setColumnCount(7)
+        self.tabla.setHorizontalHeaderLabels(["Categoría", "Patente", "Ingreso", "Salida", "Minutos", "Usuario", "Monto"])
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SingleSelection)
@@ -132,14 +166,28 @@ class ReportesWindow(QWidget):
         self.tabla.verticalHeader().setDefaultSectionSize(38)
 
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.tabla.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.tabla.horizontalHeader().sectionClicked.connect(self.ordenar_tabla)
 
         layout.addWidget(self.tabla, 1)
 
         self.setLayout(layout)
+
+    def cargar_usuarios(self):
+        self.combo_usuario.clear()
+        self.combo_usuario.addItem("Todos", "")
+        try:
+            for usuario in obtener_usuarios():
+                nombre = usuario.get("usuario")
+                if nombre:
+                    self.combo_usuario.addItem(nombre, nombre)
+        except Exception:
+            pass
 
     def crear_tarjeta_resumen(self, titulo, valor):
         frame = QFrame()
@@ -168,72 +216,91 @@ class ReportesWindow(QWidget):
     def limpiar_filtros(self):
         self.fecha_inicio.setDate(QDate.currentDate())
         self.fecha_fin.setDate(QDate.currentDate())
+        self.hora_inicio.setTime(QTime(0, 0))
+        self.hora_fin.setTime(QTime(23, 59))
         self.input_patente.clear()
-        self.resultados = []
+        self.combo_usuario.setCurrentIndex(0)
+        self.resultados = {"items": [], "totals": {}}
         self.tabla.setRowCount(0)
         self.card_movimientos.label_valor.setText("0")
         self.card_total.label_valor.setText("$0")
+        self.card_gastos.label_valor.setText("$0")
+        self.card_neto.label_valor.setText("$0")
         self.boton_exportar.setEnabled(False)
 
     def filtrar(self):
         fecha_inicio = self.fecha_inicio.date().toPython()
         fecha_fin = self.fecha_fin.date().toPython()
         patente = self.input_patente.text().strip().upper()
+        hora_inicio = self.hora_inicio.time().toPython()
+        hora_fin = self.hora_fin.time().toPython()
+        usuario = self.combo_usuario.currentData() or ""
 
-        self.resultados = obtener_reportes(fecha_inicio, fecha_fin, patente)
+        self.resultados = obtener_reportes(fecha_inicio, fecha_fin, patente, hora_inicio, hora_fin, usuario)
+        items = self.resultados.get("items", [])
+        totals = self.resultados.get("totals", {})
         self.ultimos_filtros = {
             "fecha_inicio": fecha_inicio,
             "fecha_fin": fecha_fin,
             "patente": patente,
+            "hora_inicio": hora_inicio,
+            "hora_fin": hora_fin,
+            "usuario": usuario,
         }
 
-        if not self.resultados:
+        if not items:
             self.tabla.setRowCount(0)
             self.card_movimientos.label_valor.setText("0")
             self.card_total.label_valor.setText("$0")
+            self.card_gastos.label_valor.setText("$0")
+            self.card_neto.label_valor.setText("$0")
             self.boton_exportar.setEnabled(False)
             QMessageBox.information(self, "Sin resultados", "No se encontraron movimientos en ese rango.")
             return
 
-        self.tabla.setRowCount(len(self.resultados) + 1)
-        total = 0
+        self.tabla.setRowCount(len(items) + 1)
+        self.tabla.setSortingEnabled(False)
 
-        for i, row in enumerate(self.resultados):
+        for i, row in enumerate(items):
             ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
             salida = row["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M")
             tarifa = row["tarifa_aplicada"]
-            total += tarifa
+            categoria = row.get("categoria", "")
+            usuario_row = row.get("usuario") or "-"
 
-            item_patente = QTableWidgetItem(row["patente"])
-            item_ingreso = QTableWidgetItem(ingreso)
-            item_salida = QTableWidgetItem(salida)
-            item_minutos = QTableWidgetItem(str(row["minutos"]))
-            item_monto = QTableWidgetItem(f"${tarifa:.0f}")
+            item_categoria = create_sortable_item(categoria)
+            item_patente = create_sortable_item(row["patente"])
+            item_ingreso = create_sortable_item(ingreso, sort_value=row["fecha_hora_ingreso"])
+            item_salida = create_sortable_item(salida, sort_value=row["fecha_hora_salida"])
+            item_minutos = create_sortable_item(str(row["minutos"]), sort_value=row["minutos"])
+            item_usuario = create_sortable_item(usuario_row)
+            item_monto = create_sortable_item(f"${tarifa:.0f}", sort_value=tarifa)
 
             item_patente.setTextAlignment(Qt.AlignCenter)
             item_minutos.setTextAlignment(Qt.AlignCenter)
             item_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-            self.tabla.setItem(i, 0, item_patente)
-            self.tabla.setItem(i, 1, item_ingreso)
-            self.tabla.setItem(i, 2, item_salida)
-            self.tabla.setItem(i, 3, item_minutos)
-            self.tabla.setItem(i, 4, item_monto)
+            self.tabla.setItem(i, 0, item_categoria)
+            self.tabla.setItem(i, 1, item_patente)
+            self.tabla.setItem(i, 2, item_ingreso)
+            self.tabla.setItem(i, 3, item_salida)
+            self.tabla.setItem(i, 4, item_minutos)
+            self.tabla.setItem(i, 5, item_usuario)
+            self.tabla.setItem(i, 6, item_monto)
 
-        fila_total = len(self.resultados)
+        fila_total = len(items)
 
-        self.tabla.setItem(fila_total, 0, QTableWidgetItem(""))
-        self.tabla.setItem(fila_total, 1, QTableWidgetItem(""))
-        self.tabla.setItem(fila_total, 2, QTableWidgetItem(""))
+        for columna in range(5):
+            self.tabla.setItem(fila_total, columna, QTableWidgetItem(""))
 
         item_total_label = QTableWidgetItem("TOTAL NETO:")
         item_total_label.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        item_total_valor = QTableWidgetItem(f"${total:.0f}")
+        item_total_valor = QTableWidgetItem(f"${totals.get('total_neto', 0):.0f}")
         item_total_valor.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        self.tabla.setItem(fila_total, 3, item_total_label)
-        self.tabla.setItem(fila_total, 4, item_total_valor)
+        self.tabla.setItem(fila_total, 5, item_total_label)
+        self.tabla.setItem(fila_total, 6, item_total_valor)
 
         for col in range(self.tabla.columnCount()):
             item = self.tabla.item(fila_total, col)
@@ -242,12 +309,23 @@ class ReportesWindow(QWidget):
                 fuente.setBold(True)
                 item.setFont(fuente)
 
-        self.card_movimientos.label_valor.setText(str(len(self.resultados)))
-        self.card_total.label_valor.setText(f"${total:.0f}")
+        self.card_movimientos.label_valor.setText(str(totals.get("total_movimientos", len(items))))
+        self.card_total.label_valor.setText(f"${totals.get('total_general', 0):.0f}")
+        self.card_gastos.label_valor.setText(f"${totals.get('total_gastos', 0):.0f}")
+        self.card_neto.label_valor.setText(f"${totals.get('total_neto', 0):.0f}")
         self.boton_exportar.setEnabled(True)
 
+    def ordenar_tabla(self, columna):
+        if self.tabla.rowCount() == 0:
+            return
+        sort_table_from_header_click(
+            self.tabla,
+            columna,
+            protected_rows={self.tabla.rowCount() - 1},
+        )
+
     def exportar_pdf(self):
-        if self.resultados:
+        if self.resultados.get("items"):
             filtros = self.ultimos_filtros or {}
             fecha_inicio = filtros.get("fecha_inicio")
             fecha_fin = filtros.get("fecha_fin")

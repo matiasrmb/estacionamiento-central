@@ -11,7 +11,7 @@ from controllers.usuarios_controller import (
     eliminar_usuario_seguro,
 )
 from views.dialog_cambiar_clave import CambiarClaveDialog
-from utils.table_filters import filtrar_filas_tabla
+from utils.table_filters import create_sortable_item, filtrar_filas_tabla, sort_table_from_header_click
 from functools import partial
 
 
@@ -83,6 +83,8 @@ class UsuariosWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setSortIndicatorShown(True)
+        self.tabla.horizontalHeader().sectionClicked.connect(self.ordenar_tabla)
 
         layout.addWidget(self.tabla, 1)
 
@@ -149,8 +151,8 @@ class UsuariosWindow(QWidget):
         self.tabla.setRowCount(len(usuarios))
 
         for i, u in enumerate(usuarios):
-            item_usuario = QTableWidgetItem(u["usuario"])
-            item_rol = QTableWidgetItem(u["rol"])
+            item_usuario = create_sortable_item(u["usuario"], sort_value=u["usuario"])
+            item_rol = create_sortable_item(u["rol"], sort_value=u["rol"])
 
             item_usuario.setTextAlignment(Qt.AlignCenter)
             item_rol.setTextAlignment(Qt.AlignCenter)
@@ -200,7 +202,16 @@ class UsuariosWindow(QWidget):
         self.filtrar_tabla()
 
     def filtrar_tabla(self):
-        filtrar_filas_tabla(self.tabla, self.busqueda.text())
+        filtrar_filas_tabla(self.tabla, self.busqueda.text(), action_columns={2})
+
+    def ordenar_tabla(self, columna):
+        if columna == 2:
+            return
+        sort_table_from_header_click(
+            self.tabla,
+            columna,
+            action_columns={2},
+        )
 
     def crear_usuario(self):
         usuario = self.input_usuario.text().strip()

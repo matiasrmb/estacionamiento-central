@@ -12,7 +12,7 @@ from controllers.gastos_controller import (
     obtener_total_gastos_pendientes,
     registrar_gasto,
 )
-from utils.table_filters import filtrar_filas_tabla
+from utils.table_filters import create_sortable_item, filtrar_filas_tabla, sort_table_from_header_click
 
 
 class GastosWindow(QWidget):
@@ -96,6 +96,8 @@ class GastosWindow(QWidget):
             self.tabla.horizontalHeader().setSectionResizeMode(columna, QHeaderView.ResizeToContents)
         if self.es_admin:
             self.tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setSortIndicatorShown(True)
+        self.tabla.horizontalHeader().sectionClicked.connect(self.ordenar_tabla)
         layout.addWidget(self.tabla, 1)
 
     def registrar(self):
@@ -135,8 +137,9 @@ class GastosWindow(QWidget):
         for fila, gasto in enumerate(gastos):
             fecha = gasto["fecha_hora"].strftime("%d/%m/%Y %H:%M")
             valores = (fecha, gasto["categoria"], gasto["descripcion"], f"${int(gasto['monto']):,}", gasto["usuario"])
+            ordenes = (gasto["fecha_hora"], gasto["categoria"], gasto["descripcion"], int(gasto["monto"]), gasto["usuario"])
             for columna, valor in enumerate(valores):
-                item = QTableWidgetItem(str(valor))
+                item = create_sortable_item(str(valor), sort_value=ordenes[columna])
                 if columna == 3:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabla.setItem(fila, columna, item)
@@ -194,4 +197,13 @@ class GastosWindow(QWidget):
         self.cargar_gastos()
 
     def filtrar_tabla(self):
-        filtrar_filas_tabla(self.tabla, self.busqueda.text())
+        filtrar_filas_tabla(self.tabla, self.busqueda.text(), action_columns={5} if self.es_admin else set())
+
+    def ordenar_tabla(self, columna):
+        if self.es_admin and columna == 5:
+            return
+        sort_table_from_header_click(
+            self.tabla,
+            columna,
+            action_columns={5} if self.es_admin else set(),
+        )
