@@ -526,6 +526,53 @@ class OrdenarPatentesTurnoParaF4Tests(unittest.TestCase):
         self.assertEqual([fila["id_ingreso"] for fila in resultado], [1, 2])
 
 
+class ObtenerPatentesCerradasTurnoActualTests(unittest.TestCase):
+    @patch.object(registro_controller, "db_cursor")
+    def test_incluye_salida_del_dia_anterior_si_sigue_pendiente_de_cierre(self, db_cursor):
+        fila_turno = {
+            "id_ingreso": 10,
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 1, 22, 30),
+            "fecha_hora_salida": datetime(2026, 1, 1, 23, 45),
+            "tarifa_aplicada": 2500,
+            "usuario": "operador",
+        }
+        cursor = FakeCursor(fetchall_results=[[fila_turno]])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.obtener_patentes_cerradas_turno_actual()
+
+        self.assertEqual(resultado, [fila_turno])
+        query, params = cursor.executed[0]
+        self.assertIsNone(params)
+        self.assertIn("i.fecha_hora_salida IS NOT NULL", query)
+        self.assertIn("i.cerrado = FALSE", query)
+        self.assertNotIn("DATE(i.fecha_hora_salida)", query)
+        self.assertNotIn("CURDATE()", query)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_excluye_ingresos_ya_cerrados_en_caja_por_sql(self, db_cursor):
+        cursor = FakeCursor(fetchall_results=[[]])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        registro_controller.obtener_patentes_cerradas_turno_actual()
+
+        query = cursor.executed[0][0]
+        self.assertIn("i.cerrado = FALSE", query)
+        self.assertNotIn("i.cerrado = TRUE", query)
+
+    @patch.object(registro_controller, "db_cursor")
+    def test_no_filtra_por_fecha_calendario_de_salida(self, db_cursor):
+        cursor = FakeCursor(fetchall_results=[[]])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        registro_controller.obtener_patentes_cerradas_turno_actual()
+
+        query = cursor.executed[0][0]
+        self.assertNotIn("DATE(i.fecha_hora_salida) = CURDATE()", query)
+        self.assertIn("ORDER BY i.fecha_hora_salida DESC, i.id_ingreso DESC", query)
+
+
 class OrdenarPatentesParaBusquedaTests(unittest.TestCase):
     def test_orden_vacio_es_alfabetico_para_f3(self):
         filas = [
@@ -536,6 +583,22 @@ class OrdenarPatentesParaBusquedaTests(unittest.TestCase):
         resultado = registro_controller.ordenar_patentes_para_busqueda(filas, "", campo_fecha="hora")
 
         self.assertEqual([fila["patente"] for fila in resultado], ["ABC123", "ZZZ999"])
+
+
+class ObtenerPatentesConocidasTests(unittest.TestCase):
+    @patch.object(registro_controller, "db_cursor")
+    def test_obtener_patentes_conocidas_retorna_patentes_distintas_ordenadas(self, db_cursor):
+        cursor = FakeCursor(fetchall_results=[[('ABC123',), ('XYZ789',)]])
+        db_cursor.return_value = FakeDbCursorContext(cursor)
+
+        resultado = registro_controller.obtener_patentes_conocidas()
+
+        self.assertEqual(resultado, ["ABC123", "XYZ789"])
+        query, params = cursor.executed[0]
+        self.assertIsNone(params)
+        self.assertIn("SELECT DISTINCT patente", query)
+        self.assertIn("WHERE patente IS NOT NULL AND patente <> ''", query)
+        self.assertIn("ORDER BY patente ASC", query)
 
 
 class ObtenerIngresoActivoPriorizadoTests(unittest.TestCase):

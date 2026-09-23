@@ -59,6 +59,22 @@ def crear_subida_temporal(hora_inicio, hora_fin, monto_adicional):
         print(f"[ERROR] al crear subida temporal: {e}")
         return False
 
+def desactivar_subida_temporal():
+    """
+    Desactiva manualmente cualquier subida temporal vigente.
+
+    Returns:
+        bool: True si se desactivó correctamente.
+    """
+    try:
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("UPDATE subida_precios SET activa = 0 WHERE activa = 1")
+
+        return True
+    except Exception as e:
+        print(f"[ERROR] al desactivar subida temporal: {e}")
+        return False
+
 def obtener_subida_activa():
     """
     Obtiene la subida de precios temporal activa, si existe.

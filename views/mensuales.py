@@ -2,11 +2,12 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QHBoxLayout,
-    QSizePolicy, QFrame, QFormLayout, QSpinBox, QDialog, QDialogButtonBox
+    QSizePolicy, QFrame, QFormLayout, QSpinBox, QDialog, QDialogButtonBox, QCompleter
 )
 from PySide6.QtCore import Qt
 from functools import partial
 
+from controllers.registro_controller import obtener_patentes_conocidas
 from controllers.mensuales_controller import (
     obtener_mensuales, agregar_mensual,
     actualizar_tarifa, eliminar_mensual, registrar_pago_mensual
@@ -57,6 +58,7 @@ class MensualesWindow(QWidget):
         self.patente_input.setPlaceholderText("Ej: ABCD12")
         self.patente_input.setMinimumHeight(38)
         self.patente_input.returnPressed.connect(self.agregar_mensual)
+        self.cargar_autocomplete_patentes()
 
         self.tarifa_input = QSpinBox()
         self.tarifa_input.setRange(1, 99999999)
@@ -196,6 +198,16 @@ class MensualesWindow(QWidget):
 
     def filtrar_tabla(self):
         filtrar_filas_tabla(self.tabla, self.busqueda.text(), action_columns={7})
+
+    def cargar_autocomplete_patentes(self):
+        try:
+            patentes = obtener_patentes_conocidas()
+        except Exception:
+            patentes = []
+        self.completer_patentes = QCompleter(patentes, self)
+        self.completer_patentes.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer_patentes.setFilterMode(Qt.MatchContains)
+        self.patente_input.setCompleter(self.completer_patentes)
 
     def ordenar_tabla(self, columna):
         if columna == 7:

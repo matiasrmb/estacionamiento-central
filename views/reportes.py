@@ -3,11 +3,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QTableWidget,
     QTableWidgetItem, QHeaderView, QDateEdit,
     QMessageBox, QFrame, QGridLayout, QSizePolicy,
-    QComboBox, QTimeEdit
+    QComboBox, QTimeEdit, QCompleter
 )
 from PySide6.QtCore import QDate, QTime, Qt
 
 from controllers.reportes_controller import obtener_reportes, exportar_pdf
+from controllers.registro_controller import obtener_patentes_conocidas
 from controllers.usuarios_controller import obtener_usuarios
 from utils.table_filters import create_sortable_item, sort_table_from_header_click
 
@@ -82,6 +83,7 @@ class ReportesWindow(QWidget):
         self.input_patente.setPlaceholderText("Opcional")
         self.input_patente.setMinimumHeight(38)
         self.input_patente.returnPressed.connect(self.filtrar)
+        self.cargar_autocomplete_patentes()
 
         label_usuario = QLabel("Usuario")
         label_usuario.setObjectName("EtiquetaFormulario")
@@ -188,6 +190,16 @@ class ReportesWindow(QWidget):
                     self.combo_usuario.addItem(nombre, nombre)
         except Exception:
             pass
+
+    def cargar_autocomplete_patentes(self):
+        try:
+            patentes = obtener_patentes_conocidas()
+        except Exception:
+            patentes = []
+        self.completer_patentes = QCompleter(patentes, self)
+        self.completer_patentes.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer_patentes.setFilterMode(Qt.MatchContains)
+        self.input_patente.setCompleter(self.completer_patentes)
 
     def crear_tarjeta_resumen(self, titulo, valor):
         frame = QFrame()
