@@ -23,7 +23,11 @@ from controllers.registro_controller import (
     obtener_patentes_turno_actual_para_f4, ordenar_patentes_para_busqueda,
     ordenar_patentes_turno_para_f4,
 )
-from controllers.subida_controller import crear_subida_temporal, obtener_subida_activa
+from controllers.subida_controller import (
+    crear_subida_temporal,
+    desactivar_subida_temporal,
+    obtener_subida_activa,
+)
 from controllers.config_controller import obtener_configuracion
 from controllers.tarifas_controller import calcular_tarifa, describir_detalle_tarifa
 from controllers.dashboard_controller import obtener_resumen_banos
@@ -1760,6 +1764,17 @@ class RegistroWindow(QWidget):
     def abrir_dialogo_subida(self):
         dialogo = SubidaDialog()
         if dialogo.exec():
+            if dialogo.obtener_accion() == "desactivar":
+                exito = desactivar_subida_temporal()
+                if exito:
+                    QMessageBox.information(self, "Éxito", "Subida temporal desactivada correctamente.")
+                    self.actualizar_estado_subida()
+                    self.actualizar_tabla_activos()
+                    self.enfocar_patente()
+                else:
+                    QMessageBox.warning(self, "Error", "No se pudo desactivar la subida.")
+                return
+
             hora_inicio, hora_fin, monto = dialogo.obtener_datos()
 
             exito = crear_subida_temporal(hora_inicio, hora_fin, monto)

@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QEnterEvent
-from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
+from PySide6.QtWidgets import QApplication, QLabel, QCompleter, QLineEdit
 from views.admin_edicion import EdicionIngresosWindow
 from views.registro import (
     QMessageBox, REGISTRO_METRICAS, RegistroWindow, TarjetaResumen,
@@ -165,6 +165,27 @@ class RegistroViewReingresoTests(unittest.TestCase):
         vista.actualizar_tabla_activos.assert_called_once_with()
 
 
+class RegistroViewSubidaTests(unittest.TestCase):
+    def test_abrir_dialogo_subida_desactiva_subida_temporal_y_refresca_pantalla(self):
+        vista = Mock()
+        dialogo = Mock()
+        dialogo.exec.return_value = True
+        dialogo.obtener_accion.return_value = "desactivar"
+
+        with patch("views.registro.SubidaDialog", return_value=dialogo), \
+             patch("views.registro.desactivar_subida_temporal", return_value=True) as desactivar, \
+             patch("views.registro.crear_subida_temporal") as crear, \
+             patch("views.registro.QMessageBox.information") as informar:
+            RegistroWindow.abrir_dialogo_subida(vista)
+
+        desactivar.assert_called_once_with()
+        crear.assert_not_called()
+        informar.assert_called_once_with(vista, "Éxito", "Subida temporal desactivada correctamente.")
+        vista.actualizar_estado_subida.assert_called_once_with()
+        vista.actualizar_tabla_activos.assert_called_once_with()
+        vista.enfocar_patente.assert_called_once_with()
+
+
 class RegistroViewF4Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -284,6 +305,26 @@ class RegistroViewF4Tests(unittest.TestCase):
 
         self.assertEqual(enviar.call_count, 2)
         self.assertTrue(enviar.call_args_list[1].kwargs["confirma_ticket_impreso"])
+
+
+class RegistroViewAutocompleteTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_autocomplete_patentes_permanece_activo_desde_texto_vacio(self):
+        input_patente = QLineEdit()
+        completer_patentes = QCompleter(["ABC123"], input_patente)
+        completer_patentes.setCaseSensitivity(Qt.CaseInsensitive)
+        completer_patentes.setFilterMode(Qt.MatchContains)
+
+        input_patente.setCompleter(completer_patentes)
+
+        for texto in ("", "A", "AB", "ABC"):
+            with self.subTest(texto=texto):
+                input_patente.setText(texto)
+                self.assertIs(input_patente.completer(), completer_patentes)
+                self.assertEqual(input_patente.completer().filterMode(), Qt.MatchContains)
 
 
 class RegistroViewF3Tests(unittest.TestCase):

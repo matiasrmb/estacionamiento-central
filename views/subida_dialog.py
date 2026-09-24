@@ -8,7 +8,8 @@ class SubidaDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Definir Subida Temporal de Precios")
-        self.setFixedSize(300, 300)
+        self.setFixedSize(300, 340)
+        self.accion = "activar"
 
         layout = QVBoxLayout()
         layout.setContentsMargins(15, 15, 15, 15)
@@ -48,10 +49,21 @@ class SubidaDialog(QDialog):
 
         layout.addLayout(botones_layout)
 
+        self.btn_desactivar = QPushButton("Desactivar subida")
+        layout.addWidget(self.btn_desactivar)
+
         self.setLayout(layout)
 
         self.btn_ok.clicked.connect(self.accept)
         self.btn_cancel.clicked.connect(self.reject)
+        self.btn_desactivar.clicked.connect(self.desactivar_subida)
+
+    def desactivar_subida(self):
+        self.accion = "desactivar"
+        self.accept()
+
+    def obtener_accion(self):
+        return self.accion
 
     def obtener_datos(self):
         return (

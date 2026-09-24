@@ -7,11 +7,14 @@ from controllers import subida_controller
 
 
 class FakeCursor:
-    def __init__(self, fetchone_results=None):
+    def __init__(self, fetchone_results=None, execute_error=None):
         self.fetchone_results = list(fetchone_results or [])
+        self.execute_error = execute_error
         self.executed = []
 
     def execute(self, query, params=None):
+        if self.execute_error:
+            raise self.execute_error
         self.executed.append((query, params))
 
     def fetchone(self):
@@ -49,6 +52,29 @@ class SubidaControllerTests(unittest.TestCase):
 
         self.assertEqual(resultado, subida)
         db_cursor.assert_called_once_with(dictionary=True)
+
+    @patch.object(subida_controller, "db_cursor")
+    def test_desactivar_subida_temporal_desactiva_solo_subidas_activas(self, db_cursor):
+        cursor = FakeCursor()
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        resultado = subida_controller.desactivar_subida_temporal()
+
+        self.assertTrue(resultado)
+        db_cursor.assert_called_once_with(commit=True)
+        self.assertEqual(
+            cursor.executed,
+            [("UPDATE subida_precios SET activa = 0 WHERE activa = 1", None)],
+        )
+
+    @patch.object(subida_controller, "db_cursor")
+    def test_desactivar_subida_temporal_retorna_false_si_falla(self, db_cursor):
+        cursor = FakeCursor(execute_error=RuntimeError("db unavailable"))
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        resultado = subida_controller.desactivar_subida_temporal()
+
+        self.assertFalse(resultado)
 
     def test_calcular_minutos_en_subida_en_rango_normal(self):
         ingreso = datetime(2026, 1, 1, 10, 30)

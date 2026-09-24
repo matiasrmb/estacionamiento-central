@@ -808,7 +808,7 @@ def obtener_vehiculos_activos():
 
 def obtener_patentes_cerradas_turno_actual():
     """
-    Obtiene las estadías cerradas del turno/día actual aún no cerradas.
+    Obtiene las estadías cerradas del turno actual aún no cerradas en caja.
 
     Returns:
         list[dict]: Ingresos con salida y cerrado=FALSE.
@@ -829,7 +829,6 @@ def obtener_patentes_cerradas_turno_actual():
                   SELECT 1 FROM ingresos_eliminados ie
                   WHERE ie.id_ingreso_original = i.id_ingreso
               )
-              AND DATE(i.fecha_hora_salida) = CURDATE()
             ORDER BY i.fecha_hora_salida DESC, i.id_ingreso DESC
         """)
         return cursor.fetchall()
@@ -929,7 +928,7 @@ def obtener_patentes_turno_actual_para_f4():
     """
     Obtiene patentes abiertas y cerradas del turno actual para navegación rápida.
 
-    Incluye ingresos activos y salidas del día/turno actual que aún no fueron
+    Incluye ingresos activos y salidas del turno actual que aún no fueron
     cerradas en caja. Devuelve una fila por patente/ingreso ordenada por patente.
     """
     activos = obtener_vehiculos_activos()
@@ -1663,6 +1662,18 @@ def obtener_patentes_existentes():
                   WHERE ie.id_ingreso_original = i.id_ingreso
               )
             ORDER BY v.patente ASC
+        """)
+        filas = cursor.fetchall()
+        return [f[0] for f in filas]
+
+
+def obtener_patentes_conocidas():
+    with db_cursor() as cursor:
+        cursor.execute("""
+            SELECT DISTINCT patente
+            FROM vehiculos
+            WHERE patente IS NOT NULL AND patente <> ''
+            ORDER BY patente ASC
         """)
         filas = cursor.fetchall()
         return [f[0] for f in filas]

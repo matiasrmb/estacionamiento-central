@@ -2,11 +2,12 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QTableWidget,
     QTableWidgetItem, QDateEdit, QMessageBox,
-    QFrame, QGridLayout, QHeaderView, QSizePolicy
+    QFrame, QGridLayout, QHeaderView, QSizePolicy, QCompleter
 )
 from PySide6.QtCore import QDate, Qt
 
 from controllers.asistencias_controller import obtener_asistencias
+from controllers.usuarios_controller import obtener_usuarios
 from utils.pdf_asistencias import exportar_asistencias_pdf
 from utils.table_filters import create_sortable_item, sort_table_from_header_click
 
@@ -52,6 +53,7 @@ class AsistenciasWindow(QWidget):
         self.input_usuario.setPlaceholderText("Opcional")
         self.input_usuario.setMinimumHeight(38)
         self.input_usuario.returnPressed.connect(self.filtrar)
+        self.cargar_autocomplete_usuarios()
 
         label_desde = QLabel("Desde")
         label_desde.setObjectName("EtiquetaFormulario")
@@ -169,6 +171,17 @@ class AsistenciasWindow(QWidget):
 
         frame.label_valor = label_valor
         return frame
+
+    def cargar_autocomplete_usuarios(self):
+        usuarios = []
+        try:
+            usuarios = [usuario.get("usuario") for usuario in obtener_usuarios() if usuario.get("usuario")]
+        except Exception:
+            pass
+        self.completer_usuarios = QCompleter(usuarios, self)
+        self.completer_usuarios.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer_usuarios.setFilterMode(Qt.MatchContains)
+        self.input_usuario.setCompleter(self.completer_usuarios)
 
     def limpiar_filtros(self):
         self.input_usuario.clear()
