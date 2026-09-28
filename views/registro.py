@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QPushButton, QMessageBox, QTableWidget,
     QTableWidgetItem, QGroupBox, QHeaderView, QCompleter,
     QHBoxLayout, QGridLayout, QFrame, QSizePolicy, QScrollArea,
-    QDialog, QDialogButtonBox, QInputDialog
+    QComboBox, QDialog, QDialogButtonBox, QInputDialog
 )
 from PySide6.QtCore import QTimer, Qt, QSize
 from PySide6.QtGui import QIcon, QShortcut, QKeySequence
@@ -44,6 +44,7 @@ from controllers.operaciones_servicio_controller import (
 )
 from controllers.wash_pricing_controller import SOLO_LAVADO_PRICE_CONFIG_MESSAGE, list_wash_vehicle_types
 from controllers.cotizaciones_controller import (
+    calcular_estadia_por_duracion,
     calcular_minutos_estadia_por_horarios,
     preview_cotizacion,
     resolve_wash_quote_options,
@@ -1517,16 +1518,27 @@ class RegistroWindow(QWidget):
 
         try:
             if tipo == "Estadía":
-                tiempos = self._pedir_horarios_cotizacion_estadia()
-                if tiempos is None:
+                datos_estadia = self._pedir_horarios_cotizacion_estadia()
+                if datos_estadia is None:
                     return
-                hora_ingreso, hora_salida = tiempos
-                minutos = calcular_minutos_estadia_por_horarios(hora_ingreso, hora_salida)
+                hora_ingreso = datos_estadia["hora_ingreso"]
+                if datos_estadia["modo"] == "duracion":
+                    estimacion = calcular_estadia_por_duracion(hora_ingreso, datos_estadia["duracion_horas"])
+                    minutos = estimacion["minutos"]
+                    hora_salida = estimacion["hora_salida_estimada"]
+                    sufijo_dia = f" (+{estimacion['dias_adicionales']} día)" if estimacion["dias_adicionales"] == 1 else ""
+                    if estimacion["dias_adicionales"] > 1:
+                        sufijo_dia = f" (+{estimacion['dias_adicionales']} días)"
+                    detalle_salida = f"Salida estimada: {hora_salida}{sufijo_dia}"
+                else:
+                    hora_salida = datos_estadia["hora_salida"]
+                    minutos = calcular_minutos_estadia_por_horarios(hora_ingreso, hora_salida)
+                    detalle_salida = f"Salida: {hora_salida}"
                 monto = calcular_tarifa(minutos)
                 cotizacion = preview_cotizacion({"estadia": {"minutos": minutos, "monto_estadia": monto}})
                 detalle = (
                     f"Ingreso: {hora_ingreso}\n"
-                    f"Salida: {hora_salida}\n"
+                    f"{detalle_salida}\n"
                     f"Duración: {minutos} min\n"
                     f"{describir_detalle_tarifa(minutos)}"
                 )
@@ -1589,7 +1601,11 @@ class RegistroWindow(QWidget):
         dialog.setWindowTitle("Cotizar estadía")
 
         layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel("Ingresá la hora de ingreso y salida (HH:MM)."))
+        layout.addWidget(QLabel("Ingresá la hora de ingreso y el modo de cálculo."))
+
+        modo = QComboBox()
+        modo.addItem("Por hora de salida", "horarios")
+        modo.addItem("Por duración", "duracion")
 
         input_ingreso = QLineEdit("13:00")
         input_ingreso.setInputMask("99:99")
@@ -1597,11 +1613,17 @@ class RegistroWindow(QWidget):
         input_salida = QLineEdit("19:00")
         input_salida.setInputMask("99:99")
         input_salida.setPlaceholderText("HH:MM")
+        input_duracion = QLineEdit("4")
+        input_duracion.setPlaceholderText("Horas, ej: 4 o 1.5")
 
+        layout.addWidget(QLabel("Modo"))
+        layout.addWidget(modo)
         layout.addWidget(QLabel("Hora de ingreso"))
         layout.addWidget(input_ingreso)
         layout.addWidget(QLabel("Hora de salida"))
         layout.addWidget(input_salida)
+        layout.addWidget(QLabel("Duración en horas"))
+        layout.addWidget(input_duracion)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dialog.accept)
@@ -1610,7 +1632,13 @@ class RegistroWindow(QWidget):
 
         if dialog.exec() != QDialog.Accepted:
             return None
-        return input_ingreso.text().strip(), input_salida.text().strip()
+        modo_dato = modo.currentData()
+        return {
+            "modo": modo_dato,
+            "hora_ingreso": input_ingreso.text().strip(),
+            "hora_salida": input_salida.text().strip(),
+            "duracion_horas": input_duracion.text().strip(),
+        }
 
     def reingresar_vehiculo(self):
         from controllers.registro_controller import obtener_ingresos_editables, reingresar_vehiculo_cerrado

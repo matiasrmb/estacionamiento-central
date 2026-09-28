@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
 from controllers.config_controller import obtener_valores_lavado
 
 
@@ -15,6 +18,36 @@ def calcular_minutos_estadia_por_horarios(hora_ingreso, hora_salida):
     if duracion < 0:
         raise ValueError("La hora de salida debe ser posterior a la hora de ingreso.")
     return duracion
+
+
+def calcular_minutos_estadia_por_duracion(horas_duracion):
+    """Calcula minutos de estadía desde una duración positiva en horas."""
+    try:
+        horas = Decimal(str(horas_duracion).strip().replace(",", "."))
+    except (AttributeError, InvalidOperation) as exc:
+        raise ValueError("Ingresá una duración válida en horas.") from exc
+
+    if horas <= 0:
+        raise ValueError("La duración debe ser mayor a cero.")
+
+    minutos = int((horas * Decimal("60")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    if minutos <= 0:
+        raise ValueError("La duración debe ser de al menos 1 minuto.")
+    return minutos
+
+
+def calcular_estadia_por_duracion(hora_ingreso, horas_duracion):
+    """Calcula duración y salida estimada para una cotización por duración."""
+    ingreso = _parse_hora_cotizacion(hora_ingreso, "hora de ingreso")
+    minutos = calcular_minutos_estadia_por_duracion(horas_duracion)
+    fecha_base = datetime(2000, 1, 1, ingreso[0], ingreso[1])
+    salida = fecha_base + timedelta(minutes=minutos)
+    return {
+        "minutos": minutos,
+        "hora_ingreso": f"{ingreso[0]:02d}:{ingreso[1]:02d}",
+        "hora_salida_estimada": salida.strftime("%H:%M"),
+        "dias_adicionales": (salida.date() - fecha_base.date()).days,
+    }
 
 
 def cotizar_estadia(minutos, monto_estadia, tamano_vehiculo=None):

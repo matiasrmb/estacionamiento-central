@@ -1,6 +1,8 @@
 import unittest
 
 from controllers.cotizaciones_controller import (
+    calcular_estadia_por_duracion,
+    calcular_minutos_estadia_por_duracion,
     calcular_minutos_estadia_por_horarios,
     cotizar_combinada,
     cotizar_estadia,
@@ -38,6 +40,23 @@ class CotizacionesServiceTests(unittest.TestCase):
             with self.subTest(ingreso=ingreso, salida=salida):
                 with self.assertRaisesRegex(ValueError, mensaje):
                     calcular_minutos_estadia_por_horarios(ingreso, salida)
+
+    def test_calcula_minutos_estadia_desde_duracion_decimal(self):
+        self.assertEqual(calcular_minutos_estadia_por_duracion("1.5"), 90)
+        self.assertEqual(calcular_minutos_estadia_por_duracion("0,5"), 30)
+
+    def test_calcula_salida_estimada_por_duracion_cruzando_medianoche(self):
+        resultado = calcular_estadia_por_duracion("22:00", "4")
+
+        self.assertEqual(resultado["minutos"], 240)
+        self.assertEqual(resultado["hora_salida_estimada"], "02:00")
+        self.assertEqual(resultado["dias_adicionales"], 1)
+
+    def test_rechaza_duracion_invalida_para_cotizar_estadia(self):
+        for duracion in ("", "abc", "0", "-1"):
+            with self.subTest(duracion=duracion):
+                with self.assertRaises(ValueError):
+                    calcular_minutos_estadia_por_duracion(duracion)
 
     def test_cotizar_mensualidad_requiere_monto_faltante(self):
         cotizacion = cotizar_mensualidad([

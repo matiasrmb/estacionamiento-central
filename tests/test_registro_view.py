@@ -432,6 +432,29 @@ class RegistroViewPreviewIngresoTests(unittest.TestCase):
         ]))
 
 
+class RegistroViewCotizacionTests(unittest.TestCase):
+    def test_cotizacion_estadia_por_duracion_muestra_salida_estimada_del_dia_siguiente(self):
+        vista = Mock()
+        vista._pedir_horarios_cotizacion_estadia.return_value = {
+            "modo": "duracion",
+            "hora_ingreso": "22:00",
+            "hora_salida": "19:00",
+            "duracion_horas": "4",
+        }
+
+        with patch("views.registro.QInputDialog.getItem", return_value=("Estadía", True)), \
+             patch("views.registro.calcular_tarifa", return_value=5000), \
+             patch("views.registro.describir_detalle_tarifa", return_value="Detalle tarifa"), \
+             patch("views.registro.QMessageBox.information") as informar:
+            RegistroWindow.mostrar_cotizacion(vista)
+
+        mensaje = informar.call_args.args[2]
+        self.assertIn("Ingreso: 22:00", mensaje)
+        self.assertIn("Salida estimada: 02:00 (+1 día)", mensaje)
+        self.assertIn("Duración: 240 min", mensaje)
+        self.assertIn("Total estimado: $5000", mensaje)
+
+
 class RegistroViewPopupTests(unittest.TestCase):
     def test_info_f3_f4_usa_jerarquia_vertical_y_distingue_total_cerrado(self):
         mensaje = construir_info_patente_navegada(
