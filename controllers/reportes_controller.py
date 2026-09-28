@@ -45,7 +45,10 @@ class ReportPayload(dict):
         return dict.__eq__(self, other)
 
 
-def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora_fin=None, usuario=""):
+MOVIMIENTO_FILTROS = {"todos", "ingresos", "salidas"}
+
+
+def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora_fin=None, usuario="", movimiento="todos"):
     """
     Obtiene los registros de ingresos y salidas de vehículos dentro de un rango de fechas.
 
@@ -57,7 +60,26 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora
     Returns:
         dict: Payload con items normalizados y totales contables.
     """
-    query = """
+    movimiento = (movimiento or "todos").strip().lower()
+    if movimiento not in MOVIMIENTO_FILTROS:
+        raise ValueError("Filtro de movimiento inválido.")
+
+    fecha_columna = "i.fecha_hora_ingreso" if movimiento == "ingresos" else "i.fecha_hora_salida"
+    salida_requerida = "" if movimiento == "ingresos" else "i.fecha_hora_salida IS NOT NULL AND"
+    fecha_condicion = f"DATE({fecha_columna}) BETWEEN %s AND %s"
+    params = [fecha_inicio, fecha_fin]
+
+    if movimiento == "todos":
+        salida_requerida = ""
+        fecha_condicion = """
+          (
+              (i.fecha_hora_salida IS NOT NULL AND DATE(i.fecha_hora_salida) BETWEEN %s AND %s)
+              OR (i.fecha_hora_salida IS NULL AND DATE(i.fecha_hora_ingreso) BETWEEN %s AND %s)
+          )
+        """
+        params = [fecha_inicio, fecha_fin, fecha_inicio, fecha_fin]
+
+    query = f"""
         SELECT 
             v.patente,
             i.fecha_hora_ingreso,
@@ -67,24 +89,41 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora
             i.usuario
         FROM ingresos i
         JOIN vehiculos v ON i.id_vehiculo = v.id_vehiculo
-        WHERE i.fecha_hora_salida IS NOT NULL
-          AND NOT EXISTS (
-              SELECT 1 FROM ingresos_eliminados ie
-              WHERE ie.id_ingreso_original = i.id_ingreso
-          )
-          AND DATE(i.fecha_hora_salida) BETWEEN %s AND %s
+        WHERE {salida_requerida}
+          NOT EXISTS (
+               SELECT 1 FROM ingresos_eliminados ie
+               WHERE ie.id_ingreso_original = i.id_ingreso
+           )
+          AND {fecha_condicion}
     """
-    params = [fecha_inicio, fecha_fin]
 
     if patente:
         query += " AND v.patente = %s"
         params.append(patente)
     if hora_inicio:
-        query += " AND TIME(i.fecha_hora_salida) >= %s"
-        params.append(hora_inicio)
+        if movimiento == "todos":
+            query += """
+              AND (
+                  (i.fecha_hora_salida IS NOT NULL AND TIME(i.fecha_hora_salida) >= %s)
+                  OR (i.fecha_hora_salida IS NULL AND TIME(i.fecha_hora_ingreso) >= %s)
+              )
+            """
+            params.extend([hora_inicio, hora_inicio])
+        else:
+            query += f" AND TIME({fecha_columna}) >= %s"
+            params.append(hora_inicio)
     if hora_fin:
-        query += " AND TIME(i.fecha_hora_salida) <= %s"
-        params.append(hora_fin)
+        if movimiento == "todos":
+            query += """
+              AND (
+                  (i.fecha_hora_salida IS NOT NULL AND TIME(i.fecha_hora_salida) <= %s)
+                  OR (i.fecha_hora_salida IS NULL AND TIME(i.fecha_hora_ingreso) <= %s)
+              )
+            """
+            params.extend([hora_fin, hora_fin])
+        else:
+            query += f" AND TIME({fecha_columna}) <= %s"
+            params.append(hora_fin)
     if usuario:
         query += " AND i.usuario = %s"
         params.append(usuario)
@@ -93,6 +132,13 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora
         cursor.execute(query, tuple(params))
         movimientos = cursor.fetchall()
         resultados = [_normalizar_vehiculo(row) for row in movimientos]
+
+        if movimiento != "todos":
+            resultados.sort(key=lambda item: item.get("fecha_hora_salida") or item["fecha_hora_ingreso"])
+            return ReportPayload({
+                "items": resultados,
+                "totals": build_report_totals(resultados),
+            })
 
         # Usos de baños (solo si no se filtró patente)
         if not patente:
@@ -207,7 +253,7 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora
         for cobro in noches:
             resultados.append(_normalizar_noche(cobro))
 
-    resultados.sort(key=lambda item: item["fecha_hora_salida"])
+    resultados.sort(key=lambda item: item.get("fecha_hora_salida") or item["fecha_hora_ingreso"])
     return ReportPayload({
         "items": resultados,
         "totals": build_report_totals(resultados),
@@ -252,8 +298,8 @@ def _normalizar_vehiculo(row):
         "patente": row["patente"],
         "fecha_hora_ingreso": row["fecha_hora_ingreso"],
         "fecha_hora_salida": row["fecha_hora_salida"],
-        "minutos": row.get("minutos") or 0,
-        "tarifa_aplicada": row.get("tarifa_aplicada") or 0,
+        "minutos": row.get("minutos"),
+        "tarifa_aplicada": row.get("tarifa_aplicada"),
         "usuario": row.get("usuario"),
     }
 
@@ -404,8 +450,9 @@ def exportar_pdf(datos, fecha_inicio=None, fecha_fin=None, incluir_banos=False, 
 
     for row in items:
         ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
-        salida = row["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M")
-        tarifa = row["tarifa_aplicada"]
+        salida_valor = row.get("fecha_hora_salida")
+        salida = salida_valor.strftime("%d-%m-%Y %H:%M") if salida_valor else "-"
+        tarifa = row.get("tarifa_aplicada") or 0
         total += tarifa
 
         pdf.cell(0, 8, f"{row['patente']} | {ingreso} -> {salida} | ${tarifa:.0f}", ln=True)

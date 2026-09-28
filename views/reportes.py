@@ -91,6 +91,14 @@ class ReportesWindow(QWidget):
         self.combo_usuario.setMinimumHeight(38)
         self.cargar_usuarios()
 
+        label_movimiento = QLabel("Movimiento")
+        label_movimiento.setObjectName("EtiquetaFormulario")
+        self.combo_movimiento = QComboBox()
+        self.combo_movimiento.setMinimumHeight(38)
+        self.combo_movimiento.addItem("Todos", "todos")
+        self.combo_movimiento.addItem("Solo ingresos", "ingresos")
+        self.combo_movimiento.addItem("Solo salidas", "salidas")
+
         self.boton_filtrar = QPushButton("Buscar")
         self.boton_filtrar.setMinimumHeight(40)
         self.boton_filtrar.clicked.connect(self.filtrar)
@@ -125,6 +133,8 @@ class ReportesWindow(QWidget):
 
         filtros_layout.addWidget(label_usuario, 2, 0)
         filtros_layout.addWidget(self.combo_usuario, 2, 1)
+        filtros_layout.addWidget(label_movimiento, 2, 2)
+        filtros_layout.addWidget(self.combo_movimiento, 2, 3)
         filtros_layout.addWidget(self.boton_limpiar, 1, 4)
         filtros_layout.addWidget(self.boton_actualizar, 1, 5)
         filtros_layout.addWidget(self.boton_exportar, 1, 6)
@@ -232,6 +242,7 @@ class ReportesWindow(QWidget):
         self.hora_fin.setTime(QTime(23, 59))
         self.input_patente.clear()
         self.combo_usuario.setCurrentIndex(0)
+        self.combo_movimiento.setCurrentIndex(0)
         self.resultados = {"items": [], "totals": {}}
         self.tabla.setRowCount(0)
         self.card_movimientos.label_valor.setText("0")
@@ -247,8 +258,9 @@ class ReportesWindow(QWidget):
         hora_inicio = self.hora_inicio.time().toPython()
         hora_fin = self.hora_fin.time().toPython()
         usuario = self.combo_usuario.currentData() or ""
+        movimiento = self.combo_movimiento.currentData() or "todos"
 
-        self.resultados = obtener_reportes(fecha_inicio, fecha_fin, patente, hora_inicio, hora_fin, usuario)
+        self.resultados = obtener_reportes(fecha_inicio, fecha_fin, patente, hora_inicio, hora_fin, usuario, movimiento)
         items = self.resultados.get("items", [])
         totals = self.resultados.get("totals", {})
         self.ultimos_filtros = {
@@ -258,6 +270,7 @@ class ReportesWindow(QWidget):
             "hora_inicio": hora_inicio,
             "hora_fin": hora_fin,
             "usuario": usuario,
+            "movimiento": movimiento,
         }
 
         if not items:
@@ -274,19 +287,24 @@ class ReportesWindow(QWidget):
         self.tabla.setSortingEnabled(False)
 
         for i, row in enumerate(items):
-            ingreso = row["fecha_hora_ingreso"].strftime("%d-%m-%Y %H:%M")
-            salida = row["fecha_hora_salida"].strftime("%d-%m-%Y %H:%M")
-            tarifa = row["tarifa_aplicada"]
+            ingreso_valor = row.get("fecha_hora_ingreso")
+            salida_valor = row.get("fecha_hora_salida")
+            minutos = row.get("minutos")
+            tarifa = row.get("tarifa_aplicada")
+            ingreso = ingreso_valor.strftime("%d-%m-%Y %H:%M") if ingreso_valor else "-"
+            salida = salida_valor.strftime("%d-%m-%Y %H:%M") if salida_valor else "-"
+            minutos_texto = str(minutos) if minutos is not None else "-"
+            tarifa_valor = tarifa or 0
             categoria = row.get("categoria", "")
             usuario_row = row.get("usuario") or "-"
 
             item_categoria = create_sortable_item(categoria)
             item_patente = create_sortable_item(row["patente"])
-            item_ingreso = create_sortable_item(ingreso, sort_value=row["fecha_hora_ingreso"])
-            item_salida = create_sortable_item(salida, sort_value=row["fecha_hora_salida"])
-            item_minutos = create_sortable_item(str(row["minutos"]), sort_value=row["minutos"])
+            item_ingreso = create_sortable_item(ingreso, sort_value=ingreso_valor or "")
+            item_salida = create_sortable_item(salida, sort_value=salida_valor or "")
+            item_minutos = create_sortable_item(minutos_texto, sort_value=minutos or 0)
             item_usuario = create_sortable_item(usuario_row)
-            item_monto = create_sortable_item(f"${tarifa:.0f}", sort_value=tarifa)
+            item_monto = create_sortable_item(f"${tarifa_valor:.0f}", sort_value=tarifa_valor)
 
             item_patente.setTextAlignment(Qt.AlignCenter)
             item_minutos.setTextAlignment(Qt.AlignCenter)

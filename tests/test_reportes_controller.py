@@ -96,7 +96,7 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertIn("AND v.patente = %s", cursor.executed[3][0])
         self.assertEqual(
             cursor.executed[0][1],
-            (date(2026, 1, 1), date(2026, 1, 31), "ABC123"),
+            (date(2026, 1, 1), date(2026, 1, 31), date(2026, 1, 1), date(2026, 1, 31), "ABC123"),
         )
         self.assertEqual(
             cursor.executed[1][1],
@@ -104,6 +104,31 @@ class ObtenerReportesTests(unittest.TestCase):
         )
         for _, params in cursor.executed[2:]:
             self.assertEqual(params, (date(2026, 1, 1), date(2026, 1, 31), "ABC123"))
+
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_todos_incluye_ingresos_abiertos_por_fecha_de_ingreso(self, db_cursor):
+        abierto = {
+            "patente": "OPEN1",
+            "fecha_hora_ingreso": datetime(2026, 1, 10, 22, 0),
+            "fecha_hora_salida": None,
+            "minutos": None,
+            "tarifa_aplicada": None,
+            "usuario": "admin",
+        }
+        cursor = FakeCursor(fetchall_results=[[abierto], [], [], [], [], []])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(date(2026, 1, 10), date(2026, 1, 10))
+
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["patente"], "OPEN1")
+        self.assertIsNone(payload["items"][0]["fecha_hora_salida"])
+        self.assertIsNone(payload["items"][0]["tarifa_aplicada"])
+        self.assertEqual(payload["totals"]["total_recaudado"], 0)
+        query, params = cursor.executed[0]
+        self.assertIn("i.fecha_hora_salida IS NOT NULL AND DATE(i.fecha_hora_salida)", query)
+        self.assertIn("i.fecha_hora_salida IS NULL AND DATE(i.fecha_hora_ingreso)", query)
+        self.assertEqual(params, (date(2026, 1, 10), date(2026, 1, 10), date(2026, 1, 10), date(2026, 1, 10)))
 
     @patch.object(reportes_controller, "db_cursor")
     def test_obtener_reportes_filters_plate_time_and_user_across_categories(self, db_cursor):
@@ -249,6 +274,60 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(payload["totals"]["total_general"], 0)
         self.assertEqual(payload["totals"]["total_neto"], 0)
         self.assertEqual(payload["totals"]["total_movimientos"], 0)
+
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_solo_salidas_filtra_movimientos_por_salida(self, db_cursor):
+        salida = {
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 9, 22, 0),
+            "fecha_hora_salida": datetime(2026, 1, 10, 2, 0),
+            "minutos": 240,
+            "tarifa_aplicada": 5000,
+            "usuario": "admin",
+        }
+        cursor = FakeCursor(fetchall_results=[[salida]])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(
+            date(2026, 1, 10), date(2026, 1, 10), movimiento="salidas"
+        )
+
+        self.assertEqual([item["tipo"] for item in payload["items"]], ["vehiculo"])
+        self.assertEqual(len(cursor.executed), 1)
+        self.assertIn("DATE(i.fecha_hora_salida) BETWEEN %s AND %s", cursor.executed[0][0])
+        self.assertIn("i.fecha_hora_salida IS NOT NULL", cursor.executed[0][0])
+
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_solo_ingresos_filtra_por_ingreso_e_incluye_abiertos(self, db_cursor):
+        abierto = {
+            "patente": "OPEN1",
+            "fecha_hora_ingreso": datetime(2026, 1, 10, 22, 0),
+            "fecha_hora_salida": None,
+            "minutos": None,
+            "tarifa_aplicada": None,
+            "usuario": "admin",
+        }
+        cursor = FakeCursor(fetchall_results=[[abierto]])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(
+            date(2026, 1, 10), date(2026, 1, 10), movimiento="ingresos"
+        )
+
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertIsNone(payload["items"][0]["fecha_hora_salida"])
+        self.assertIsNone(payload["items"][0]["minutos"])
+        self.assertIsNone(payload["items"][0]["tarifa_aplicada"])
+        self.assertEqual(payload["totals"]["total_recaudado"], 0)
+        self.assertEqual(len(cursor.executed), 1)
+        self.assertIn("DATE(i.fecha_hora_ingreso) BETWEEN %s AND %s", cursor.executed[0][0])
+        self.assertNotIn("i.fecha_hora_salida IS NOT NULL", cursor.executed[0][0])
+
+    def test_obtener_reportes_rechaza_filtro_movimiento_invalido(self):
+        with self.assertRaisesRegex(ValueError, "Filtro de movimiento inválido"):
+            reportes_controller.obtener_reportes(
+                date(2026, 1, 10), date(2026, 1, 10), movimiento="otro"
+            )
 
 
 class ExportarPdfTests(unittest.TestCase):
