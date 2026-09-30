@@ -4,6 +4,7 @@ from datetime import date, datetime, time
 from unittest.mock import Mock, patch
 
 from controllers import reportes_controller
+from utils.api_client import ApiClientError
 
 
 class FakeCursor:
@@ -32,6 +33,126 @@ def fake_db_cursor(cursor):
 
 
 class ObtenerReportesTests(unittest.TestCase):
+    @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
+    @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
+    def test_dashboard_api_uses_canonical_metric_labels(self, metric_catalog, dashboard_api):
+        metric_catalog.return_value = {
+            "version": "2026-09-29",
+            "metrics": [
+                {
+                    "name": "operational_income_total",
+                    "meaning": "Payments collected from operational sources",
+                    "sign": "positive",
+                },
+                {
+                    "name": "operational_expense_total",
+                    "meaning": "Operational expenses",
+                    "sign": "positive_expense_negative_result",
+                },
+                {
+                    "name": "operational_net_total",
+                    "meaning": "Income minus expenses",
+                    "sign": "signed",
+                },
+            ],
+        }
+        dashboard_api.return_value = {
+            "period": {"id": "open:8", "state": "open"},
+            "catalog_version": "2026-09-29",
+            "metrics": {
+                "operational_income_total": 2500,
+                "operational_expense_total": 300,
+                "operational_net_total": 2200,
+            },
+        }
+
+        payload = reportes_controller.obtener_resumen_dashboard_reportes(token="api-token")
+
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["catalog_version"], "2026-09-29")
+        self.assertEqual(
+            payload["summary"],
+            [
+                {
+                    "metric": "operational_income_total",
+                    "label": "Payments collected from operational sources",
+                    "sign": "positive",
+                    "value": 2500,
+                },
+                {
+                    "metric": "operational_expense_total",
+                    "label": "Operational expenses",
+                    "sign": "positive_expense_negative_result",
+                    "value": 300,
+                },
+                {
+                    "metric": "operational_net_total",
+                    "label": "Income minus expenses",
+                    "sign": "signed",
+                    "value": 2200,
+                },
+            ],
+        )
+        metric_catalog.assert_called_once_with("api-token")
+        dashboard_api.assert_called_once_with("api-token", period_id="current", state="open")
+
+    @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
+    @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
+    @patch.object(reportes_controller, "db_cursor")
+    def test_dashboard_api_unavailable_falls_back_to_local_report(self, db_cursor, metric_catalog, dashboard_api):
+        metric_catalog.return_value = {"metrics": []}
+        dashboard_api.side_effect = ApiClientError(detail="API_UNAVAILABLE")
+        movement = {
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 10, 9, 0),
+            "fecha_hora_salida": datetime(2026, 1, 10, 10, 0),
+            "minutos": 60,
+            "tarifa_aplicada": 3000,
+            "usuario": "admin",
+        }
+        cursor = FakeCursor(fetchall_results=[[movement], [], [], [], [], []])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_resumen_dashboard_reportes(
+            fecha_inicio=date(2026, 1, 10),
+            fecha_fin=date(2026, 1, 10),
+            token="api-token",
+        )
+
+        self.assertEqual(payload["source"], "local_fallback")
+        self.assertEqual(payload["api_error"], "API_UNAVAILABLE")
+        self.assertEqual(payload["totals"]["total_recaudado"], 3000)
+        self.assertEqual(payload["items"][0]["patente"], "ABC123")
+
+    @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
+    @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_preserves_local_reports_without_api_calls(
+        self,
+        db_cursor,
+        metric_catalog,
+        dashboard_api,
+    ):
+        metric_catalog.side_effect = AssertionError("Local reports must not call reporting API")
+        dashboard_api.side_effect = AssertionError("Local reports must not call reporting API")
+        movement = {
+            "patente": "ABC123",
+            "fecha_hora_ingreso": datetime(2026, 1, 10, 9, 0),
+            "fecha_hora_salida": datetime(2026, 1, 10, 10, 0),
+            "minutos": 60,
+            "tarifa_aplicada": 3000,
+            "usuario": "admin",
+        }
+        cursor = FakeCursor(fetchall_results=[[movement], [], [], [], [], []])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(date(2026, 1, 10), date(2026, 1, 10))
+
+        self.assertEqual(payload["items"][0]["patente"], "ABC123")
+        self.assertEqual(payload["totals"]["total_recaudado"], 3000)
+        metric_catalog.assert_not_called()
+        dashboard_api.assert_not_called()
+
     @patch.object(reportes_controller, "db_cursor")
     def test_obtener_reportes_incluye_banos_si_no_filtra_patente(self, db_cursor):
         movimiento = {

@@ -55,6 +55,24 @@ class ApiClientSessionTests(unittest.TestCase):
 
         request.assert_called_once_with("GET", "/auth/session-summary", token="desktop-token")
 
+    @patch.object(api_client, "_request", return_value={"metrics": []})
+    def test_reporting_metric_catalog_uses_canonical_endpoint(self, request):
+        result = api_client.obtener_catalogo_metricas_reporting("desktop-token")
+
+        self.assertEqual(result, {"metrics": []})
+        request.assert_called_once_with("GET", "/reporting/metric-catalog", token="desktop-token")
+
+    @patch.object(api_client, "_request", return_value={"metrics": {}})
+    def test_reporting_dashboard_uses_current_open_period_endpoint(self, request):
+        result = api_client.obtener_dashboard_reporting("desktop-token", period_id="current", state="open")
+
+        self.assertEqual(result, {"metrics": {}})
+        request.assert_called_once_with(
+            "GET",
+            "/reporting/dashboard?period_id=current&state=open",
+            token="desktop-token",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
