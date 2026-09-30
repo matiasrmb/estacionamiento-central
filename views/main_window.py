@@ -225,7 +225,7 @@ class MainWindow(QWidget):
             on_ir_edicion=self.mostrar_edicion
         )
 
-        self.reportes_view = ReportesWindow()
+        self.reportes_view = ReportesWindow(api_token=self.api_token)
         self.mensuales_view = MensualesWindow(self.usuario)
         self.config_view = ConfiguracionWindow(
             on_tramos_actualizados=self.refrescar_tarifas_personalizadas,
