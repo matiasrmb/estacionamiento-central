@@ -7,7 +7,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QDate, QTime, Qt
 
-from controllers.reportes_controller import obtener_reportes, exportar_pdf
+from controllers.reportes_controller import (
+    obtener_reportes,
+    obtener_resumen_dashboard_reportes,
+    exportar_pdf,
+)
 from controllers.registro_controller import obtener_patentes_conocidas
 from controllers.usuarios_controller import obtener_usuarios
 from utils.table_filters import create_sortable_item, sort_table_from_header_click
@@ -19,8 +23,9 @@ class ReportesWindow(QWidget):
     de vehículos por rango de fechas y patente.
     """
 
-    def __init__(self):
+    def __init__(self, api_token=None):
         super().__init__()
+        self.api_token = api_token
         self.setMinimumSize(900, 600)
         self.resultados = {"items": [], "totals": {}}
         self.ultimos_filtros = None
@@ -166,6 +171,35 @@ class ReportesWindow(QWidget):
         layout.addLayout(resumen_layout)
 
         # =========================================================
+        # RESUMEN CANÓNICO 1.3.0
+        # =========================================================
+        dashboard_group = QFrame()
+        dashboard_group.setObjectName("PanelFormulario")
+        dashboard_layout = QVBoxLayout(dashboard_group)
+        dashboard_layout.setContentsMargins(14, 14, 14, 14)
+        dashboard_layout.setSpacing(8)
+
+        dashboard_header = QHBoxLayout()
+        dashboard_titulo = QLabel("Resumen canónico 1.3.0")
+        dashboard_titulo.setObjectName("TituloResumenModulo")
+        self.label_dashboard_estado = QLabel("Fuente: reporte local")
+        self.label_dashboard_estado.setObjectName("SubtituloSeccion")
+        self.label_dashboard_estado.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.label_dashboard_estado.setWordWrap(True)
+        dashboard_header.addWidget(dashboard_titulo)
+        dashboard_header.addStretch()
+        dashboard_header.addWidget(self.label_dashboard_estado)
+
+        self.dashboard_metricas_layout = QHBoxLayout()
+        self.dashboard_metricas_layout.setSpacing(12)
+        self.dashboard_metric_cards = []
+        self._actualizar_resumen_dashboard_local(self.resultados)
+
+        dashboard_layout.addLayout(dashboard_header)
+        dashboard_layout.addLayout(self.dashboard_metricas_layout)
+        layout.addWidget(dashboard_group)
+
+        # =========================================================
         # TABLA
         # =========================================================
         self.tabla = QTableWidget()
@@ -249,6 +283,7 @@ class ReportesWindow(QWidget):
         self.card_total.label_valor.setText("$0")
         self.card_gastos.label_valor.setText("$0")
         self.card_neto.label_valor.setText("$0")
+        self._actualizar_resumen_dashboard_local(self.resultados)
         self.boton_exportar.setEnabled(False)
 
     def filtrar(self):
@@ -263,6 +298,7 @@ class ReportesWindow(QWidget):
         self.resultados = obtener_reportes(fecha_inicio, fecha_fin, patente, hora_inicio, hora_fin, usuario, movimiento)
         items = self.resultados.get("items", [])
         totals = self.resultados.get("totals", {})
+        self._actualizar_resumen_dashboard(fecha_inicio, fecha_fin)
         self.ultimos_filtros = {
             "fecha_inicio": fecha_inicio,
             "fecha_fin": fecha_fin,
@@ -344,6 +380,84 @@ class ReportesWindow(QWidget):
         self.card_gastos.label_valor.setText(f"${totals.get('total_gastos', 0):.0f}")
         self.card_neto.label_valor.setText(f"${totals.get('total_neto', 0):.0f}")
         self.boton_exportar.setEnabled(True)
+
+    def _actualizar_resumen_dashboard(self, fecha_inicio, fecha_fin):
+        try:
+            payload = obtener_resumen_dashboard_reportes(
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+                token=self.api_token,
+            )
+        except Exception:
+            self._actualizar_resumen_dashboard_local(self.resultados)
+            return
+
+        if payload.get("source") == "api":
+            self._actualizar_resumen_dashboard_api(payload)
+        else:
+            self._actualizar_resumen_dashboard_local(payload)
+
+    def _actualizar_resumen_dashboard_api(self, payload):
+        version = payload.get("catalog_version") or "no disponible"
+        periodo = payload.get("period", {}) or {}
+        periodo_texto = periodo.get("id") or "actual"
+        self.label_dashboard_estado.setText(
+            f"Fuente: API reporting · Período: {periodo_texto} · Versión catálogo: {version}"
+        )
+        metricas = []
+        for metrica in payload.get("summary", []):
+            nombre = metrica.get("metric") or ""
+            etiqueta = self._etiqueta_metrica_dashboard(nombre, metrica.get("label"))
+            metricas.append((etiqueta, self._formatear_valor_metrica(nombre, metrica.get("value", 0))))
+        self._renderizar_metricas_dashboard(metricas)
+
+    def _actualizar_resumen_dashboard_local(self, payload):
+        totals = (payload or {}).get("totals", {})
+        source = (payload or {}).get("source")
+        if source == "local_fallback":
+            estado = "Fuente: reporte local · API no disponible"
+        elif not self.api_token:
+            estado = "Fuente: reporte local · Sin sesión API"
+        else:
+            estado = "Fuente: reporte local"
+        self.label_dashboard_estado.setText(estado)
+        self._renderizar_metricas_dashboard([
+            ("Total bruto", f"${totals.get('total_general', 0):.0f}"),
+            ("Gastos", f"${totals.get('total_gastos', 0):.0f}"),
+            ("Total neto", f"${totals.get('total_neto', 0):.0f}"),
+        ])
+
+    def _renderizar_metricas_dashboard(self, metricas):
+        while self.dashboard_metricas_layout.count():
+            item = self.dashboard_metricas_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.dashboard_metric_cards = []
+        for titulo, valor in metricas[:4]:
+            tarjeta = self.crear_tarjeta_resumen(titulo, valor)
+            self.dashboard_metricas_layout.addWidget(tarjeta)
+            self.dashboard_metric_cards.append(tarjeta)
+        self.dashboard_metricas_layout.addStretch()
+
+    @staticmethod
+    def _etiqueta_metrica_dashboard(nombre, etiqueta_api=None):
+        etiquetas = {
+            "operational_income_total": "Total ingresos operacionales",
+            "operational_expense_total": "Gastos operacionales",
+            "operational_net_total": "Neto operacional",
+        }
+        return etiquetas.get(nombre) or etiqueta_api or nombre or "Métrica"
+
+    @staticmethod
+    def _formatear_valor_metrica(nombre, valor):
+        try:
+            numero = float(valor or 0)
+        except (TypeError, ValueError):
+            return str(valor)
+        if nombre.endswith("_count") or nombre.endswith("_quantity"):
+            return f"{numero:.0f}"
+        return f"${numero:.0f}"
 
     def ordenar_tabla(self, columna):
         if self.tabla.rowCount() == 0:
