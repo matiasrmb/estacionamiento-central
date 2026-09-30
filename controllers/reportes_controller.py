@@ -13,6 +13,11 @@ from datetime import datetime, time
 from fpdf import FPDF
 import os
 from controllers.accounting_contracts import build_report_totals
+from utils.api_client import (
+    ApiClientError,
+    obtener_catalogo_metricas_reporting as obtener_catalogo_metricas_reporting_api,
+    obtener_dashboard_reporting as obtener_dashboard_reporting_api,
+)
 
 
 CATEGORY_LABELS = {
@@ -46,6 +51,56 @@ class ReportPayload(dict):
 
 
 MOVIMIENTO_FILTROS = {"todos", "ingresos", "salidas"}
+
+
+def obtener_resumen_dashboard_reportes(
+    fecha_inicio=None,
+    fecha_fin=None,
+    token=None,
+    period_id="current",
+    state="open",
+):
+    if token:
+        try:
+            catalog = obtener_catalogo_metricas_reporting_api(token)
+            dashboard = obtener_dashboard_reporting_api(token, period_id=period_id, state=state)
+            return _normalizar_dashboard_reporting_api(catalog, dashboard)
+        except ApiClientError as exc:
+            if not fecha_inicio or not fecha_fin:
+                raise
+            local_payload = obtener_reportes(fecha_inicio, fecha_fin)
+            local_payload["source"] = "local_fallback"
+            local_payload["api_error"] = exc.detail
+            return local_payload
+
+    if not fecha_inicio or not fecha_fin:
+        raise ApiClientError(detail="API_NOT_CONFIGURED")
+
+    local_payload = obtener_reportes(fecha_inicio, fecha_fin)
+    local_payload["source"] = "local"
+    return local_payload
+
+
+def _normalizar_dashboard_reporting_api(catalog, dashboard):
+    metrics = dashboard.get("metrics", {})
+    catalog_metrics = catalog.get("metrics", [])
+    return {
+        "source": "api",
+        "period": dashboard.get("period", {}),
+        "catalog_version": dashboard.get("catalog_version") or catalog.get("version"),
+        "filters": dashboard.get("filters", {}),
+        "pagination": dashboard.get("pagination", {}),
+        "summary": [
+            {
+                "metric": metric["name"],
+                "label": metric.get("meaning") or metric["name"],
+                "sign": metric.get("sign"),
+                "value": metrics.get(metric["name"], 0),
+            }
+            for metric in catalog_metrics
+            if metric.get("name") in metrics
+        ],
+    }
 
 
 def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora_fin=None, usuario="", movimiento="todos"):
