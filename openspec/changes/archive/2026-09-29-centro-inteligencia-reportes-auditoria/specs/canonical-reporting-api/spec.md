@@ -1,0 +1,92 @@
+# Canonical Reporting API Specification
+
+## Purpose
+
+Define canonical reporting semantics, metric names, period inputs, and read-model behavior used by API, Desktop, and Mobile in 1.3.0.
+
+## Requirements
+
+### Requirement: Metric Catalog and Sign Semantics
+
+The system MUST expose a canonical metric catalog for reporting consumers. Affected repos: API, Desktop, Mobile.
+
+| Metric | Meaning | Sign |
+|---|---|---|
+| `operational_income_total` | Payments collected from operational sources | positive |
+| `operational_expense_total` | Operational expenses | positive in expense lists; negative in result components |
+| `operational_net_total` | Income minus expenses | signed |
+| `mensualidad_sales_total` | Commercial mensualidad activity | positive |
+| `vehicle_movement_count` | Vehicle entries/exits in the period | count |
+
+Financial reporting MUST focus on payments. Commercial reporting MAY focus on mensualidad activity without treating it as payment-method accounting.
+
+#### Scenario: Net calculation uses operational signs
+
+- GIVEN operational income is 1000 and expenses are 150
+- WHEN the report summary is requested
+- THEN `operational_expense_total` is 150 in expense lists
+- AND `operational_net_total` is 850
+
+#### Scenario: Excluded accounting concepts are not exposed
+
+- GIVEN a consumer requests financial metrics
+- WHEN the API returns the metric catalog
+- THEN taxes, commissions, payment-method accounting, and formal ledger balances MUST NOT appear
+
+### Requirement: Operational Period Semantics
+
+The system MUST define an operational day as the period from one daily closure to the next daily closure, including periods that cross calendar midnight. Operator login/logout attendance sessions MUST be modeled as operator sessions inside an operational day, not as operational days themselves. Affected repos: API, Desktop, Mobile.
+
+#### Scenario: Operational day crosses midnight
+
+- GIVEN a daily closure occurs at 09:30 and the next daily closure occurs at 02:00 next day
+- WHEN the operational period is requested
+- THEN the period includes operations between both closures
+- AND it is represented as one operational day
+
+#### Scenario: Multiple operator sessions belong to one operational day
+
+- GIVEN operator A works 09:30-14:30 and operator B works 14:30-19:30 before the next daily closure
+- WHEN the current operational period is requested
+- THEN both operator sessions belong to the same operational day
+- AND reporting can still filter by operator/session without splitting the operational day
+
+#### Scenario: Missing next closure keeps operational day open
+
+- GIVEN a daily closure has occurred and no later closure exists
+- WHEN the current operational day is requested
+- THEN the operational day status is `open`
+- AND results are calculated from live operations since the last closure
+
+### Requirement: API Read Model Contract
+
+The API MUST own canonical read models for dashboard and reports and MUST support about 400 vehicles/day without pagination loss. Affected repos: API, Desktop, Mobile.
+
+#### Scenario: Shared consumer contract
+
+- GIVEN Desktop and Mobile request the same period and filters
+- WHEN both call the canonical API contract
+- THEN metric names, totals, and period boundaries match
+
+#### Scenario: Expected load is represented completely
+
+- GIVEN a period contains about 400 vehicle movements
+- WHEN a report read model is requested
+- THEN all matching movements are represented in totals
+- AND consumers receive stable pagination or complete summary metadata
+
+### Requirement: Open Period Source of Truth
+
+For open periods, the system MUST calculate reporting values from operational rows, not closure snapshots. Affected repos: API, Desktop, Mobile.
+
+#### Scenario: Open period reflects latest operation
+
+- GIVEN a period is open and a new paid exit is recorded
+- WHEN the report summary is requested
+- THEN operational income includes that payment
+
+#### Scenario: Closure snapshot is ignored while open
+
+- GIVEN a period is open
+- WHEN reports are calculated
+- THEN no closed-period snapshot is used as the source of truth
