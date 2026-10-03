@@ -98,6 +98,58 @@ class ObtenerReportesTests(unittest.TestCase):
 
     @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
     @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
+    def test_dashboard_api_preserves_canonical_state_and_capacity(self, metric_catalog, dashboard_api):
+        metric_catalog.return_value = {
+            "version": "catalog-v1",
+            "metrics": [
+                {"name": "occupied_spaces_count", "label": "Occupied spaces", "sign": "neutral"},
+                {"name": "available_spaces_count", "meaning": "Available spaces", "sign": "neutral"},
+            ],
+        }
+        dashboard_api.return_value = {
+            "source_state": "closure",
+            "period": {"id": "period-42", "state": "closed"},
+            "period_state": "closed",
+            "completeness": {"state": "complete", "reason": None},
+            "capacity": {"total": 40, "occupied": 12, "available": 28},
+            "catalog_version": "dashboard-v2",
+            "metrics": {"occupied_spaces_count": 12, "available_spaces_count": 28},
+        }
+
+        payload = reportes_controller.obtener_resumen_dashboard_reportes(token="api-token")
+
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["source_state"], "closure")
+        self.assertEqual(payload["period"], {"id": "period-42", "state": "closed"})
+        self.assertEqual(payload["period_state"], "closed")
+        self.assertEqual(payload["completeness"], {"state": "complete", "reason": None})
+        self.assertEqual(payload["capacity"], {"total": 40, "occupied": 12, "available": 28})
+        self.assertEqual(payload["catalog_version"], "dashboard-v2")
+        self.assertEqual(
+            payload["summary"],
+            [
+                {"metric": "occupied_spaces_count", "label": "Occupied spaces", "sign": "neutral", "value": 12},
+                {"metric": "available_spaces_count", "label": "Available spaces", "sign": "neutral", "value": 28},
+            ],
+        )
+
+    @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
+    @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
+    def test_dashboard_api_payload_driven_without_live_canonical_fields(self, metric_catalog, dashboard_api):
+        metric_catalog.return_value = {"metrics": [{"name": "legacy_total", "label": "Legacy total"}]}
+        dashboard_api.return_value = {"metrics": {"legacy_total": 99}}
+
+        payload = reportes_controller.obtener_resumen_dashboard_reportes(token="api-token")
+
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["source_state"], "api")
+        self.assertEqual(payload["period_state"], "open")
+        self.assertEqual(payload["completeness"], {"state": "complete", "reason": None})
+        self.assertIsNone(payload["capacity"])
+        self.assertEqual(payload["summary"], [{"metric": "legacy_total", "label": "Legacy total", "sign": None, "value": 99}])
+
+    @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
+    @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
     @patch.object(reportes_controller, "db_cursor")
     def test_dashboard_api_unavailable_falls_back_to_local_report(self, db_cursor, metric_catalog, dashboard_api):
         metric_catalog.return_value = {"metrics": []}
@@ -120,6 +172,12 @@ class ObtenerReportesTests(unittest.TestCase):
         )
 
         self.assertEqual(payload["source"], "local_fallback")
+        self.assertEqual(payload["source_state"], "local_fallback")
+        self.assertEqual(payload["period_state"], "open")
+        self.assertEqual(payload["completeness"]["state"], "incomplete")
+        self.assertIn("API_UNAVAILABLE", payload["completeness"]["reason"])
+        self.assertIsNone(payload["capacity"])
+        self.assertIsNone(payload["catalog_version"])
         self.assertEqual(payload["api_error"], "API_UNAVAILABLE")
         self.assertEqual(payload["totals"]["total_recaudado"], 3000)
         self.assertEqual(payload["items"][0]["patente"], "ABC123")

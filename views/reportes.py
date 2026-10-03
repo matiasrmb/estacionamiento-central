@@ -193,11 +193,45 @@ class ReportesWindow(QWidget):
         self.dashboard_metricas_layout = QHBoxLayout()
         self.dashboard_metricas_layout.setSpacing(12)
         self.dashboard_metric_cards = []
+
+        self.label_dashboard_completitud = QLabel("")
+        self.label_dashboard_completitud.setObjectName("SubtituloSeccion")
+        self.label_dashboard_completitud.setWordWrap(True)
+        self.label_dashboard_capacidad = QLabel("Capacity: unavailable")
+        self.label_dashboard_capacidad.setObjectName("SubtituloSeccion")
+        self.label_dashboard_capacidad.setWordWrap(True)
         self._actualizar_resumen_dashboard_local(self.resultados)
 
         dashboard_layout.addLayout(dashboard_header)
         dashboard_layout.addLayout(self.dashboard_metricas_layout)
+        dashboard_layout.addWidget(self.label_dashboard_completitud)
+        dashboard_layout.addWidget(self.label_dashboard_capacidad)
         layout.addWidget(dashboard_group)
+
+        # =========================================================
+        # CLOSED/EXPORT ROADMAP BOUNDARIES
+        # =========================================================
+        roadmap_group = QFrame()
+        roadmap_group.setObjectName("PanelFormulario")
+        roadmap_layout = QHBoxLayout(roadmap_group)
+        roadmap_layout.setContentsMargins(14, 14, 14, 14)
+        roadmap_layout.setSpacing(10)
+
+        roadmap_text = QLabel(
+            "Roadmap boundaries: API-backed closed/export support is required before these flows become operational."
+        )
+        roadmap_text.setObjectName("SubtituloSeccion")
+        roadmap_text.setWordWrap(True)
+        self.boton_reportes_cerrados = QPushButton("Future API-backed closed reports")
+        self.boton_reportes_cerrados.setObjectName("BotonSecundario")
+        self.boton_reportes_cerrados.clicked.connect(self.mostrar_limite_reportes_cerrados)
+        self.boton_exportacion_canonica = QPushButton("Future API-backed PDF/CSV export")
+        self.boton_exportacion_canonica.setObjectName("BotonSecundario")
+        self.boton_exportacion_canonica.clicked.connect(self.mostrar_limite_exportacion_canonica)
+        roadmap_layout.addWidget(roadmap_text, 1)
+        roadmap_layout.addWidget(self.boton_reportes_cerrados)
+        roadmap_layout.addWidget(self.boton_exportacion_canonica)
+        layout.addWidget(roadmap_group)
 
         # =========================================================
         # TABLA
@@ -400,10 +434,12 @@ class ReportesWindow(QWidget):
     def _actualizar_resumen_dashboard_api(self, payload):
         version = payload.get("catalog_version") or "no disponible"
         periodo = payload.get("period", {}) or {}
-        periodo_texto = periodo.get("id") or "actual"
+        periodo_texto = payload.get("period_state") or periodo.get("state") or periodo.get("id") or "open"
+        source_state = payload.get("source_state") or payload.get("source") or "api"
         self.label_dashboard_estado.setText(
-            f"Fuente: API reporting · Período: {periodo_texto} · Versión catálogo: {version}"
+            f"Fuente: API reporting · Periodo: {periodo_texto} · Fuente datos: {source_state} · Versión catálogo: {version}"
         )
+        self._actualizar_metadata_dashboard(payload)
         metricas = []
         for metrica in payload.get("summary", []):
             nombre = metrica.get("metric") or ""
@@ -414,18 +450,52 @@ class ReportesWindow(QWidget):
     def _actualizar_resumen_dashboard_local(self, payload):
         totals = (payload or {}).get("totals", {})
         source = (payload or {}).get("source")
+        source_state = (payload or {}).get("source_state") or source or "local"
+        period_state = (payload or {}).get("period_state") or "open"
         if source == "local_fallback":
-            estado = "Fuente: reporte local · API no disponible"
+            estado = f"Fuente: reporte local · Periodo: {period_state} · Fuente datos: {source_state} · API no disponible"
         elif not self.api_token:
-            estado = "Fuente: reporte local · Sin sesión API"
+            estado = f"Fuente: reporte local · Periodo: {period_state} · Fuente datos: {source_state} · Sin sesión API"
         else:
-            estado = "Fuente: reporte local"
+            estado = f"Fuente: reporte local · Periodo: {period_state} · Fuente datos: {source_state}"
         self.label_dashboard_estado.setText(estado)
+        self._actualizar_metadata_dashboard(payload or {})
         self._renderizar_metricas_dashboard([
             ("Total bruto", f"${totals.get('total_general', 0):.0f}"),
             ("Gastos", f"${totals.get('total_gastos', 0):.0f}"),
             ("Total neto", f"${totals.get('total_neto', 0):.0f}"),
         ])
+
+    def _actualizar_metadata_dashboard(self, payload):
+        completeness = payload.get("completeness") or {"state": "complete", "reason": None}
+        state = completeness.get("state") or "complete"
+        reason = completeness.get("reason")
+        if state == "incomplete":
+            text = "Incomplete totals: available values are shown, but totals may be incomplete."
+            if reason:
+                text = f"{text} Reason: {reason}"
+        else:
+            text = "Completeness: complete"
+        self.label_dashboard_completitud.setText(text)
+        self.label_dashboard_capacidad.setText(self._texto_capacidad_dashboard(payload.get("capacity")))
+
+    @staticmethod
+    def _texto_capacidad_dashboard(capacity):
+        if not capacity:
+            return "Capacity: unavailable"
+        total = capacity.get("total")
+        occupied = capacity.get("occupied")
+        available = capacity.get("available")
+        parts = []
+        if total is not None:
+            parts.append(f"total {total}")
+        if occupied is not None:
+            parts.append(f"occupied {occupied}")
+        if available is not None:
+            parts.append(f"available {available}")
+        if not parts:
+            return "Capacity: unavailable"
+        return f"Capacity: {', '.join(parts)}"
 
     def _renderizar_metricas_dashboard(self, metricas):
         while self.dashboard_metricas_layout.count():
@@ -447,7 +517,21 @@ class ReportesWindow(QWidget):
             "operational_expense_total": "Gastos operacionales",
             "operational_net_total": "Neto operacional",
         }
-        return etiquetas.get(nombre) or etiqueta_api or nombre or "Métrica"
+        return etiqueta_api or etiquetas.get(nombre) or nombre or "Métrica"
+
+    def mostrar_limite_reportes_cerrados(self):
+        QMessageBox.information(
+            self,
+            "Roadmap boundary",
+            "API-backed closed/export support is required before closed-report retrieval becomes operational.",
+        )
+
+    def mostrar_limite_exportacion_canonica(self):
+        QMessageBox.information(
+            self,
+            "Roadmap boundary",
+            "API-backed closed/export support is required before PDF/CSV export generation becomes operational.",
+        )
 
     @staticmethod
     def _formatear_valor_metrica(nombre, valor):
