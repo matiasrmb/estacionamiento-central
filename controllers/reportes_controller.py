@@ -69,31 +69,40 @@ def obtener_resumen_dashboard_reportes(
             if not fecha_inicio or not fecha_fin:
                 raise
             local_payload = obtener_reportes(fecha_inicio, fecha_fin)
-            local_payload["source"] = "local_fallback"
             local_payload["api_error"] = exc.detail
-            return local_payload
+            return _agregar_metadata_fallback_local(local_payload, exc.detail)
 
     if not fecha_inicio or not fecha_fin:
         raise ApiClientError(detail="API_NOT_CONFIGURED")
 
     local_payload = obtener_reportes(fecha_inicio, fecha_fin)
     local_payload["source"] = "local"
+    local_payload["source_state"] = "local"
+    local_payload["period_state"] = "open"
+    local_payload["completeness"] = {"state": "complete", "reason": None}
+    local_payload["capacity"] = None
+    local_payload["catalog_version"] = None
     return local_payload
 
 
 def _normalizar_dashboard_reporting_api(catalog, dashboard):
     metrics = dashboard.get("metrics", {})
     catalog_metrics = catalog.get("metrics", [])
+    period = dashboard.get("period", {}) or {}
     return {
         "source": "api",
-        "period": dashboard.get("period", {}),
+        "source_state": dashboard.get("source_state") or dashboard.get("source") or "api",
+        "period": period,
+        "period_state": dashboard.get("period_state") or period.get("state") or "open",
+        "completeness": dashboard.get("completeness") or {"state": "complete", "reason": None},
+        "capacity": dashboard.get("capacity"),
         "catalog_version": dashboard.get("catalog_version") or catalog.get("version"),
         "filters": dashboard.get("filters", {}),
         "pagination": dashboard.get("pagination", {}),
         "summary": [
             {
                 "metric": metric["name"],
-                "label": metric.get("meaning") or metric["name"],
+                "label": metric.get("label") or metric.get("meaning") or metric["name"],
                 "sign": metric.get("sign"),
                 "value": metrics.get(metric["name"], 0),
             }
@@ -101,6 +110,19 @@ def _normalizar_dashboard_reporting_api(catalog, dashboard):
             if metric.get("name") in metrics
         ],
     }
+
+
+def _agregar_metadata_fallback_local(local_payload, api_error):
+    local_payload["source"] = "local_fallback"
+    local_payload["source_state"] = "local_fallback"
+    local_payload["period_state"] = "open"
+    local_payload["completeness"] = {
+        "state": "incomplete",
+        "reason": f"Reporting API unavailable; local fallback totals may be incomplete ({api_error}).",
+    }
+    local_payload["capacity"] = None
+    local_payload["catalog_version"] = None
+    return local_payload
 
 
 def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora_fin=None, usuario="", movimiento="todos"):
