@@ -5,7 +5,7 @@ persistence: openspec
 detected_at: 2026-06-25
 
 context: |
-  Umbrella ecosystem spans desktop, API, mobile, and installer sibling repos under C:\Users\matia.
+  Umbrella ecosystem spans desktop, API, mobile, and installer sibling repos under D:\Desarrollo\EstacionamientoCentral.
   Desktop: Python/PySide6 MVC-style app with controllers, views, utils, MySQL, reports/tickets, PyInstaller packaging.
   API: Python FastAPI app with versioned /api/v1 endpoints, repositories/services, SQLAlchemy/PyMySQL, JWT/security helpers, printer agent.
   Mobile: Flutter/Dart app using Dio, Provider, GoRouter, secure storage, Sunmi printing, mobile_scanner, Android Gradle Kotlin DSL.
@@ -20,7 +20,7 @@ testing:
     source: "No explicit SDD/TDD marker found; enabled because automated test runners were detected in desktop/API/mobile. Installer changes require manual verification unless tests are added."
   repos:
     desktop:
-      path: C:\Users\matia\estacionamiento-central
+      path: D:\Desarrollo\EstacionamientoCentral\estacionamiento-central
       stack: Python 3 / PySide6 / MySQL / PyInstaller
       runner: unittest
       command: "python -m unittest discover -s tests"
@@ -38,7 +38,7 @@ testing:
       build:
         command: "pyinstaller EstacionamientoCentral.spec"
     api:
-      path: C:\Users\matia\estacionamiento-central-api
+      path: D:\Desarrollo\EstacionamientoCentral\estacionamiento-central-api
       stack: Python / FastAPI / SQLAlchemy / PyMySQL / Uvicorn
       runner: unittest
       command: "python -m unittest discover -s tests"
@@ -56,7 +56,7 @@ testing:
       build:
         command: ""
     mobile:
-      path: C:\Users\matia\estacionamiento_central_mobile
+      path: D:\Desarrollo\EstacionamientoCentral\estacionamiento_central_mobile
       stack: Flutter / Dart / Android Gradle Kotlin DSL
       runner: flutter_test
       command: "flutter test"
@@ -75,7 +75,7 @@ testing:
       build:
         command: "flutter build apk"
     installer:
-      path: C:\Users\matia\estacionamiento-central-installer
+      path: D:\Desarrollo\EstacionamientoCentral\estacionamiento-central-installer
       stack: Inno Setup / batch scripts / MySQL 8.4.8 payload / PyInstaller app payload
       runner: ""
       command: ""
