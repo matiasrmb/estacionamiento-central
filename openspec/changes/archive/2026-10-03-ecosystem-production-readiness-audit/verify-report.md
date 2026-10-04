@@ -1,3 +1,103 @@
+```yaml
+schema: gentle-ai.verify-result/v1
+evidence_revision: sha256:eee56b375c71a08e269c2113360fca96fba0c75e386f09935f91957e321fec6d
+verdict: pass
+blockers: 0
+critical_findings: 0
+requirements: 11/11
+scenarios: 13/13
+test_command: "powershell artifact consistency audit: tasks checked/unchecked and spec requirement/scenario counts"
+test_exit_code: 0
+test_output_hash: sha256:eee56b375c71a08e269c2113360fca96fba0c75e386f09935f91957e321fec6d
+build_command: "not run (verify-report refresh only; no product code/build changes)"
+build_exit_code: 0
+build_output_hash: sha256:2d497f73bc246f79b9ec757381f8ab4a7b4530582bca0f67f4893d218744de58
+```
+
+## Verification Report
+
+**Change**: ecosystem-production-readiness-audit
+**Version**: current OpenSpec change artifacts
+**Mode**: Standard verify-report refresh; historical manual VM/installer evidence preserved; no product code validation rerun.
+
+### Completeness
+
+| Metric | Value |
+|---|---:|
+| Tasks total | 12 |
+| Tasks complete | 12 |
+| Tasks incomplete | 0 |
+| Requirements counted from specs | 11 |
+| Scenarios counted from specs | 13 |
+
+### Build & Tests Execution
+
+**Build**: ➖ Not run. This verification refresh changes only the SDD verify report, and no product code/build artifact was modified.
+
+```text
+build_not_run=verify-report refresh only; no product code/build changes
+```
+
+**Tests / lightweight checks**: ✅ Passed.
+
+```text
+tasks_checked=12
+tasks_unchecked=0
+requirements=11
+scenarios=13
+artifact_consistency=PASS
+```
+
+**Coverage**: ➖ Not available / not applicable for this report-only verification refresh.
+
+### Spec Compliance Matrix
+
+| Requirement area | Scenarios | Evidence | Result |
+|---|---:|---|---|
+| production-deployment | 7 | Tasks 1.1-4.2 and 6.1-6.2 are complete; historical Slice 2-4 and Slice 6 evidence below covers installer ownership, API service lifecycle, Print Agent lifecycle, firewall idempotency, central production config, and data-safe operations. | ✅ COMPLIANT |
+| production-observability | 6 | Tasks 4.2, 5.1, and 5.2 are complete; historical Slice 4-5 evidence below covers production health, threshold slow logs, required instrumentation, redacted diagnostics, and validation evidence. | ✅ COMPLIANT |
+
+**Compliance summary**: 13/13 scenarios compliant based on current task/spec consistency and preserved historical runtime/manual evidence.
+
+### Correctness (Static Evidence)
+
+| Check | Status | Notes |
+|---|---|---|
+| Required artifacts read | ✅ Passed | Proposal, design, tasks, previous verify report, and both production specs were inspected. |
+| Task completion | ✅ Passed | `tasks.md` marks all 12 planned tasks complete and preserves correction/final-validation notes. |
+| Requirement/scenario counts | ✅ Passed | Specs contain 11 requirements and 13 scenarios using native-counted headings. |
+| Final Slice 6 evidence | ✅ Passed | Prior report records final Slice 6 PASS with mobile tests/analyze, static checks, docs/guidance validation, and user-provided phone/Sunmi LAN proof. |
+| Prior caveats preserved | ✅ Passed | Physical thermal printer sign-off remains the material preserved caveat; historical VM/manual installer evidence remains below. |
+| Product code edits | ✅ Passed | No product code edit was needed or made for this verify refresh. |
+
+### Coherence (Design)
+
+| Design decision | Followed? | Notes |
+|---|---|---|
+| Installer-first production readiness | ✅ Yes | Tasks and preserved evidence cover installer-owned API/agent/firewall/config/diagnostics. |
+| WinSW-managed API service via packaged executable | ✅ Yes | Historical Slice 2 acceptance and corrections are preserved below. |
+| Installer-owned Print Agent lifecycle | ✅ Yes | Historical Slice 3 acceptance and hardware caveat are preserved below. |
+| Threshold-only observability and redacted diagnostics | ✅ Yes | Historical Slice 5 acceptance records tests, diagnostics redaction, and quiet normal logs. |
+| Minimal client guidance without dev-IP fallback | ✅ Yes | Final Slice 6 evidence records mobile tests/analyze and LAN validation. |
+
+### Issues Found
+
+**CRITICAL**: None.
+
+**WARNING**:
+- Prior Slice 3 physical thermal printer caveat remains preserved: VM validation proved service/queue/failure semantics up to the hardware boundary, but target thermal-printer sign-off remains outside this report refresh.
+
+**SUGGESTION**:
+- Keep this refreshed envelope as the current canonical verification result before archive/settlement; do not infer that this report reran heavy VM/manual installer validation.
+
+### Verdict
+
+PASS — Current OpenSpec artifacts are internally consistent, all 12 tasks are complete, both production specs are covered by task/evidence history, final Slice 6 PASS evidence and caveats are preserved, and this refresh required no product code changes.
+
+---
+
+# Historical Evidence Preserved From Previous Report
+
 # Verification Report: ecosystem-production-readiness-audit — FINAL Slice 6 Minimal Client Guidance
 
 **Mode**: OpenSpec + Engram, Strict TDD for mobile behavior changes; docs and installer guidance validated with static/parser checks.
