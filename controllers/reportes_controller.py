@@ -13,6 +13,7 @@ from datetime import datetime, time
 from fpdf import FPDF
 import os
 from controllers.accounting_contracts import build_report_totals
+from controllers.operaciones_servicio_controller import asegurar_schema_operaciones_servicio_cierre
 from utils.api_client import (
     ApiClientError,
     obtener_catalogo_metricas_reporting as obtener_catalogo_metricas_reporting_api,
@@ -75,6 +76,9 @@ def obtener_resumen_dashboard_reportes(
     if not fecha_inicio or not fecha_fin:
         raise ApiClientError(detail="API_NOT_CONFIGURED")
 
+    if state == "closed":
+        return obtener_reporte_cierre_local(period_id)
+
     local_payload = obtener_reportes(fecha_inicio, fecha_fin)
     local_payload["source"] = "local"
     local_payload["source_state"] = "local"
@@ -83,6 +87,85 @@ def obtener_resumen_dashboard_reportes(
     local_payload["capacity"] = None
     local_payload["catalog_version"] = None
     return local_payload
+
+
+def obtener_reporte_cierre_local(period_id):
+    id_cierre = _normalizar_period_id_cierre(period_id)
+    with db_cursor(dictionary=True) as cursor:
+        cursor.execute("""
+            SELECT id_cierre, fecha_inicio, fecha_cierre, total_recaudado,
+                   total_ingresos, total_salidas, total_banos, total_banos_monto,
+                   total_lavados_solos, total_lavados_solos_monto,
+                   total_mensualidades, total_mensualidades_monto,
+                   total_noches, total_noches_monto, total_general,
+                   total_gastos, total_neto, usuario
+            FROM cierres_diarios
+            WHERE id_cierre = %s
+            LIMIT 1
+        """, (id_cierre,))
+        cierre = cursor.fetchone()
+
+    if not cierre:
+        raise ValueError("Cierre local no encontrado.")
+
+    totals = _totales_desde_cierre(cierre)
+    items = _items_desde_cierre(cierre)
+    return ReportPayload({
+        "source": "local",
+        "source_state": "closure",
+        "period_state": "closed",
+        "period": {
+            "id": str(cierre["id_cierre"]),
+            "state": "closed",
+            "fecha_inicio": cierre.get("fecha_inicio"),
+            "fecha_cierre": cierre.get("fecha_cierre"),
+        },
+        "items": items,
+        "totals": totals,
+        "completeness": {"state": "complete", "reason": None},
+        "capacity": None,
+        "catalog_version": None,
+    })
+
+
+def _normalizar_period_id_cierre(period_id):
+    if isinstance(period_id, str) and period_id.startswith("closure:"):
+        period_id = period_id.split(":", 1)[1]
+    return int(period_id)
+
+
+def _totales_desde_cierre(cierre):
+    return {
+        "total_recaudado": int(cierre.get("total_recaudado") or 0),
+        "total_movimientos": int(cierre.get("total_salidas") or 0),
+        "total_banos": int(cierre.get("total_banos") or 0),
+        "total_banos_monto": int(cierre.get("total_banos_monto") or 0),
+        "total_lavados_solos": int(cierre.get("total_lavados_solos") or 0),
+        "total_lavados_solos_monto": int(cierre.get("total_lavados_solos_monto") or 0),
+        "total_mensualidades": int(cierre.get("total_mensualidades") or 0),
+        "total_mensualidades_monto": int(cierre.get("total_mensualidades_monto") or 0),
+        "total_noches": int(cierre.get("total_noches") or 0),
+        "total_noches_monto": int(cierre.get("total_noches_monto") or 0),
+        "total_gastos": int(cierre.get("total_gastos") or 0),
+        "total_general": int(cierre.get("total_general") or 0),
+        "total_neto": int(cierre.get("total_neto") or 0),
+    }
+
+
+def _items_desde_cierre(cierre):
+    items = []
+    if int(cierre.get("total_lavados_solos") or 0):
+        items.append({
+            "tipo": "lavado_solo",
+            "categoria": CATEGORY_LABELS["lavado_solo"],
+            "patente": "[LAVADOS CIERRE]",
+            "fecha_hora_ingreso": cierre.get("fecha_inicio"),
+            "fecha_hora_salida": cierre.get("fecha_cierre"),
+            "minutos": 0,
+            "tarifa_aplicada": int(cierre.get("total_lavados_solos_monto") or 0),
+            "usuario": cierre.get("usuario"),
+        })
+    return items
 
 
 def _normalizar_dashboard_reporting_api(catalog, dashboard):
@@ -219,6 +302,7 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora
 
         # Usos de baños (solo si no se filtró patente)
         if not patente:
+            asegurar_schema_operaciones_servicio_cierre(cursor)
             cursor.execute("""
                 SELECT fecha_hora, monto, usuario
                 FROM usos_bano
@@ -236,6 +320,8 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora
                        valor_lavado_snapshot, usuario_fin
                 FROM operaciones_servicio
                 WHERE estado = 'FINALIZADO_COBRADO'
+                  AND cerrado = FALSE
+                  AND id_cierre IS NULL
                   AND id_ingreso_generado IS NULL
                   AND fecha_hora_fin IS NOT NULL
                   AND DATE(fecha_hora_fin) BETWEEN %s AND %s
@@ -257,6 +343,7 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora
             for gasto in gastos:
                 resultados.append(_normalizar_gasto(gasto))
         else:
+            asegurar_schema_operaciones_servicio_cierre(cursor)
             cursor.execute("""
                 SELECT patente, fecha_hora_inicio, fecha_hora_fin,
                        TIMESTAMPDIFF(MINUTE, fecha_hora_inicio, fecha_hora_fin) AS minutos,
@@ -264,6 +351,8 @@ def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora
                 FROM operaciones_servicio
                 WHERE patente = %s
                   AND estado = 'FINALIZADO_COBRADO'
+                  AND cerrado = FALSE
+                  AND id_cierre IS NULL
                   AND id_ingreso_generado IS NULL
                   AND fecha_hora_fin IS NOT NULL
                   AND DATE(fecha_hora_fin) BETWEEN %s AND %s

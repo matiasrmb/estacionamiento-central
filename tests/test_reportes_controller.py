@@ -12,11 +12,26 @@ class FakeCursor:
         self.fetchall_results = list(fetchall_results or [])
         self.fetchone_results = list(fetchone_results or [])
         self.executed = []
+        self._schema_result = None
 
     def execute(self, query, params=None):
         self.executed.append((query, params))
+        normalized_query = " ".join(query.split()).upper()
+        if normalized_query.startswith("SHOW COLUMNS FROM OPERACIONES_SERVICIO"):
+            self._schema_result = [
+                {"Field": "cerrado"},
+                {"Field": "id_cierre"},
+            ]
+        elif normalized_query.startswith("SHOW INDEX FROM OPERACIONES_SERVICIO"):
+            self._schema_result = [{"Key_name": "idx_operaciones_servicio_id_cierre"}]
+        else:
+            self._schema_result = None
 
     def fetchall(self):
+        if self._schema_result is not None:
+            result = self._schema_result
+            self._schema_result = None
+            return result
         if self.fetchall_results:
             return self.fetchall_results.pop(0)
         return []
@@ -251,9 +266,13 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(mensualidad["patente"], "[MENSUAL] MENSUAL1")
         self.assertEqual(mensualidad["tarifa_aplicada"], 50000)
         self.assertEqual(noche["patente"], "[NOCHES] ABC123")
-        self.assertEqual(len(cursor.executed), 6)
-        self.assertIn("FROM ingresos_eliminados", cursor.executed[0][0])
-        self.assertIn("id_ingreso_generado IS NULL", cursor.executed[2][0])
+        business_queries = [
+            query for query, _ in cursor.executed
+            if not "SHOW COLUMNS" in query and not "SHOW INDEX" in query
+        ]
+        self.assertEqual(len(business_queries), 6)
+        self.assertIn("FROM ingresos_eliminados", business_queries[0])
+        self.assertIn("id_ingreso_generado IS NULL", business_queries[2])
 
     @patch.object(reportes_controller, "db_cursor")
     def test_obtener_reportes_filtra_por_patente_y_no_incluye_banos(self, db_cursor):
@@ -267,21 +286,25 @@ class ObtenerReportesTests(unittest.TestCase):
         )
 
         self.assertEqual(resultado, [])
-        self.assertEqual(len(cursor.executed), 4)
-        self.assertIn("AND v.patente = %s", cursor.executed[0][0])
-        self.assertIn("WHERE patente = %s", cursor.executed[1][0])
-        self.assertIn("id_ingreso_generado IS NULL", cursor.executed[1][0])
-        self.assertIn("AND v.patente = %s", cursor.executed[2][0])
-        self.assertIn("AND v.patente = %s", cursor.executed[3][0])
+        business_executed = [
+            (query, params) for query, params in cursor.executed
+            if not "SHOW COLUMNS" in query and not "SHOW INDEX" in query
+        ]
+        self.assertEqual(len(business_executed), 4)
+        self.assertIn("AND v.patente = %s", business_executed[0][0])
+        self.assertIn("WHERE patente = %s", business_executed[1][0])
+        self.assertIn("id_ingreso_generado IS NULL", business_executed[1][0])
+        self.assertIn("AND v.patente = %s", business_executed[2][0])
+        self.assertIn("AND v.patente = %s", business_executed[3][0])
         self.assertEqual(
-            cursor.executed[0][1],
+            business_executed[0][1],
             (date(2026, 1, 1), date(2026, 1, 31), date(2026, 1, 1), date(2026, 1, 31), "ABC123"),
         )
         self.assertEqual(
-            cursor.executed[1][1],
+            business_executed[1][1],
             ("ABC123", date(2026, 1, 1), date(2026, 1, 31)),
         )
-        for _, params in cursor.executed[2:]:
+        for _, params in business_executed[2:]:
             self.assertEqual(params, (date(2026, 1, 1), date(2026, 1, 31), "ABC123"))
 
     @patch.object(reportes_controller, "db_cursor")
@@ -453,6 +476,99 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(payload["totals"]["total_general"], 0)
         self.assertEqual(payload["totals"]["total_neto"], 0)
         self.assertEqual(payload["totals"]["total_movimientos"], 0)
+
+    @patch.object(reportes_controller, "asegurar_schema_operaciones_servicio_cierre")
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_includes_only_open_charged_solo_lavados(self, db_cursor, ensure_schema):
+        charged_wash = {
+            "patente": "WASH1",
+            "fecha_hora_inicio": datetime(2026, 1, 10, 11, 0),
+            "fecha_hora_fin": datetime(2026, 1, 10, 12, 0),
+            "minutos": 60,
+            "valor_lavado_snapshot": 8000,
+            "usuario_fin": "washer",
+        }
+        cursor = FakeCursor(fetchall_results=[[], [], [charged_wash], [], [], []])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(date(2026, 1, 10), date(2026, 1, 10))
+
+        ensure_schema.assert_called_once_with(cursor)
+        self.assertEqual([item["tipo"] for item in payload["items"]], ["lavado_solo"])
+        self.assertEqual(payload["items"][0]["tarifa_aplicada"], 8000)
+        self.assertEqual(payload["totals"]["total_lavados_solos"], 1)
+        self.assertEqual(payload["totals"]["total_lavados_solos_monto"], 8000)
+        wash_query = cursor.executed[2][0]
+        self.assertIn("estado = 'FINALIZADO_COBRADO'", wash_query)
+        self.assertIn("cerrado = FALSE", wash_query)
+        self.assertIn("id_cierre IS NULL", wash_query)
+        self.assertIn("id_ingreso_generado IS NULL", wash_query)
+
+    @patch.object(reportes_controller, "asegurar_schema_operaciones_servicio_cierre")
+    @patch.object(reportes_controller, "db_cursor")
+    def test_obtener_reportes_plate_filter_uses_open_charged_solo_lavado_filter(self, db_cursor, ensure_schema):
+        cursor = FakeCursor(fetchall_results=[[], [], [], []])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_reportes(
+            date(2026, 1, 10),
+            date(2026, 1, 10),
+            patente="ABC123",
+        )
+
+        self.assertEqual(payload["items"], [])
+        ensure_schema.assert_called_once_with(cursor)
+        wash_query = cursor.executed[1][0]
+        self.assertIn("WHERE patente = %s", wash_query)
+        self.assertIn("estado = 'FINALIZADO_COBRADO'", wash_query)
+        self.assertIn("cerrado = FALSE", wash_query)
+        self.assertIn("id_cierre IS NULL", wash_query)
+        self.assertIn("id_ingreso_generado IS NULL", wash_query)
+
+    @patch.object(reportes_controller, "db_cursor")
+    def test_closed_local_report_replays_saved_closure_totals_without_open_recount(self, db_cursor):
+        cierre_guardado = {
+            "id_cierre": 91,
+            "fecha_inicio": datetime(2026, 1, 10, 0, 0),
+            "fecha_cierre": datetime(2026, 1, 10, 23, 59),
+            "total_recaudado": 3000,
+            "total_ingresos": 1,
+            "total_salidas": 1,
+            "total_banos": 0,
+            "total_banos_monto": 0,
+            "total_lavados_solos": 1,
+            "total_lavados_solos_monto": 8000,
+            "total_mensualidades": 0,
+            "total_mensualidades_monto": 0,
+            "total_noches": 0,
+            "total_noches_monto": 0,
+            "total_general": 11000,
+            "total_gastos": 500,
+            "total_neto": 10500,
+            "usuario": "admin",
+        }
+        cursor = FakeCursor(fetchone_results=[cierre_guardado])
+        db_cursor.return_value = fake_db_cursor(cursor)
+
+        payload = reportes_controller.obtener_resumen_dashboard_reportes(
+            fecha_inicio=date(2026, 1, 10),
+            fecha_fin=date(2026, 1, 10),
+            period_id="91",
+            state="closed",
+        )
+
+        self.assertEqual(len(cursor.executed), 1)
+        self.assertIn("FROM cierres_diarios", cursor.executed[0][0])
+        self.assertNotIn("FROM operaciones_servicio", cursor.executed[0][0])
+        self.assertEqual(payload["source"], "local")
+        self.assertEqual(payload["source_state"], "closure")
+        self.assertEqual(payload["period_state"], "closed")
+        self.assertEqual(payload["period"]["id"], "91")
+        self.assertEqual(payload["totals"]["total_lavados_solos"], 1)
+        self.assertEqual(payload["totals"]["total_lavados_solos_monto"], 8000)
+        self.assertEqual(payload["totals"]["total_general"], 11000)
+        self.assertEqual(payload["items"][0]["tipo"], "lavado_solo")
+        self.assertEqual(payload["items"][0]["tarifa_aplicada"], 8000)
 
     @patch.object(reportes_controller, "db_cursor")
     def test_obtener_reportes_solo_salidas_filtra_movimientos_por_salida(self, db_cursor):
