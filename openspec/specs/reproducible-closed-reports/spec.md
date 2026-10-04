@@ -8,7 +8,8 @@ Define exact closed-period replay, administrative closure reference behavior, dr
 
 ### Requirement: Exact Closed Report Reproduction
 
-Closed reports MUST be exactly reproducible from their persisted closure reference and reproducibility metadata. Affected repos: API, Desktop, Mobile.
+Closed reports MUST be exactly reproducible from their persisted closure reference and reproducibility metadata. Desktop closure references MUST preserve charged solo lavado totals and item inclusion exactly as saved. Affected repos: API, Desktop, Mobile.
+(Previously: closed reports had to replay persisted closure references, but solo lavado closure totals were not explicit.)
 
 #### Scenario: Replaying a closed report
 
@@ -23,6 +24,12 @@ Closed reports MUST be exactly reproducible from their persisted closure referen
 - THEN the closure reference remains unchanged
 - AND discrepancies are shown separately
 
+#### Scenario: Charged solo lavado is replayed from closure reference
+
+- GIVEN Desktop saved a closure containing charged solo lavado income
+- WHEN that closed report is requested later
+- THEN solo-lavado totals and general totals MUST match the saved closure reference
+- AND the solo lavado MUST NOT be recounted from a later open-period calculation
 ### Requirement: Closure Reference and Operations Drill-Down
 
 Closed periods MUST preserve closure values as administrative reference and SHALL allow drill-down against operational rows. Affected repos: API, Desktop, Mobile.

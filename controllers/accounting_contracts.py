@@ -11,11 +11,7 @@ def build_accounting_summary(
     """
     total_recaudado = _sum_amount(parking_movements, "tarifa_aplicada")
     total_banos_monto = _sum_amount(bathroom_uses, "monto")
-    charged_wash_only = [
-        operation
-        for operation in wash_only_operations
-        if operation.get("estado") in CHARGED_WASH_ONLY_STATES
-    ]
+    charged_wash_only = _charged_wash_only(wash_only_operations)
     total_lavados_solos_monto = _sum_amount(charged_wash_only, "valor_lavado_snapshot")
     total_mensualidades_monto = _sum_amount(monthly_payments, "monto_snapshot")
     total_noches_monto = _sum_amount(night_charges, "monto_snapshot")
@@ -135,6 +131,7 @@ def _charged_wash_only(wash_only_operations):
         operation
         for operation in wash_only_operations
         if operation.get("estado") in CHARGED_WASH_ONLY_STATES
+        and not operation.get("cerrado")
     ]
 
 

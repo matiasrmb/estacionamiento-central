@@ -17,6 +17,60 @@ ESTADO_CONVERTIDO_ESTADIA = "CONVERTIDO_ESTADIA"
 _ESTADOS_FINALES = {ESTADO_FINALIZADO_COBRADO, ESTADO_CONVERTIDO_ESTADIA}
 
 
+def _row_value(row, key, position=0):
+    if isinstance(row, dict):
+        return row.get(key)
+    if isinstance(row, (list, tuple)) and len(row) > position:
+        return row[position]
+    return None
+
+
+def asegurar_schema_operaciones_servicio_cierre(cursor):
+    cursor.execute("SHOW COLUMNS FROM operaciones_servicio")
+    columnas = {str(_row_value(row, "Field") or "").lower() for row in cursor.fetchall()}
+    if "id_cierre" not in columnas:
+        cursor.execute("ALTER TABLE operaciones_servicio ADD COLUMN id_cierre INT NULL")
+
+    cursor.execute("SHOW INDEX FROM operaciones_servicio")
+    indices = {str(_row_value(row, "Key_name", 2) or "").lower() for row in cursor.fetchall()}
+    if "idx_operaciones_servicio_id_cierre" not in indices:
+        cursor.execute(
+            "CREATE INDEX idx_operaciones_servicio_id_cierre "
+            "ON operaciones_servicio (id_cierre)"
+        )
+
+
+def obtener_lavados_solos_pendientes_cierre(cursor):
+    asegurar_schema_operaciones_servicio_cierre(cursor)
+    cursor.execute("""
+        SELECT id_operacion_servicio, estado, valor_lavado_snapshot,
+               cerrado, id_cierre, id_ingreso_generado, fecha_hora_fin
+        FROM operaciones_servicio
+        WHERE estado = 'FINALIZADO_COBRADO'
+          AND cerrado = FALSE
+          AND id_cierre IS NULL
+          AND id_ingreso_generado IS NULL
+          AND fecha_hora_fin IS NOT NULL
+        FOR UPDATE
+    """)
+    return cursor.fetchall()
+
+
+def marcar_lavados_solos_cerrados(cursor, ids, id_cierre):
+    ids = tuple(int(operacion_id) for operacion_id in ids)
+    if not ids:
+        return 0
+
+    cursor.execute("""
+        UPDATE operaciones_servicio
+        SET cerrado = TRUE,
+            id_cierre = %s
+        WHERE id_operacion_servicio IN %s
+          AND cerrado = FALSE
+    """, (int(id_cierre), ids))
+    return cursor.rowcount
+
+
 def build_operacion_servicio_inicio(patente, wash_snapshot, usuario_inicio, fecha_hora_inicio):
     return {
         "patente": str(patente).upper(),

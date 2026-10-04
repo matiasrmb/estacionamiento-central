@@ -92,12 +92,14 @@ CREATE TABLE IF NOT EXISTS operaciones_servicio (
     estado ENUM('ACTIVO', 'FINALIZADO_COBRADO', 'CONVERTIDO_ESTADIA') NOT NULL DEFAULT 'ACTIVO',
     id_ingreso_generado INT NULL,
     cerrado TINYINT(1) NOT NULL DEFAULT 0,
+    id_cierre INT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_operaciones_servicio_estado_fecha (estado, fecha_hora_inicio),
     INDEX idx_operaciones_servicio_patente (patente),
     INDEX idx_operaciones_servicio_ingreso_generado (id_ingreso_generado),
     INDEX idx_operaciones_servicio_cierre (cerrado, estado, fecha_hora_fin),
+    INDEX idx_operaciones_servicio_id_cierre (id_cierre),
     FOREIGN KEY (id_tipo_vehiculo_lavado) REFERENCES tipos_vehiculo_lavado(id_tipo_vehiculo_lavado),
     FOREIGN KEY (id_ingreso_generado) REFERENCES ingresos(id_ingreso)
 );
@@ -147,6 +149,10 @@ CREATE TABLE IF NOT EXISTS cierres_diarios (
     total_neto INT NOT NULL DEFAULT 0,
     usuario VARCHAR(50) NOT NULL
 );
+
+ALTER TABLE operaciones_servicio
+    ADD CONSTRAINT fk_operaciones_servicio_cierre
+    FOREIGN KEY (id_cierre) REFERENCES cierres_diarios(id_cierre);
 
 -- Cobros mensuales inmutables, una vez por vehículo y período.
 CREATE TABLE IF NOT EXISTS pagos_mensuales (
