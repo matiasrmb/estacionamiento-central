@@ -8,11 +8,12 @@ Define canonical reporting semantics, metric names, period inputs, and read-mode
 
 ### Requirement: Metric Catalog and Sign Semantics
 
-The system MUST expose a canonical metric catalog for reporting consumers. Affected repos: API, Desktop, Mobile.
+The system MUST expose a canonical metric catalog for reporting consumers. Charged solo lavado operational income MUST be represented as collected operational income for Desktop local reports; active and converted solo lavados MUST NOT be represented as collected income. Affected repos: API, Desktop, Mobile.
+(Previously: operational income focused on collected payments but did not explicitly state Desktop solo lavado inclusion/exclusion.)
 
 | Metric | Meaning | Sign |
 |---|---|---|
-| `operational_income_total` | Payments collected from operational sources | positive |
+| `operational_income_total` | Payments collected from operational sources, including charged solo lavado income | positive |
 | `operational_expense_total` | Operational expenses | positive in expense lists; negative in result components |
 | `operational_net_total` | Income minus expenses | signed |
 | `mensualidad_sales_total` | Commercial mensualidad activity | positive |
@@ -33,6 +34,12 @@ Financial reporting MUST focus on payments. Commercial reporting MAY focus on me
 - WHEN the API returns the metric catalog
 - THEN taxes, commissions, payment-method accounting, and formal ledger balances MUST NOT appear
 
+#### Scenario: Desktop charged solo lavado is operational income
+
+- GIVEN Desktop has one charged solo lavado in the reporting period
+- WHEN Desktop calculates local report totals
+- THEN `operational_income_total` MUST include the charged solo lavado amount
+- AND active or converted solo lavados MUST NOT be included
 ### Requirement: Operational Period Semantics
 
 The system MUST define an operational day as the period from one daily closure to the next daily closure, including periods that cross calendar midnight. Operator login/logout attendance sessions MUST be modeled as operator sessions inside an operational day, not as operational days themselves. Affected repos: API, Desktop, Mobile.
@@ -114,3 +121,19 @@ Desktop MUST normalize dashboard responses into a view model that preserves cano
 - WHEN the tests verify normalization behavior
 - THEN they do not require a live API containing PR #80, #81, or #82 fields
 - AND live runtime verification may still list that API chain as a prerequisite
+### Requirement: Preserve scope boundaries for pricing gaps
+
+Affected repos: Desktop, API, Mobile. This change MUST NOT add quote persistence, monthly billing automation, API behavior changes, Mobile behavior changes, or installer schema parity.
+
+#### Scenario: Quote and monthly flows stay unchanged
+
+- GIVEN Desktop includes charged solo lavado operational income
+- WHEN quote or monthly billing features are used
+- THEN the change MUST NOT create quote records, monthly charges, PDFs, or conversion workflows
+
+#### Scenario: API and Mobile remain semantic consumers
+
+- GIVEN Desktop local reports include charged solo lavado income
+- WHEN API or Mobile reporting behavior is exercised
+- THEN their behavior MUST remain unchanged by this Desktop slice
+
