@@ -31,6 +31,21 @@ class AccountingReportContractsTests(unittest.TestCase):
         self.assertEqual(summary["total_lavados_solos_monto"], 8000)
         self.assertEqual(summary["total_general"], 9500)
 
+    def test_closed_wash_only_revenue_is_excluded_from_pending_closure_totals(self):
+        summary = build_accounting_summary(
+            parking_movements=[],
+            bathroom_uses=[],
+            wash_only_operations=[
+                {"estado": "FINALIZADO_COBRADO", "valor_lavado_snapshot": 8000, "cerrado": True},
+                {"estado": "FINALIZADO_COBRADO", "valor_lavado_snapshot": 5000, "cerrado": False},
+                {"estado": "ACTIVO", "valor_lavado_snapshot": 9000, "cerrado": False},
+            ],
+        )
+
+        self.assertEqual(summary["total_lavados_solos"], 1)
+        self.assertEqual(summary["total_lavados_solos_monto"], 5000)
+        self.assertEqual(summary["total_general"], 5000)
+
     def test_expenses_reduce_net_total_without_changing_gross_total(self):
         summary = build_accounting_summary(
             parking_movements=[{"tarifa_aplicada": 1000}],
