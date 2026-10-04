@@ -22,9 +22,20 @@ class FakeCursor:
         self.closed = False
         self.lastrowid = 123
         self.rowcount = 1
+        self._schema_result = None
 
     def execute(self, query, params=None):
         self.executed.append((query, params))
+        normalized_query = " ".join(query.split()).upper()
+        if normalized_query.startswith("SHOW COLUMNS FROM OPERACIONES_SERVICIO"):
+            self._schema_result = [
+                {"Field": "cerrado"},
+                {"Field": "id_cierre"},
+            ]
+        elif normalized_query.startswith("SHOW INDEX FROM OPERACIONES_SERVICIO"):
+            self._schema_result = [{"Key_name": "idx_operaciones_servicio_id_cierre"}]
+        else:
+            self._schema_result = None
 
     def fetchone(self):
         if self.fetchone_results:
@@ -32,6 +43,10 @@ class FakeCursor:
         return None
 
     def fetchall(self):
+        if self._schema_result is not None:
+            result = self._schema_result
+            self._schema_result = None
+            return result
         if self.fetchall_results:
             return self.fetchall_results.pop(0)
         return []

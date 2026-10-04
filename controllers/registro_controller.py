@@ -28,7 +28,10 @@ from controllers.lavados_controller import (
     obtener_minutos_lavado_por_ingresos,
     obtener_totales_lavado_por_ingresos,
 )
-from controllers.operaciones_servicio_controller import obtener_operacion_convertida_por_ingreso
+from controllers.operaciones_servicio_controller import (
+    asegurar_schema_operaciones_servicio_cierre,
+    obtener_operacion_convertida_por_ingreso,
+)
 from controllers.accounting_contracts import build_accounting_summary
 from utils.slowlog import slow_operation
 from utils.plates import requerir_patente_valida
@@ -1021,6 +1024,7 @@ def obtener_resumen_caja_actual():
     """Obtiene el efectivo pendiente de cierre usando las fuentes del cierre diario."""
     ahora = datetime.now()
     with db_cursor(dictionary=True) as cursor:
+        asegurar_schema_operaciones_servicio_cierre(cursor)
         cursor.execute("""
             SELECT tarifa_aplicada
             FROM ingresos
