@@ -92,3 +92,14 @@ def obtener_catalogo_metricas_reporting(token):
 def obtener_dashboard_reporting(token, period_id="current", state="open"):
     query = urlencode({"period_id": period_id, "state": state})
     return _request("GET", f"/reporting/dashboard?{query}", token=token)
+
+
+def obtener_reporte_cerrado(token, closure_id):
+    return _request("GET", f"/reporting/reports/closed/{closure_id}", token=token)
+
+
+def exportar_reporte_cerrado(token, closure_id, formato):
+    formato = (formato or "").lower()
+    if formato not in {"pdf", "xlsx"}:
+        raise ValueError("Formato de exportación inválido.")
+    return _request("GET", f"/reporting/exports/{closure_id}.{formato}", token=token)

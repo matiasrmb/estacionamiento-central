@@ -3,13 +3,15 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QTableWidget,
     QTableWidgetItem, QHeaderView, QDateEdit,
     QMessageBox, QFrame, QGridLayout, QSizePolicy,
-    QComboBox, QTimeEdit, QCompleter
+    QComboBox, QTimeEdit, QCompleter, QInputDialog
 )
 from PySide6.QtCore import QDate, QTime, Qt
 
 from controllers.reportes_controller import (
     obtener_reportes,
     obtener_resumen_dashboard_reportes,
+    obtener_reporte_cerrado,
+    exportar_reporte_cerrado,
     exportar_pdf,
 )
 from controllers.registro_controller import obtener_patentes_conocidas
@@ -29,6 +31,7 @@ class ReportesWindow(QWidget):
         self.setMinimumSize(900, 600)
         self.resultados = {"items": [], "totals": {}}
         self.ultimos_filtros = None
+        self.reporte_cerrado_actual = None
         self.init_ui()
 
     def init_ui(self):
@@ -209,29 +212,77 @@ class ReportesWindow(QWidget):
         layout.addWidget(dashboard_group)
 
         # =========================================================
-        # CLOSED/EXPORT ROADMAP BOUNDARIES
+        # CLOSED REPORTS / API EXPORTS
         # =========================================================
-        roadmap_group = QFrame()
-        roadmap_group.setObjectName("PanelFormulario")
-        roadmap_layout = QHBoxLayout(roadmap_group)
-        roadmap_layout.setContentsMargins(14, 14, 14, 14)
-        roadmap_layout.setSpacing(10)
+        closed_group = QFrame()
+        closed_group.setObjectName("PanelFormulario")
+        closed_layout = QVBoxLayout(closed_group)
+        closed_layout.setContentsMargins(14, 14, 14, 14)
+        closed_layout.setSpacing(8)
 
-        roadmap_text = QLabel(
-            "Roadmap boundaries: API-backed closed/export support is required before these flows become operational."
-        )
-        roadmap_text.setObjectName("SubtituloSeccion")
-        roadmap_text.setWordWrap(True)
-        self.boton_reportes_cerrados = QPushButton("Future API-backed closed reports")
+        closed_header = QHBoxLayout()
+        closed_title = QLabel("Closed report from API")
+        closed_title.setObjectName("TituloResumenModulo")
+        self.label_reporte_cerrado_estado = QLabel("No closed report loaded")
+        self.label_reporte_cerrado_estado.setObjectName("SubtituloSeccion")
+        self.label_reporte_cerrado_estado.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.label_reporte_cerrado_estado.setWordWrap(True)
+
+        self.boton_reportes_cerrados = QPushButton("Load closed report")
         self.boton_reportes_cerrados.setObjectName("BotonSecundario")
-        self.boton_reportes_cerrados.clicked.connect(self.mostrar_limite_reportes_cerrados)
-        self.boton_exportacion_canonica = QPushButton("Future API-backed PDF/CSV export")
+        self.boton_reportes_cerrados.clicked.connect(self.cargar_reporte_cerrado)
+        self.boton_exportacion_canonica = QPushButton("Export closed PDF")
         self.boton_exportacion_canonica.setObjectName("BotonSecundario")
-        self.boton_exportacion_canonica.clicked.connect(self.mostrar_limite_exportacion_canonica)
-        roadmap_layout.addWidget(roadmap_text, 1)
-        roadmap_layout.addWidget(self.boton_reportes_cerrados)
-        roadmap_layout.addWidget(self.boton_exportacion_canonica)
-        layout.addWidget(roadmap_group)
+        self.boton_exportacion_canonica.clicked.connect(lambda: self.exportar_reporte_cerrado_api("pdf"))
+        self.boton_exportacion_canonica_xlsx = QPushButton("Export closed XLSX")
+        self.boton_exportacion_canonica_xlsx.setObjectName("BotonSecundario")
+        self.boton_exportacion_canonica_xlsx.clicked.connect(lambda: self.exportar_reporte_cerrado_api("xlsx"))
+
+        closed_header.addWidget(closed_title)
+        closed_header.addStretch()
+        closed_header.addWidget(self.label_reporte_cerrado_estado)
+        closed_header.addWidget(self.boton_reportes_cerrados)
+        closed_header.addWidget(self.boton_exportacion_canonica)
+        closed_header.addWidget(self.boton_exportacion_canonica_xlsx)
+
+        self.reporte_cerrado_metricas_layout = QHBoxLayout()
+        self.reporte_cerrado_metricas_layout.setSpacing(12)
+        self.card_reporte_cerrado_bruto = self.crear_tarjeta_resumen("Total bruto", "$0")
+        self.card_reporte_cerrado_gastos = self.crear_tarjeta_resumen("Gastos", "$0")
+        self.card_reporte_cerrado_neto = self.crear_tarjeta_resumen("Total neto", "$0")
+        self.reporte_cerrado_metric_cards = [
+            self.card_reporte_cerrado_bruto,
+            self.card_reporte_cerrado_gastos,
+            self.card_reporte_cerrado_neto,
+        ]
+        for card in self.reporte_cerrado_metric_cards:
+            self.reporte_cerrado_metricas_layout.addWidget(card)
+        self.reporte_cerrado_metricas_layout.addStretch()
+
+        self.label_reporte_cerrado_periodo = QLabel("Period: unavailable")
+        self.label_reporte_cerrado_periodo.setObjectName("SubtituloSeccion")
+        self.label_reporte_cerrado_periodo.setWordWrap(True)
+        self.label_reporte_cerrado_fuente = QLabel("Source: unavailable")
+        self.label_reporte_cerrado_fuente.setObjectName("SubtituloSeccion")
+        self.label_reporte_cerrado_fuente.setWordWrap(True)
+        self.label_reporte_cerrado_completitud = QLabel("Completeness: unavailable")
+        self.label_reporte_cerrado_completitud.setObjectName("SubtituloSeccion")
+        self.label_reporte_cerrado_completitud.setWordWrap(True)
+        self.label_reporte_cerrado_capacidad = QLabel("Capacity: unavailable")
+        self.label_reporte_cerrado_capacidad.setObjectName("SubtituloSeccion")
+        self.label_reporte_cerrado_capacidad.setWordWrap(True)
+        self.label_reporte_cerrado_advertencias = QLabel("")
+        self.label_reporte_cerrado_advertencias.setObjectName("SubtituloSeccion")
+        self.label_reporte_cerrado_advertencias.setWordWrap(True)
+
+        closed_layout.addLayout(closed_header)
+        closed_layout.addLayout(self.reporte_cerrado_metricas_layout)
+        closed_layout.addWidget(self.label_reporte_cerrado_periodo)
+        closed_layout.addWidget(self.label_reporte_cerrado_fuente)
+        closed_layout.addWidget(self.label_reporte_cerrado_completitud)
+        closed_layout.addWidget(self.label_reporte_cerrado_capacidad)
+        closed_layout.addWidget(self.label_reporte_cerrado_advertencias)
+        layout.addWidget(closed_group)
 
         # =========================================================
         # TABLA
@@ -519,19 +570,75 @@ class ReportesWindow(QWidget):
         }
         return etiqueta_api or etiquetas.get(nombre) or nombre or "Métrica"
 
-    def mostrar_limite_reportes_cerrados(self):
-        QMessageBox.information(
-            self,
-            "Roadmap boundary",
-            "API-backed closed/export support is required before closed-report retrieval becomes operational.",
-        )
+    def cargar_reporte_cerrado(self):
+        closure_id, accepted = QInputDialog.getText(self, "Closed report", "Closure or report id:")
+        closure_id = closure_id.strip()
+        if not accepted or not closure_id:
+            return
+        payload = obtener_reporte_cerrado(self.api_token, closure_id)
+        if not payload.get("ok"):
+            self._mostrar_error_reporte_cerrado(payload)
+            return
+        self.reporte_cerrado_actual = payload
+        self._renderizar_reporte_cerrado(payload)
+        QMessageBox.information(self, "Closed report", "Closed report loaded from the API.")
 
-    def mostrar_limite_exportacion_canonica(self):
-        QMessageBox.information(
-            self,
-            "Roadmap boundary",
-            "API-backed closed/export support is required before PDF/CSV export generation becomes operational.",
+    def _mostrar_error_reporte_cerrado(self, payload):
+        detail = payload.get("api_error") or "Closed report request failed."
+        status = payload.get("status")
+        mensaje = f"{detail}"
+        if status:
+            mensaje = f"{mensaje} (status {status})"
+        self.label_reporte_cerrado_advertencias.setText(mensaje)
+        QMessageBox.warning(self, "Closed report error", mensaje)
+
+    def _renderizar_reporte_cerrado(self, payload):
+        report_id = payload.get("report_id") or "unavailable"
+        period = payload.get("period") or {}
+        closure = payload.get("closure_reference") or {}
+        totals = payload.get("operation_totals") or {}
+        completeness = payload.get("historical_completeness") or payload.get("completeness") or {}
+        source_state = payload.get("source_state") or payload.get("source") or "api"
+        catalog_version = payload.get("catalog_version") or "unavailable"
+
+        self.label_reporte_cerrado_estado.setText(f"Report: {report_id}")
+        self.label_reporte_cerrado_periodo.setText(
+            f"Period: {period.get('from') or '-'} to {period.get('to') or '-'} · Closure: {closure.get('id') or '-'}"
         )
+        self.label_reporte_cerrado_fuente.setText(
+            f"Source: {source_state} · Catalog version: {catalog_version}"
+        )
+        self.label_reporte_cerrado_completitud.setText(self._texto_completitud_reporte_cerrado(completeness))
+        self.label_reporte_cerrado_capacidad.setText(self._texto_capacidad_dashboard(payload.get("capacity")))
+        warnings = payload.get("warnings") or []
+        self.label_reporte_cerrado_advertencias.setText("Warnings: " + "; ".join(warnings) if warnings else "Warnings: none")
+        self.card_reporte_cerrado_bruto.label_valor.setText(f"${totals.get('total_general', 0):.0f}")
+        self.card_reporte_cerrado_gastos.label_valor.setText(f"${totals.get('total_gastos', 0):.0f}")
+        self.card_reporte_cerrado_neto.label_valor.setText(f"${totals.get('total_neto', 0):.0f}")
+
+    @staticmethod
+    def _texto_completitud_reporte_cerrado(completeness):
+        state = completeness.get("state") or "complete"
+        reason = completeness.get("reason")
+        if state == "incomplete":
+            text = "Incomplete totals: available values are shown, but totals may be incomplete."
+            if reason:
+                text = f"{text} Reason: {reason}"
+            return text
+        return f"Completeness: {state}"
+
+    def exportar_reporte_cerrado_api(self, formato):
+        closure = (self.reporte_cerrado_actual or {}).get("closure_reference") or {}
+        closure_id = closure.get("id")
+        if not closure_id:
+            QMessageBox.warning(self, "Closed report export", "Load a closed report before exporting.")
+            return
+        result = exportar_reporte_cerrado(self.api_token, closure_id, formato)
+        if not result.get("ok"):
+            detail = result.get("api_error") or "Closed report export failed."
+            QMessageBox.warning(self, "Closed report export error", detail)
+            return
+        QMessageBox.information(self, "Closed report export", f"Export saved: {result.get('path')}")
 
     @staticmethod
     def _formatear_valor_metrica(nombre, valor):

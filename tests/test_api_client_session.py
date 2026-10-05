@@ -73,6 +73,45 @@ class ApiClientSessionTests(unittest.TestCase):
             token="desktop-token",
         )
 
+    @patch.object(api_client, "_request", return_value={"report_id": "closed-42"})
+    def test_closed_report_uses_canonical_endpoint(self, request):
+        result = api_client.obtener_reporte_cerrado("desktop-token", "closure-42")
+
+        self.assertEqual(result, {"report_id": "closed-42"})
+        request.assert_called_once_with(
+            "GET",
+            "/reporting/reports/closed/closure-42",
+            token="desktop-token",
+        )
+
+    @patch.object(api_client, "_request", return_value={"format": "pdf"})
+    def test_closed_report_pdf_export_uses_canonical_endpoint(self, request):
+        result = api_client.exportar_reporte_cerrado("desktop-token", "closure-42", "pdf")
+
+        self.assertEqual(result, {"format": "pdf"})
+        request.assert_called_once_with(
+            "GET",
+            "/reporting/exports/closure-42.pdf",
+            token="desktop-token",
+        )
+
+    @patch.object(api_client, "_request", return_value={"format": "xlsx"})
+    def test_closed_report_xlsx_export_uses_canonical_endpoint(self, request):
+        result = api_client.exportar_reporte_cerrado("desktop-token", "closure-42", "xlsx")
+
+        self.assertEqual(result, {"format": "xlsx"})
+        request.assert_called_once_with(
+            "GET",
+            "/reporting/exports/closure-42.xlsx",
+            token="desktop-token",
+        )
+
+    def test_closed_report_export_rejects_non_pdf_xlsx_format(self):
+        with self.assertRaises(ValueError) as context:
+            api_client.exportar_reporte_cerrado("desktop-token", "closure-42", "csv")
+
+        self.assertEqual(str(context.exception), "Formato de exportación inválido.")
+
 
 if __name__ == "__main__":
     unittest.main()
