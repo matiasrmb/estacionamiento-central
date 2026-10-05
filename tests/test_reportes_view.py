@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from views.reportes import ReportesWindow
 
@@ -128,18 +128,107 @@ class ReportesViewTests(unittest.TestCase):
         vista.close()
 
     @patch("views.reportes.QMessageBox.information")
-    def test_limites_roadmap_cerrados_y_exportaciones_son_visibles_no_operativos(self, information):
+    @patch("views.reportes.QInputDialog.getText", return_value=("closure-2026-01", True))
+    @patch("views.reportes.obtener_reporte_cerrado", create=True)
+    def test_loads_api_closed_report_and_renders_metadata_without_local_fallback(self, cerrado, _input, information):
+        cerrado.return_value = {
+            "ok": True,
+            "report_id": "closed-report-1",
+            "period": {"from": "2026-01-01", "to": "2026-01-31", "state": "closed"},
+            "closure_reference": {"id": "closure-2026-01", "closed_at": "2026-02-01T00:00:00Z"},
+            "operation_totals": {"total_general": 12000, "total_gastos": 2000, "total_neto": 10000},
+            "source_state": "canonical_snapshot",
+            "catalog_version": "1.3.0",
+            "historical_completeness": {"state": "complete", "reason": None},
+            "capacity": {"total": 40, "occupied": 12, "available": 28},
+            "warnings": [],
+        }
         vista = self._crear_vista(api_token="desktop-token")
 
-        self.assertIn("Future API-backed closed reports", vista.boton_reportes_cerrados.text())
-        self.assertIn("Future API-backed PDF/CSV export", vista.boton_exportacion_canonica.text())
+        self.assertNotIn("Future", vista.boton_reportes_cerrados.text())
+        self.assertNotIn("CSV", vista.boton_exportacion_canonica.text())
 
         vista.boton_reportes_cerrados.click()
+
+        cerrado.assert_called_once_with("desktop-token", "closure-2026-01")
+        self.assertEqual(vista.reporte_cerrado_actual["report_id"], "closed-report-1")
+        self.assertIn("closed-report-1", vista.label_reporte_cerrado_estado.text())
+        self.assertIn("closure-2026-01", vista.label_reporte_cerrado_periodo.text())
+        self.assertIn("canonical_snapshot", vista.label_reporte_cerrado_fuente.text())
+        self.assertIn("Completeness: complete", vista.label_reporte_cerrado_completitud.text())
+        self.assertIn("Capacity: total 40", vista.label_reporte_cerrado_capacidad.text())
+        self.assertEqual([card.label_valor.text() for card in vista.reporte_cerrado_metric_cards], ["$12000", "$2000", "$10000"])
+        information.assert_called_once()
+        self.assertIn("Closed report loaded", information.call_args.args[2])
+        vista.close()
+
+    @patch("views.reportes.QMessageBox.information")
+    @patch("views.reportes.QMessageBox.warning")
+    @patch("views.reportes.QInputDialog.getText", return_value=("closure-2026-02", True))
+    @patch("views.reportes.obtener_reporte_cerrado", create=True)
+    def test_closed_report_warnings_and_api_errors_are_actionable(self, cerrado, _input, warning, _information):
+        cerrado.return_value = {
+            "ok": True,
+            "report_id": "closed-report-2",
+            "period": {"from": "2026-02-01", "to": "2026-02-28"},
+            "closure_reference": {"id": "closure-2026-02"},
+            "operation_totals": {"total_general": 7000, "total_gastos": 1000, "total_neto": 6000},
+            "source_state": "partial_snapshot",
+            "historical_completeness": {"state": "incomplete", "reason": "Backfill pending"},
+            "warnings": ["Missing legacy rows"],
+        }
+        vista = self._crear_vista(api_token="desktop-token")
+
+        vista.boton_reportes_cerrados.click()
+
+        self.assertIn("Incomplete totals", vista.label_reporte_cerrado_completitud.text())
+        self.assertIn("Backfill pending", vista.label_reporte_cerrado_completitud.text())
+        self.assertIn("Missing legacy rows", vista.label_reporte_cerrado_advertencias.text())
+
+        cerrado.return_value = {
+            "ok": False,
+            "api_error": "Closed report not found",
+            "status": 404,
+            "source_state": "api_error",
+        }
+        vista.boton_reportes_cerrados.click()
+
+        warning.assert_called_once()
+        self.assertIn("Closed report not found", warning.call_args.args[2])
+        self.assertIn("Closed report not found", vista.label_reporte_cerrado_advertencias.text())
+        self.assertEqual(vista.card_reporte_cerrado_neto.label_valor.text(), "$6000")
+        vista.close()
+
+    @patch("views.reportes.QMessageBox.warning")
+    @patch("views.reportes.QMessageBox.information")
+    @patch("views.reportes.exportar_reporte_cerrado", create=True)
+    def test_closed_report_pdf_and_xlsx_exports_use_api_result(self, exportar, information, warning):
+        exportar.side_effect = [
+            {"ok": True, "format": "pdf", "path": "reportes/closed_closure-2026-01.pdf", "content_type": "application/pdf"},
+            {"ok": True, "format": "xlsx", "path": "reportes/closed_closure-2026-01.xlsx", "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+            {"ok": False, "format": "pdf", "api_error": "Export unavailable", "status": 503},
+        ]
+        vista = self._crear_vista(api_token="desktop-token")
+        vista.reporte_cerrado_actual = {"closure_reference": {"id": "closure-2026-01"}}
+
+        self.assertNotIn("CSV", vista.boton_exportacion_canonica.text())
+        vista.boton_exportacion_canonica.click()
+        vista.boton_exportacion_canonica_xlsx.click()
         vista.boton_exportacion_canonica.click()
 
+        self.assertEqual(
+            [call.args for call in exportar.call_args_list],
+            [
+                ("desktop-token", "closure-2026-01", "pdf"),
+                ("desktop-token", "closure-2026-01", "xlsx"),
+                ("desktop-token", "closure-2026-01", "pdf"),
+            ],
+        )
         self.assertEqual(information.call_count, 2)
-        shown_messages = [call.args[2] for call in information.call_args_list]
-        self.assertTrue(all("API-backed closed/export support" in message for message in shown_messages))
+        self.assertIn("closed_closure-2026-01.pdf", information.call_args_list[0].args[2])
+        self.assertIn("closed_closure-2026-01.xlsx", information.call_args_list[1].args[2])
+        warning.assert_called_once()
+        self.assertIn("Export unavailable", warning.call_args.args[2])
         vista.close()
 
 
