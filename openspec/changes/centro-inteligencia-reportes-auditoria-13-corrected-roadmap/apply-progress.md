@@ -43,6 +43,49 @@ Compared sources:
 | Runtime harness command/scenario and exact result | N/A: Slice 0 is planning-only reconciliation. No runtime boundary exists because application code, tests, and executable paths are explicitly out of scope. |
 | Rollback boundary | Remove `openspec/changes/centro-inteligencia-reportes-auditoria-13-corrected-roadmap/apply-progress.md` and revert only task checkboxes 1.1-1.3 in this change's `tasks.md`. |
 
+## Phase 2 API Derivative Handoff Status
+
+Status: completed for planning handoff only. The API repo remains read-only from this Desktop-root apply work unit; no sibling repository files, application code, tests, branches, commits, pushes, or PRs were changed.
+
+Planning status update: the prior tasks artifact recorded `Delivery strategy: ask-on-risk` and `Chain strategy: pending`. The parent session already selected `auto-chain` with `stacked-to-main`, so `tasks.md` was updated to record that resolved planning status while preserving the high 400-line budget risk and chained review boundary.
+
+Created artifact:
+- `openspec/changes/centro-inteligencia-reportes-auditoria-13-corrected-roadmap/api-derivative-handoff.md`.
+
+Completed Phase 2 tasks:
+- [x] 2.1 Created the API repo-scoped derivative handoff for admin guard, filter 422, bad period IDs, net revenue, monthly-payment timing, solo lavado, capacity, and anomalies.
+- [x] 2.2 Referenced `../estacionamiento-central-api/app/repositories/reporting_read_models.py` as read-only evidence for metric names, source/capacity/audit/anomaly contracts, and export deferral.
+- [x] 2.3 Referenced `../estacionamiento-central-api/app/repositories/reporting_repo.py` as read-only evidence for closure/journey truth, current journey, `fecha_pago`, capacity default 50, and audit inventory.
+- [x] 2.4 Referenced `../estacionamiento-central-api/app/api/v1/endpoints/reporting.py` as read-only evidence for route/admin contracts and required API derivative tests.
+
+### Phase 2 Evidence Matrix
+
+| Area | Read-only evidence | API derivative instruction |
+|---|---|---|
+| Admin guard and 422 behavior | `reporting.py` routes use `require_role("admin")`; unsupported dashboard filters and plate-history validation return 422. | Preserve admin-only route contracts and add focused API derivative tests for non-admin access, unsupported filters, malformed periods, and bad identifiers. |
+| Corrected metrics and net revenue | `reporting_read_models.py` and `reporting_repo.py` still expose old `operational_*` / `mensualidad_sales_total` names. | Migrate canonical names to corrected spec names and compute net revenue from all collected sources minus expenses. |
+| Monthly payments and solo lavado | `reporting_repo.py` reads monthly payment timing from `fecha_pago` and includes charged solo lavado via `operaciones_servicio`. | Keep collection-journey timing and include charged solo lavado in collected sources while excluding uncharged active washes. |
+| Capacity | `reporting_read_models.py` and `reporting_repo.py` use hard-coded 50 capacity values. | Replace immutable capacity with configurable current capacity defaulting to 50 and historical-limited labels. |
+| Audit and anomalies | `reporting_read_models.py` exposes deterministic discrepancy/anomaly and audit inventory helpers; `reporting_repo.py` inventories existing sources. | Keep deterministic existing-source audit/anomaly behavior without event sourcing or formal-accounting claims. |
+| Export deferral and CSV policy | `reporting_read_models.py` keeps canonical PDF/XLSX formats and legacy CSV compatibility. | Do not let exports block 1.3.0; keep CSV non-canonical/legacy-only if retained. |
+
+### Phase 2 TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 2.1 | N/A | Structural planning artifact | N/A: no runtime code modified | N/A: no production code behavior introduced | Structural readback required below | N/A: single planning artifact output | N/A |
+| 2.2 | N/A | Structural evidence reference | N/A: read-only sibling evidence | N/A: no production code behavior introduced | Structural readback required below | N/A: evidence path presence check | N/A |
+| 2.3 | N/A | Structural evidence reference | N/A: read-only sibling evidence | N/A: no production code behavior introduced | Structural readback required below | N/A: evidence path presence check | N/A |
+| 2.4 | N/A | Structural evidence reference | N/A: read-only sibling evidence | N/A: no production code behavior introduced | Structural readback required below | N/A: evidence path presence check | N/A |
+
+### Phase 2 Work Unit Evidence
+
+| Evidence | Required value |
+|---|---|
+| Focused readback command and exact result | `python -c "from pathlib import Path; base=Path('openspec/changes/centro-inteligencia-reportes-auditoria-13-corrected-roadmap'); tasks=(base/'tasks.md').read_text(encoding='utf-8'); progress=(base/'apply-progress.md').read_text(encoding='utf-8'); handoff=(base/'api-derivative-handoff.md').read_text(encoding='utf-8'); checks={'tasks_2_1_checked':'- [x] 2.1' in tasks,'tasks_2_2_checked':'- [x] 2.2' in tasks,'tasks_2_3_checked':'- [x] 2.3' in tasks,'tasks_2_4_checked':'- [x] 2.4' in tasks,'tasks_3_1_pending':'- [ ] 3.1' in tasks,'handoff_exists':(base/'api-derivative-handoff.md').exists(),'read_models_ref':'../estacionamiento-central-api/app/repositories/reporting_read_models.py' in handoff,'repo_ref':'../estacionamiento-central-api/app/repositories/reporting_repo.py' in handoff,'endpoint_ref':'../estacionamiento-central-api/app/api/v1/endpoints/reporting.py' in handoff,'phase2_progress':'## Phase 2 API Derivative Handoff Status' in progress,'slice0_preserved':'## Keep / Change / Remove / Defer Matrix' in progress,'strategy_resolved':'auto-chain' in tasks and 'stacked-to-main' in tasks}; print('\\n'.join(f'{k}: {v}' for k,v in checks.items())); raise SystemExit(0 if all(checks.values()) else 1)"` from repo root. Result: exit 0; all checks printed `True` for tasks 2.1-2.4 checked, task 3.1 still pending, handoff file exists, all three API read-only evidence paths referenced, Phase 2 progress present, Slice 0 matrix preserved, and auto-chain/stacked-to-main strategy recorded. |
+| Runtime harness command/scenario and exact result | N/A: Phase 2 is a planning-only API derivative handoff. No runtime boundary exists inside the Desktop repo; API runtime tests belong to the API derivative. |
+| Rollback boundary | Remove `api-derivative-handoff.md`, revert only Phase 2 task checkboxes 2.1-2.4 in `tasks.md`, and remove only this Phase 2 section from `apply-progress.md`. |
+
 ## Later Work Status
 
-Phase 2+ remains pending. Do not start API, Desktop, Mobile, Installer, application-code, test, version, branch, commit, push, or PR work from this Slice 0 artifact.
+Phase 3+ remains pending. Do not start Desktop, Mobile, Installer, application-code, test, version, branch, commit, push, or PR work from this Phase 2 artifact. API application-code work must occur only in a repo-scoped API derivative.

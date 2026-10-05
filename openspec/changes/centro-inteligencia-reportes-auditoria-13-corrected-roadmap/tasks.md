@@ -8,12 +8,12 @@
 | 400-line budget risk | High |
 | Chained PRs recommended | Yes |
 | Suggested split | PR 1 Slice 0/API -> PR 2 Desktop -> PR 3 Mobile -> PR 4 Installer |
-| Delivery strategy | ask-on-risk |
-| Chain strategy | pending |
+| Delivery strategy | auto-chain |
+| Chain strategy | stacked-to-main |
 
-Decision needed before apply: Yes
+Decision needed before apply: No - parent session selected auto-chain / stacked-to-main.
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: stacked-to-main
 400-line budget risk: High
 
 ### Suggested Work Units
@@ -33,10 +33,10 @@ Chain strategy: pending
 
 ## Phase 2: API Derivative Handoff
 
-- [ ] 2.1 Create the API repo-scoped derivative handoff for admin guard, filter 422, bad period IDs, net revenue, monthly-payment timing, solo lavado, capacity, and anomalies.
-- [ ] 2.2 Reference `../estacionamiento-central-api/app/repositories/reporting_read_models.py` (read-only) as evidence for metric names, source/capacity/audit/anomaly contracts, and export deferral.
-- [ ] 2.3 Reference `../estacionamiento-central-api/app/repositories/reporting_repo.py` (read-only) as evidence for closure/journey truth, current journey, `fecha_pago`, capacity default 50, and audit inventory.
-- [ ] 2.4 Reference `../estacionamiento-central-api/app/api/v1/endpoints/reporting.py` (read-only) as evidence for route/admin contracts and required API derivative tests.
+- [x] 2.1 Create the API repo-scoped derivative handoff for admin guard, filter 422, bad period IDs, net revenue, monthly-payment timing, solo lavado, capacity, and anomalies.
+- [x] 2.2 Reference `../estacionamiento-central-api/app/repositories/reporting_read_models.py` (read-only) as evidence for metric names, source/capacity/audit/anomaly contracts, and export deferral.
+- [x] 2.3 Reference `../estacionamiento-central-api/app/repositories/reporting_repo.py` (read-only) as evidence for closure/journey truth, current journey, `fecha_pago`, capacity default 50, and audit inventory.
+- [x] 2.4 Reference `../estacionamiento-central-api/app/api/v1/endpoints/reporting.py` (read-only) as evidence for route/admin contracts and required API derivative tests.
 
 ## Phase 3: Desktop Derivative
 
