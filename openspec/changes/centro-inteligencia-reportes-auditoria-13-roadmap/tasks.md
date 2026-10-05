@@ -36,10 +36,12 @@ Chain strategy: feature-branch-chain
 - Runtime implementation is intentionally split into repo-scoped derivative changes; do not use this umbrella task list to claim cross-repo completion.
 - Completed derivative `centro-inteligencia-reportes-auditoria-api` landed the API semantic/export/audit-inventory slice: canonical reporting semantics, active-monthly capacity source, CSV legacy-only policy, PDF/XLSX closed-report exports, and existing-source audit inventory.
 - Completed derivative `centro-inteligencia-reportes-auditoria-api-filters-sorting-pagination` landed backend filters, deterministic sorting, and pagination for canonical reporting operation drill-down/list endpoints.
+- Completed derivative `centro-inteligencia-reportes-auditoria-api-historical-anomalies-statistics` landed API historical plate lookup, anomaly/statistics endpoints, and audit inventory remediation for reporting-relevant source tables.
 - Completed derivative `centro-inteligencia-reportes-auditoria-desktop-intelligence-center` landed Desktop canonical dashboard normalization/rendering, incomplete/local fallback metadata, and non-operational closed/export roadmap boundaries.
+- Completed derivative `centro-inteligencia-reportes-auditoria-desktop-closed-reports-exports` landed Desktop API-backed closed report loading and PDF/XLSX export actions.
 - Completed derivative `centro-inteligencia-reportes-auditoria-mobile-limited-scope` landed Mobile dashboard-only reporting, 1.3.x deferral copy, and no closed/export entry points.
 - Installer/package edits were not required by the completed API/Desktop/Mobile slices because no XLSX/PDF dependency or asset packaging change was introduced.
-- UI export entry points beyond Desktop roadmap boundaries, historical plate, anomalies/statistics, and release-hardening work remain incomplete until their own derivative changes implement and verify them.
+- Release-hardening work remains intentionally deferred until there is a concrete release scope; any further reporting Intelligence Center expansion should be planned as a new repo-scoped derivative rather than reopening this cross-repo roadmap.
 
 ## Phase 1: API Contract and Decisions — landed by `centro-inteligencia-reportes-auditoria-api`
 
