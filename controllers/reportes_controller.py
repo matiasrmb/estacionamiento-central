@@ -11,12 +11,17 @@ from utils.db import db_cursor
 from utils.pdf_utils import ReportePDF, abrir_pdf
 from datetime import datetime, time
 from fpdf import FPDF
+import base64
+import binascii
 import os
+import re
 from controllers.accounting_contracts import build_report_totals
 from utils.api_client import (
     ApiClientError,
+    exportar_reporte_cerrado as exportar_reporte_cerrado_api,
     obtener_catalogo_metricas_reporting as obtener_catalogo_metricas_reporting_api,
     obtener_dashboard_reporting as obtener_dashboard_reporting_api,
+    obtener_reporte_cerrado as obtener_reporte_cerrado_api,
 )
 
 
@@ -123,6 +128,108 @@ def _agregar_metadata_fallback_local(local_payload, api_error):
     local_payload["capacity"] = None
     local_payload["catalog_version"] = None
     return local_payload
+
+
+def obtener_reporte_cerrado(token, closure_id):
+    try:
+        payload = obtener_reporte_cerrado_api(token, closure_id)
+    except ApiClientError as exc:
+        return {
+            "ok": False,
+            "source": "api",
+            "source_state": "api_error",
+            "status": exc.status,
+            "api_error": exc.detail,
+            "report_id": None,
+            "operation_totals": {},
+            "warnings": [],
+        }
+    return _normalizar_reporte_cerrado(payload)
+
+
+def _normalizar_reporte_cerrado(payload):
+    completeness = payload.get("historical_completeness") or payload.get("completeness") or {
+        "state": "complete",
+        "reason": None,
+    }
+    return {
+        "ok": True,
+        "source": "api",
+        "source_state": payload.get("source_state") or payload.get("source") or "api",
+        "report_id": payload.get("report_id"),
+        "period": payload.get("period") or {},
+        "catalog_version": payload.get("catalog_version"),
+        "closure_reference": payload.get("closure_reference") or {},
+        "operation_totals": payload.get("operation_totals") or {},
+        "capacity": payload.get("capacity"),
+        "historical_completeness": completeness,
+        "completeness": completeness,
+        "discrepancy": payload.get("discrepancy"),
+        "warnings": payload.get("warnings") or [],
+        "raw": payload,
+    }
+
+
+def exportar_reporte_cerrado(token, closure_id, formato, output_dir="reportes"):
+    formato = (formato or "").lower()
+    try:
+        payload = exportar_reporte_cerrado_api(token, closure_id, formato)
+        content = _normalizar_contenido_exportacion(payload)
+        os.makedirs(output_dir, exist_ok=True)
+        ruta = os.path.join(output_dir, f"closed_{_nombre_archivo_seguro(closure_id)}.{formato}")
+        with open(ruta, "wb") as archivo:
+            archivo.write(content)
+        return {
+            "ok": True,
+            "source": "api",
+            "format": payload.get("format") or formato,
+            "content_type": payload.get("content_type"),
+            "metadata": payload.get("metadata") or {},
+            "path": ruta,
+        }
+    except ApiClientError as exc:
+        return {
+            "ok": False,
+            "source": "api",
+            "format": formato,
+            "status": exc.status,
+            "api_error": exc.detail,
+        }
+
+
+def _normalizar_contenido_exportacion(payload):
+    content = payload.get("content")
+    if content is None:
+        raise ApiClientError(detail="API_EXPORT_CONTENT_MISSING")
+    if isinstance(content, bytes):
+        return content
+    if isinstance(content, bytearray):
+        return bytes(content)
+    if not isinstance(content, str):
+        raise ApiClientError(detail="API_EXPORT_CONTENT_INVALID")
+
+    encoding = (payload.get("content_encoding") or payload.get("encoding") or "").lower()
+    if encoding == "base64":
+        return base64.b64decode(content.encode("ascii"), validate=True)
+    if encoding in {"", "text", "utf-8", "utf8"}:
+        return _contenido_texto_o_base64(content, payload.get("content_type"))
+    raise ApiClientError(detail="API_EXPORT_CONTENT_ENCODING_UNSUPPORTED")
+
+
+def _contenido_texto_o_base64(content, content_type):
+    if content_type in {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }:
+        try:
+            return base64.b64decode(content.encode("ascii"), validate=True)
+        except (binascii.Error, UnicodeEncodeError):
+            pass
+    return content.encode("utf-8")
+
+
+def _nombre_archivo_seguro(value):
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("._") or "closed_report"
 
 
 def obtener_reportes(fecha_inicio, fecha_fin, patente="", hora_inicio=None, hora_fin=None, usuario="", movimiento="todos"):

@@ -1,6 +1,8 @@
 import unittest
 from contextlib import contextmanager
 from datetime import date, datetime, time
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from controllers import reportes_controller
@@ -210,6 +212,121 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(payload["totals"]["total_recaudado"], 3000)
         metric_catalog.assert_not_called()
         dashboard_api.assert_not_called()
+
+    @patch.object(reportes_controller, "obtener_reporte_cerrado_api")
+    def test_closed_report_normalizes_api_metadata_and_totals(self, closed_report_api):
+        closed_report_api.return_value = {
+            "report_id": "closed-42",
+            "period": {"from": "2026-09-01", "to": "2026-09-30", "state": "closed"},
+            "catalog_version": "catalog-v3",
+            "closure_reference": {"id": "closure-42", "closed_at": "2026-10-01T09:00:00"},
+            "operation_totals": {"operational_income_total": 150000, "operational_net_total": 142000},
+            "capacity": {"total": 40, "occupied": 12},
+            "historical_completeness": {"state": "complete", "reason": None},
+            "discrepancy": {"state": "none", "amount": 0},
+            "source_state": "api_archived",
+            "warnings": [],
+        }
+
+        payload = reportes_controller.obtener_reporte_cerrado("api-token", "closure-42")
+
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["report_id"], "closed-42")
+        self.assertEqual(payload["period"]["state"], "closed")
+        self.assertEqual(payload["catalog_version"], "catalog-v3")
+        self.assertEqual(payload["closure_reference"]["id"], "closure-42")
+        self.assertEqual(payload["operation_totals"]["operational_income_total"], 150000)
+        self.assertEqual(payload["capacity"], {"total": 40, "occupied": 12})
+        self.assertEqual(payload["historical_completeness"], {"state": "complete", "reason": None})
+        self.assertEqual(payload["completeness"], {"state": "complete", "reason": None})
+        self.assertEqual(payload["discrepancy"], {"state": "none", "amount": 0})
+        self.assertEqual(payload["source_state"], "api_archived")
+        self.assertEqual(payload["warnings"], [])
+        closed_report_api.assert_called_once_with("api-token", "closure-42")
+
+    @patch.object(reportes_controller, "obtener_reporte_cerrado_api")
+    def test_closed_report_preserves_incomplete_state_and_warnings(self, closed_report_api):
+        closed_report_api.return_value = {
+            "report_id": "closed-43",
+            "historical_completeness": {"state": "incomplete", "reason": "Missing legacy records"},
+            "warnings": ["Some historical records are not available"],
+        }
+
+        payload = reportes_controller.obtener_reporte_cerrado("api-token", "closure-43")
+
+        self.assertEqual(payload["historical_completeness"]["state"], "incomplete")
+        self.assertEqual(payload["completeness"]["reason"], "Missing legacy records")
+        self.assertEqual(payload["warnings"], ["Some historical records are not available"])
+        self.assertEqual(payload["operation_totals"], {})
+
+    @patch.object(reportes_controller, "obtener_reportes")
+    @patch.object(reportes_controller, "obtener_reporte_cerrado_api")
+    def test_closed_report_api_error_is_explicit_without_local_fallback(self, closed_report_api, local_reports):
+        closed_report_api.side_effect = ApiClientError(status=503, detail="API_UNAVAILABLE")
+
+        payload = reportes_controller.obtener_reporte_cerrado("api-token", "closure-44")
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["status"], 503)
+        self.assertEqual(payload["api_error"], "API_UNAVAILABLE")
+        local_reports.assert_not_called()
+
+    @patch.object(reportes_controller, "exportar_reporte_cerrado_api")
+    def test_closed_report_pdf_export_writes_returned_base64_content(self, export_api):
+        export_api.return_value = {
+            "format": "pdf",
+            "content_type": "application/pdf",
+            "metadata": {"report_id": "closed-42"},
+            "content": "JVBERi0xLjQ=",
+            "content_encoding": "base64",
+        }
+        with TemporaryDirectory() as output_dir:
+            payload = reportes_controller.exportar_reporte_cerrado(
+                "api-token",
+                "closure-42",
+                "pdf",
+                output_dir=output_dir,
+            )
+
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["format"], "pdf")
+            self.assertEqual(payload["content_type"], "application/pdf")
+            self.assertEqual(payload["metadata"], {"report_id": "closed-42"})
+            self.assertEqual(Path(payload["path"]).read_bytes(), b"%PDF-1.4")
+            self.assertEqual(Path(payload["path"]).name, "closed_closure-42.pdf")
+
+    @patch.object(reportes_controller, "exportar_reporte_cerrado_api")
+    def test_closed_report_xlsx_export_writes_returned_text_content(self, export_api):
+        export_api.return_value = {
+            "format": "xlsx",
+            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "metadata": {"report_id": "closed-43"},
+            "content": "spreadsheet-content",
+        }
+        with TemporaryDirectory() as output_dir:
+            payload = reportes_controller.exportar_reporte_cerrado(
+                "api-token",
+                "closure-43",
+                "xlsx",
+                output_dir=output_dir,
+            )
+
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["format"], "xlsx")
+            self.assertEqual(Path(payload["path"]).read_text(encoding="utf-8"), "spreadsheet-content")
+            self.assertEqual(Path(payload["path"]).name, "closed_closure-43.xlsx")
+
+    @patch.object(reportes_controller, "exportar_reporte_cerrado_api")
+    def test_closed_report_export_preserves_api_errors(self, export_api):
+        export_api.side_effect = ApiClientError(status=500, detail="EXPORT_FAILED")
+
+        payload = reportes_controller.exportar_reporte_cerrado("api-token", "closure-45", "pdf")
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["format"], "pdf")
+        self.assertEqual(payload["status"], 500)
+        self.assertEqual(payload["api_error"], "EXPORT_FAILED")
 
     @patch.object(reportes_controller, "db_cursor")
     def test_obtener_reportes_incluye_banos_si_no_filtra_patente(self, db_cursor):
