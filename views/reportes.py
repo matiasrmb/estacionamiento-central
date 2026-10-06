@@ -183,7 +183,9 @@ class ReportesWindow(QWidget):
         dashboard_layout.setSpacing(8)
 
         dashboard_header = QHBoxLayout()
-        dashboard_titulo = QLabel("Resumen canónico 1.3.0")
+        self.label_centro_inteligencia = QLabel("Centro de Inteligencia · Reportes y auditoría")
+        self.label_centro_inteligencia.setObjectName("TituloResumenModulo")
+        dashboard_titulo = self.label_centro_inteligencia
         dashboard_titulo.setObjectName("TituloResumenModulo")
         self.label_dashboard_estado = QLabel("Fuente: reporte local")
         self.label_dashboard_estado.setObjectName("SubtituloSeccion")
@@ -203,12 +205,16 @@ class ReportesWindow(QWidget):
         self.label_dashboard_capacidad = QLabel("Capacity: unavailable")
         self.label_dashboard_capacidad.setObjectName("SubtituloSeccion")
         self.label_dashboard_capacidad.setWordWrap(True)
+        self.label_dashboard_advertencias = QLabel("")
+        self.label_dashboard_advertencias.setObjectName("SubtituloSeccion")
+        self.label_dashboard_advertencias.setWordWrap(True)
         self._actualizar_resumen_dashboard_local(self.resultados)
 
         dashboard_layout.addLayout(dashboard_header)
         dashboard_layout.addLayout(self.dashboard_metricas_layout)
         dashboard_layout.addWidget(self.label_dashboard_completitud)
         dashboard_layout.addWidget(self.label_dashboard_capacidad)
+        dashboard_layout.addWidget(self.label_dashboard_advertencias)
         layout.addWidget(dashboard_group)
 
         # =========================================================
@@ -234,9 +240,16 @@ class ReportesWindow(QWidget):
         self.boton_exportacion_canonica = QPushButton("Export closed PDF")
         self.boton_exportacion_canonica.setObjectName("BotonSecundario")
         self.boton_exportacion_canonica.clicked.connect(lambda: self.exportar_reporte_cerrado_api("pdf"))
+        self.boton_exportacion_canonica.setVisible(False)
+        self.boton_exportacion_canonica.setEnabled(False)
         self.boton_exportacion_canonica_xlsx = QPushButton("Export closed XLSX")
         self.boton_exportacion_canonica_xlsx.setObjectName("BotonSecundario")
         self.boton_exportacion_canonica_xlsx.clicked.connect(lambda: self.exportar_reporte_cerrado_api("xlsx"))
+        self.boton_exportacion_canonica_xlsx.setVisible(False)
+        self.boton_exportacion_canonica_xlsx.setEnabled(False)
+        self.label_exportaciones_diferidas = QLabel("PDF/XLSX exports are deferred to 1.3.x.")
+        self.label_exportaciones_diferidas.setObjectName("SubtituloSeccion")
+        self.label_exportaciones_diferidas.setWordWrap(True)
 
         closed_header.addWidget(closed_title)
         closed_header.addStretch()
@@ -276,6 +289,7 @@ class ReportesWindow(QWidget):
         self.label_reporte_cerrado_advertencias.setWordWrap(True)
 
         closed_layout.addLayout(closed_header)
+        closed_layout.addWidget(self.label_exportaciones_diferidas)
         closed_layout.addLayout(self.reporte_cerrado_metricas_layout)
         closed_layout.addWidget(self.label_reporte_cerrado_periodo)
         closed_layout.addWidget(self.label_reporte_cerrado_fuente)
@@ -505,6 +519,8 @@ class ReportesWindow(QWidget):
         period_state = (payload or {}).get("period_state") or "open"
         if source == "local_fallback":
             estado = f"Fuente: reporte local · Periodo: {period_state} · Fuente datos: {source_state} · API no disponible"
+            if (payload or {}).get("official") is False or source_state == "local_fallback":
+                estado = f"{estado} · No oficial"
         elif not self.api_token:
             estado = f"Fuente: reporte local · Periodo: {period_state} · Fuente datos: {source_state} · Sin sesión API"
         else:
@@ -529,6 +545,10 @@ class ReportesWindow(QWidget):
             text = "Completeness: complete"
         self.label_dashboard_completitud.setText(text)
         self.label_dashboard_capacidad.setText(self._texto_capacidad_dashboard(payload.get("capacity")))
+        warnings = payload.get("warnings") or []
+        if not warnings and payload.get("source_state") == "local_fallback":
+            warnings = ["Local fallback is not official closure truth."]
+        self.label_dashboard_advertencias.setText("Warnings: " + "; ".join(warnings) if warnings else "")
 
     @staticmethod
     def _texto_capacidad_dashboard(capacity):
@@ -546,6 +566,9 @@ class ReportesWindow(QWidget):
             parts.append(f"available {available}")
         if not parts:
             return "Capacity: unavailable"
+        state = capacity.get("state")
+        if state:
+            parts.append(f"state {state}")
         return f"Capacity: {', '.join(parts)}"
 
     def _renderizar_metricas_dashboard(self, metricas):
@@ -567,6 +590,10 @@ class ReportesWindow(QWidget):
             "operational_income_total": "Total ingresos operacionales",
             "operational_expense_total": "Gastos operacionales",
             "operational_net_total": "Neto operacional",
+            "collected_sources_total": "Total recaudado",
+            "net_revenue_total": "Ingreso neto",
+            "monthly_payments_collected_total": "Mensualidades cobradas",
+            "vehicle_movement_count": "Movimientos de vehículos",
         }
         return etiqueta_api or etiquetas.get(nombre) or nombre or "Métrica"
 

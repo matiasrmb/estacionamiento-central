@@ -86,6 +86,31 @@ Completed Phase 2 tasks:
 | Runtime harness command/scenario and exact result | N/A: Phase 2 is a planning-only API derivative handoff. No runtime boundary exists inside the Desktop repo; API runtime tests belong to the API derivative. |
 | Rollback boundary | Remove `api-derivative-handoff.md`, revert only Phase 2 task checkboxes 2.1-2.4 in `tasks.md`, and remove only this Phase 2 section from `apply-progress.md`. |
 
+## Phase 3 Desktop Derivative Status
+
+Status: completed for the Desktop runtime derivative. Desktop remains the full administrative center consuming canonical API read models; local fallback is degraded consultation only and is labeled incomplete, local, and non-official.
+
+Completed Phase 3 tasks:
+- [x] 3.1 Added Desktop controller/view tests for corrected canonical labels, full-center navigation, state/capacity visibility, fallback warnings, and deferred exports.
+- [x] 3.2 Updated `controllers/reportes_controller.py` to preserve normalized API metadata and mark local API fallback as `local_fallback`, incomplete, `official=false`, and non-official via warnings.
+- [x] 3.3 Updated `views/reportes.py` to show the Desktop Intelligence Center label, render fallback warnings and capacity state, and hide 1.3.0 closed PDF/XLSX export buttons while noting 1.3.x deferral.
+
+### Phase 3 TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 3.1 | `tests/test_reportes_controller.py`, `tests/test_reportes_view.py` | Unit/view with mocks | ✅ `python -m unittest tests.test_reportes_controller tests.test_reportes_view` ran 28 tests OK before edits. | ✅ New/updated tests failed first: 30 tests with 2 failures and 4 errors for missing `official`, warnings, full-center label, hidden exports, and capacity state. | ✅ Focused command later ran 30 tests OK. | ✅ Covered API labels, API metadata, fallback metadata, fallback UI warning, full-center navigation, capacity state, and export deferral. | ➖ None beyond minimal behavior additions. |
+| 3.2 | `tests/test_reportes_controller.py` | Unit | ✅ Same focused safety net. | ✅ Controller tests required API metadata and non-official fallback fields not yet returned. | ✅ Focused command later ran 30 tests OK. | ✅ API success and API-unavailable fallback paths covered. | ➖ None needed. |
+| 3.3 | `tests/test_reportes_view.py` | Unit/view with mocks | ✅ Same focused safety net. | ✅ View tests required full-center label, fallback warning text, capacity state, and hidden export buttons before implementation. | ✅ Focused command later ran 30 tests OK. | ✅ API dashboard, local fallback, capacity-state helper, closed-report load, and deferred-export UI paths covered. | ➖ None needed. |
+
+### Phase 3 Work Unit Evidence
+
+| Evidence | Required value |
+|---|---|
+| Focused test command and exact result | `python -m unittest tests.test_reportes_controller tests.test_reportes_view` from repo root. Baseline before edits: exit 0, 28 tests OK. RED after test edits: exit 1, 30 tests with 2 failures and 4 errors. GREEN after implementation: exit 0, 30 tests OK. |
+| Runtime harness command/scenario and exact result | `python -m unittest discover -s tests` from repo root. Result recorded in final apply response after Phase 3 updates. |
+| Rollback boundary | Revert only Phase 3 changes in `controllers/reportes_controller.py`, `views/reportes.py`, `tests/test_reportes_controller.py`, `tests/test_reportes_view.py`; revert Phase 3 task checkboxes 3.1-3.3 in `tasks.md`; remove only this Phase 3 section from `apply-progress.md`. |
+
 ## Later Work Status
 
-Phase 3+ remains pending. Do not start Desktop, Mobile, Installer, application-code, test, version, branch, commit, push, or PR work from this Phase 2 artifact. API application-code work must occur only in a repo-scoped API derivative.
+Phase 4+ remains pending. Do not start Mobile, Installer, version, branch, commit, push, or PR work from this Phase 3 artifact. API application-code work must occur only in a repo-scoped API derivative.

@@ -42,8 +42,8 @@ class ObtenerReportesTests(unittest.TestCase):
             "version": "2026-09-29",
             "metrics": [
                 {
-                    "name": "operational_income_total",
-                    "meaning": "Payments collected from operational sources",
+                    "name": "collected_sources_total",
+                    "meaning": "All collected sources",
                     "sign": "positive",
                 },
                 {
@@ -52,8 +52,8 @@ class ObtenerReportesTests(unittest.TestCase):
                     "sign": "positive_expense_negative_result",
                 },
                 {
-                    "name": "operational_net_total",
-                    "meaning": "Income minus expenses",
+                    "name": "net_revenue_total",
+                    "meaning": "Collected sources minus expenses",
                     "sign": "signed",
                 },
             ],
@@ -62,9 +62,9 @@ class ObtenerReportesTests(unittest.TestCase):
             "period": {"id": "open:8", "state": "open"},
             "catalog_version": "2026-09-29",
             "metrics": {
-                "operational_income_total": 2500,
+                "collected_sources_total": 2500,
                 "operational_expense_total": 300,
-                "operational_net_total": 2200,
+                "net_revenue_total": 2200,
             },
         }
 
@@ -76,8 +76,8 @@ class ObtenerReportesTests(unittest.TestCase):
             payload["summary"],
             [
                 {
-                    "metric": "operational_income_total",
-                    "label": "Payments collected from operational sources",
+                    "metric": "collected_sources_total",
+                    "label": "All collected sources",
                     "sign": "positive",
                     "value": 2500,
                 },
@@ -88,8 +88,8 @@ class ObtenerReportesTests(unittest.TestCase):
                     "value": 300,
                 },
                 {
-                    "metric": "operational_net_total",
-                    "label": "Income minus expenses",
+                    "metric": "net_revenue_total",
+                    "label": "Collected sources minus expenses",
                     "sign": "signed",
                     "value": 2200,
                 },
@@ -127,6 +127,9 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(payload["completeness"], {"state": "complete", "reason": None})
         self.assertEqual(payload["capacity"], {"total": 40, "occupied": 12, "available": 28})
         self.assertEqual(payload["catalog_version"], "dashboard-v2")
+        self.assertTrue(payload["official"])
+        self.assertEqual(payload["calendar_secondary"], {})
+        self.assertEqual(payload["warnings"], [])
         self.assertEqual(
             payload["summary"],
             [
@@ -175,9 +178,11 @@ class ObtenerReportesTests(unittest.TestCase):
 
         self.assertEqual(payload["source"], "local_fallback")
         self.assertEqual(payload["source_state"], "local_fallback")
+        self.assertFalse(payload["official"])
         self.assertEqual(payload["period_state"], "open")
         self.assertEqual(payload["completeness"]["state"], "incomplete")
         self.assertIn("API_UNAVAILABLE", payload["completeness"]["reason"])
+        self.assertIn("Local fallback is not official closure truth.", payload["warnings"])
         self.assertIsNone(payload["capacity"])
         self.assertIsNone(payload["catalog_version"])
         self.assertEqual(payload["api_error"], "API_UNAVAILABLE")

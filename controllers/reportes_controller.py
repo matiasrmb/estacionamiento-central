@@ -102,6 +102,10 @@ def _normalizar_dashboard_reporting_api(catalog, dashboard):
         "completeness": dashboard.get("completeness") or {"state": "complete", "reason": None},
         "capacity": dashboard.get("capacity"),
         "catalog_version": dashboard.get("catalog_version") or catalog.get("version"),
+        "calendar_secondary": dashboard.get("calendar_secondary") or {},
+        "official": dashboard.get("official", True),
+        "warnings": dashboard.get("warnings") or [],
+        "audit_coverage": dashboard.get("audit_coverage") or [],
         "filters": dashboard.get("filters", {}),
         "pagination": dashboard.get("pagination", {}),
         "summary": [
@@ -127,6 +131,10 @@ def _agregar_metadata_fallback_local(local_payload, api_error):
     }
     local_payload["capacity"] = None
     local_payload["catalog_version"] = None
+    local_payload["calendar_secondary"] = {}
+    local_payload["official"] = False
+    local_payload["warnings"] = ["Local fallback is not official closure truth."]
+    local_payload["audit_coverage"] = []
     return local_payload
 
 
