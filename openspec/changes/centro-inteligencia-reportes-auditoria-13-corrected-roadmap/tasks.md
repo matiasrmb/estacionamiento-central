@@ -40,9 +40,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Desktop Derivative
 
-- [ ] 3.1 RED: Add Desktop tests for canonical labels, full-center navigation, state/capacity visibility, and non-official fallback warnings.
-- [ ] 3.2 Update `controllers/reportes_controller.py` to normalize API contracts and mark fallback as `local_fallback`, incomplete, and non-official.
-- [ ] 3.3 Update `views/reportes.py` full-center UI labels and remove/hide 1.3.0 export promises when exports remain deferred.
+- [x] 3.1 RED: Add Desktop tests for canonical labels, full-center navigation, state/capacity visibility, and non-official fallback warnings.
+- [x] 3.2 Update `controllers/reportes_controller.py` to normalize API contracts and mark fallback as `local_fallback`, incomplete, and non-official.
+- [x] 3.3 Update `views/reportes.py` full-center UI labels and remove/hide 1.3.0 export promises when exports remain deferred.
 
 ## Phase 4: Mobile Derivative Handoff
 
