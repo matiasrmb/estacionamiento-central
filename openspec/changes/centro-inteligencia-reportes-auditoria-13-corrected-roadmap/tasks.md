@@ -46,9 +46,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Mobile Derivative Handoff
 
-- [ ] 4.1 Create the Mobile repo-scoped derivative handoff for quick consultation, canonical labels, matched totals, and no full-center/export flows.
-- [ ] 4.2 Reference `../estacionamiento_central_mobile/lib/features/admin/reportes/**` (read-only) as evidence for canonical payload consumption and quick-consultation UI boundaries.
-- [ ] 4.3 Define Mobile verification expectations: `flutter test`, `flutter analyze`, and runtime harness availability in the Mobile derivative.
+- [x] 4.1 Create the Mobile repo-scoped derivative handoff for quick consultation, canonical labels, matched totals, and no full-center/export flows.
+- [x] 4.2 Reference `../estacionamiento_central_mobile/lib/features/admin/reportes/**` (read-only) as evidence for canonical payload consumption and quick-consultation UI boundaries.
+- [x] 4.3 Define Mobile verification expectations: `flutter test`, `flutter analyze`, and runtime harness availability in the Mobile derivative.
 
 ## Phase 5: Installer and Release Handoff
 
