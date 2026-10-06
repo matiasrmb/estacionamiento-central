@@ -113,4 +113,42 @@ Completed Phase 3 tasks:
 
 ## Later Work Status
 
-Phase 4+ remains pending. Do not start Mobile, Installer, version, branch, commit, push, or PR work from this Phase 3 artifact. API application-code work must occur only in a repo-scoped API derivative.
+## Phase 4 Mobile Derivative Handoff Status
+
+Status: completed for planning handoff only. The Mobile repo remains read-only from this Desktop-root apply work unit; no sibling repository files, application code, tests, branches, commits, pushes, or PRs were changed.
+
+Created artifact:
+- `openspec/changes/centro-inteligencia-reportes-auditoria-13-corrected-roadmap/mobile-derivative-handoff.md`.
+
+Completed Phase 4 tasks:
+- [x] 4.1 Created the Mobile repo-scoped derivative handoff for quick consultation, canonical labels, matched totals, and no full-center/export flows.
+- [x] 4.2 Referenced `../estacionamiento_central_mobile/lib/features/admin/reportes/**` as read-only evidence for canonical payload consumption and quick-consultation UI boundaries.
+- [x] 4.3 Defined Mobile verification expectations: `flutter test`, `flutter analyze`, and runtime harness availability in the Mobile derivative.
+
+### Phase 4 Evidence Matrix
+
+| Area | Read-only evidence | Mobile derivative instruction |
+|---|---|---|
+| Canonical payload consumption | `reportes_api.dart` calls `/reporting/metric-catalog` and `/reporting/dashboard`, then maps API metric names into dashboard cards. | Keep API-backed dashboard consumption, migrate from legacy metric names to corrected canonical names, and ensure Mobile card totals match API payload values without local financial recalculation. |
+| Quick-consultation UI boundary | `reportes_admin_screen.dart` is admin-gated, shows current catalog/journey/cards, and displays a deferred closed-report/export notice without export buttons or full-center navigation. | Preserve Mobile as quick consultation only; do not add Desktop-equivalent full center, closed-report management, PDF/XLSX/CSV export flows, or audit-management workflows in the 1.3.0 Mobile derivative. |
+| Verification expectations | `openspec/config.yaml` lists Mobile `flutter test`, `flutter analyze`, and Flutter widget/unit coverage. | The Mobile derivative must run `flutter test` and `flutter analyze`, and must explicitly record runtime harness availability or `N/A` with reason. |
+
+### Phase 4 TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4.1 | N/A | Structural planning artifact | N/A: no runtime code modified | N/A: no production behavior introduced | Structural readback required below | N/A: single planning artifact output | N/A |
+| 4.2 | N/A | Structural evidence reference | N/A: read-only sibling evidence | N/A: no production behavior introduced | Structural readback required below | N/A: evidence path presence check | N/A |
+| 4.3 | N/A | Structural verification plan | N/A: no runtime code modified | N/A: no production behavior introduced | Structural readback required below | N/A: verification expectation presence check | N/A |
+
+### Phase 4 Work Unit Evidence
+
+| Evidence | Required value |
+|---|---|
+| Focused readback command and exact result | `python -c "from pathlib import Path; base=Path('openspec/changes/centro-inteligencia-reportes-auditoria-13-corrected-roadmap'); tasks=(base/'tasks.md').read_text(encoding='utf-8'); progress=(base/'apply-progress.md').read_text(encoding='utf-8'); handoff=(base/'mobile-derivative-handoff.md').read_text(encoding='utf-8'); checks={'tasks_4_1_checked':'- [x] 4.1' in tasks,'tasks_4_2_checked':'- [x] 4.2' in tasks,'tasks_4_3_checked':'- [x] 4.3' in tasks,'tasks_5_1_pending':'- [ ] 5.1' in tasks,'handoff_exists':(base/'mobile-derivative-handoff.md').exists(),'api_ref':'../estacionamiento_central_mobile/lib/features/admin/reportes/data/reportes_api.dart' in handoff,'screen_ref':'../estacionamiento_central_mobile/lib/features/admin/reportes/presentation/reportes_admin_screen.dart' in handoff,'quick_consultation':'quick consultation' in handoff,'canonical_metrics':'collected_sources_total' in handoff and 'net_revenue_total' in handoff and 'monthly_payments_collected_total' in handoff,'verification':'flutter test' in handoff and 'flutter analyze' in handoff and 'runtime harness' in handoff,'phase4_progress':'## Phase 4 Mobile Derivative Handoff Status' in progress,'slice0_preserved':'## Keep / Change / Remove / Defer Matrix' in progress,'phase2_preserved':'## Phase 2 API Derivative Handoff Status' in progress,'phase3_preserved':'## Phase 3 Desktop Derivative Status' in progress}; print('\\n'.join(f'{k}: {v}' for k,v in checks.items())); raise SystemExit(0 if all(checks.values()) else 1)"` from repo root. Result: exit 0; all checks printed `True` for Phase 4 tasks checked, Phase 5 still pending, handoff file exists, both Mobile read-only evidence paths referenced, quick-consultation and canonical metric requirements present, `flutter test`/`flutter analyze`/runtime harness expectations present, and Slice 0/Phase 2/Phase 3 progress preserved. |
+| Runtime harness command/scenario and exact result | N/A: Phase 4 is a planning-only Mobile derivative handoff. No runtime boundary exists inside the Desktop repo; Mobile runtime verification belongs to the later `estacionamiento_central_mobile` derivative. |
+| Rollback boundary | Remove `mobile-derivative-handoff.md`, revert only Phase 4 task checkboxes 4.1-4.3 in `tasks.md`, and remove only this Phase 4 section from `apply-progress.md`. |
+
+## Later Work Status
+
+Phase 5 remains pending. Do not start Installer, version, branch, commit, push, or PR work from this Phase 4 artifact. Mobile application-code work must occur only in a repo-scoped Mobile derivative.
