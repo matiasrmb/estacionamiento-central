@@ -52,6 +52,6 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: Installer and Release Handoff
 
-- [ ] 5.1 Create the Installer/release handoff for API/Desktop payload manifest and version alignment.
-- [ ] 5.2 Reference `../estacionamiento-central-installer/**` (read-only) as evidence; installer edits must wait for an installer-scoped derivative or explicit release work.
-- [ ] 5.3 Define release verification expectations: API unittest, Desktop unittest, Mobile test/analyze, and Installer checklist after repo-scoped derivatives land.
+- [x] 5.1 Create the Installer/release handoff for API/Desktop payload manifest and version alignment.
+- [x] 5.2 Reference `../estacionamiento-central-installer/**` (read-only) as evidence; installer edits must wait for an installer-scoped derivative or explicit release work.
+- [x] 5.3 Define release verification expectations: API unittest, Desktop unittest, Mobile test/analyze, and Installer checklist after repo-scoped derivatives land.

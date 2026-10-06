@@ -151,4 +151,42 @@ Completed Phase 4 tasks:
 
 ## Later Work Status
 
-Phase 5 remains pending. Do not start Installer, version, branch, commit, push, or PR work from this Phase 4 artifact. Mobile application-code work must occur only in a repo-scoped Mobile derivative.
+## Phase 5 Installer and Release Handoff Status
+
+Status: completed for planning handoff only. The Installer repo remains read-only from this Desktop-root apply work unit; no sibling repository files, application code, tests, payloads, versions, branches, commits, pushes, or PRs were changed.
+
+Created artifact:
+- `openspec/changes/centro-inteligencia-reportes-auditoria-13-corrected-roadmap/installer-release-handoff.md`.
+
+Completed Phase 5 tasks:
+- [x] 5.1 Created the Installer/release handoff for API/Desktop payload manifest and version alignment.
+- [x] 5.2 Referenced `../estacionamiento-central-installer/**` as read-only evidence; installer edits must wait for an installer-scoped derivative or explicit release work.
+- [x] 5.3 Defined release verification expectations: API unittest, Desktop unittest, Mobile test/analyze, and Installer checklist after repo-scoped derivatives land.
+
+### Phase 5 Evidence Matrix
+
+| Area | Read-only evidence | Installer/release instruction |
+|---|---|---|
+| Installer version and packaged payloads | `../estacionamiento-central-installer/EstacionamientoCentral.iss` declares `AppVersion=1.3.0`, `OutputBaseFilename=Instalador_EstacionamientoCentral_1.3.0`, packages Desktop from `app\EstacionamientoCentral\*`, packages API from `payload\api\*`, and runs service/production-health setup. | Keep Installer edits out of this Desktop handoff. Later installer/release work must align version/output naming and package post-derivative API/Desktop payloads only. |
+| API payload manifest provenance | `../estacionamiento-central-installer/payload/api/API_PAYLOAD_MANIFEST.json` records source API revision, clean tracked-change state, required executable hashes, copied files, exclusions, and the staging-provenance limitation. | Regenerate or refresh the manifest only after the API derivative lands and verify executable hashes, source revision, clean source state, and scope limitations before packaging. |
+| Release verification boundary | `openspec/config.yaml` lists API/Desktop unittest commands, Mobile `flutter test`/`flutter analyze`, and Installer manual/build expectations. | Release readiness must include API unittest, Desktop unittest, Mobile test/analyze, and an Installer checklist after repo-scoped derivatives land. |
+
+### Phase 5 TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5.1 | N/A | Structural planning artifact | N/A: no runtime code modified | N/A: no production behavior introduced | Structural readback required below | N/A: single planning artifact output | N/A |
+| 5.2 | N/A | Structural evidence reference | N/A: read-only sibling evidence | N/A: no production behavior introduced | Structural readback required below | N/A: evidence path presence check | N/A |
+| 5.3 | N/A | Structural verification plan | N/A: no runtime code modified | N/A: no production behavior introduced | Structural readback required below | N/A: verification expectation presence check | N/A |
+
+### Phase 5 Work Unit Evidence
+
+| Evidence | Required value |
+|---|---|
+| Focused readback command and exact result | `python -c "from pathlib import Path; base=Path('openspec/changes/centro-inteligencia-reportes-auditoria-13-corrected-roadmap'); tasks=(base/'tasks.md').read_text(encoding='utf-8'); progress=(base/'apply-progress.md').read_text(encoding='utf-8'); handoff=(base/'installer-release-handoff.md').read_text(encoding='utf-8'); checks={'tasks_5_1_checked':'- [x] 5.1' in tasks,'tasks_5_2_checked':'- [x] 5.2' in tasks,'tasks_5_3_checked':'- [x] 5.3' in tasks,'handoff_exists':(base/'installer-release-handoff.md').exists(),'installer_ref':'../estacionamiento-central-installer/**' in handoff,'iss_ref':'../estacionamiento-central-installer/EstacionamientoCentral.iss' in handoff,'manifest_ref':'../estacionamiento-central-installer/payload/api/API_PAYLOAD_MANIFEST.json' in handoff,'api_unittest':'python -m unittest discover -s tests' in handoff,'desktop_unittest':'python -m unittest discover -s tests' in handoff,'mobile_test':'flutter test' in handoff and 'flutter analyze' in handoff,'installer_checklist':'Installer checklist' in handoff,'phase5_progress':'## Phase 5 Installer and Release Handoff Status' in progress,'slice0_preserved':'## Keep / Change / Remove / Defer Matrix' in progress,'phase2_preserved':'## Phase 2 API Derivative Handoff Status' in progress,'phase3_preserved':'## Phase 3 Desktop Derivative Status' in progress,'phase4_preserved':'## Phase 4 Mobile Derivative Handoff Status' in progress}; print('\\n'.join(f'{k}: {v}' for k,v in checks.items())); raise SystemExit(0 if all(checks.values()) else 1)"` from repo root. Result: exit 0; all checks printed `True` for Phase 5 tasks checked, handoff file exists, Installer read-only evidence references present, API/Desktop unittest and Mobile test/analyze expectations present, Installer checklist present, and Slice 0/Phase 2/Phase 3/Phase 4 progress preserved. |
+| Runtime harness command/scenario and exact result | N/A: Phase 5 is a planning-only Installer/release handoff. No runtime boundary exists inside the Desktop repo; runtime verification belongs to API, Desktop, Mobile, and Installer release derivatives after they land. |
+| Rollback boundary | Remove `installer-release-handoff.md`, revert only Phase 5 task checkboxes 5.1-5.3 in `tasks.md`, and remove only this Phase 5 section from `apply-progress.md`. |
+
+## Later Work Status
+
+All corrected-roadmap apply tasks are complete. Do not start Installer, version, branch, commit, push, PR, or release work from this Phase 5 artifact. Installer and release edits must occur only in a repo-scoped installer derivative or explicit release work after API, Desktop, and Mobile derivatives land.
