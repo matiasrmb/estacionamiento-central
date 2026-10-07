@@ -3,7 +3,6 @@
 import json
 import uuid
 from configparser import ConfigParser
-from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -89,9 +88,8 @@ def obtener_catalogo_metricas_reporting(token):
     return _request("GET", "/reporting/metric-catalog", token=token)
 
 
-def obtener_dashboard_reporting(token, period_id="current", state="open"):
-    query = urlencode({"period_id": period_id, "state": state})
-    return _request("GET", f"/reporting/dashboard?{query}", token=token)
+def obtener_dashboard_reporting(token):
+    return _request("GET", "/reporting/dashboard", token=token)
 
 
 def obtener_reporte_cerrado(token, closure_id):

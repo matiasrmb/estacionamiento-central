@@ -61,17 +61,22 @@ class ObtenerReportesTests(unittest.TestCase):
         dashboard_api.return_value = {
             "period": {"id": "open:8", "state": "open"},
             "catalog_version": "2026-09-29",
+            "filters": {"source": "all", "state": "api-owned"},
             "metrics": {
                 "collected_sources_total": 2500,
                 "operational_expense_total": 300,
                 "net_revenue_total": 2200,
             },
+            "pagination": {"page": 1, "per_page": 50, "total": 3},
         }
 
         payload = reportes_controller.obtener_resumen_dashboard_reportes(token="api-token")
 
         self.assertEqual(payload["source"], "api")
         self.assertEqual(payload["catalog_version"], "2026-09-29")
+        self.assertEqual(payload["period"], {"id": "open:8", "state": "open"})
+        self.assertEqual(payload["filters"], {"source": "all", "state": "api-owned"})
+        self.assertEqual(payload["pagination"], {"page": 1, "per_page": 50, "total": 3})
         self.assertEqual(
             payload["summary"],
             [
@@ -96,7 +101,7 @@ class ObtenerReportesTests(unittest.TestCase):
             ],
         )
         metric_catalog.assert_called_once_with("api-token")
-        dashboard_api.assert_called_once_with("api-token", period_id="current", state="open")
+        dashboard_api.assert_called_once_with("api-token")
 
     @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
     @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
@@ -130,6 +135,7 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertTrue(payload["official"])
         self.assertEqual(payload["calendar_secondary"], {})
         self.assertEqual(payload["warnings"], [])
+        dashboard_api.assert_called_once_with("api-token")
         self.assertEqual(
             payload["summary"],
             [
