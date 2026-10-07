@@ -62,13 +62,11 @@ def obtener_resumen_dashboard_reportes(
     fecha_inicio=None,
     fecha_fin=None,
     token=None,
-    period_id="current",
-    state="open",
 ):
     if token:
         try:
             catalog = obtener_catalogo_metricas_reporting_api(token)
-            dashboard = obtener_dashboard_reporting_api(token, period_id=period_id, state=state)
+            dashboard = obtener_dashboard_reporting_api(token)
             return _normalizar_dashboard_reporting_api(catalog, dashboard)
         except ApiClientError as exc:
             if not fecha_inicio or not fecha_fin:
