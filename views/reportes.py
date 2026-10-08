@@ -11,6 +11,7 @@ from controllers.reportes_controller import (
     obtener_reportes,
     obtener_resumen_dashboard_reportes,
     obtener_reporte_cerrado,
+    obtener_operaciones_reporte_cerrado,
     exportar_reporte_cerrado,
     exportar_pdf,
 )
@@ -32,6 +33,7 @@ class ReportesWindow(QWidget):
         self.resultados = {"items": [], "totals": {}}
         self.ultimos_filtros = None
         self.reporte_cerrado_actual = None
+        self.operaciones_offset = 0
         self.init_ui()
 
     def init_ui(self):
@@ -288,6 +290,67 @@ class ReportesWindow(QWidget):
         self.label_reporte_cerrado_advertencias.setObjectName("SubtituloSeccion")
         self.label_reporte_cerrado_advertencias.setWordWrap(True)
 
+        operations_controls = QGridLayout()
+        operations_controls.setHorizontalSpacing(10)
+        operations_controls.setVerticalSpacing(8)
+        self.input_operacion_categoria = QLineEdit()
+        self.input_operacion_categoria.setPlaceholderText("Category")
+        self.input_operacion_operador = QLineEdit()
+        self.input_operacion_operador.setPlaceholderText("Operator")
+        self.input_operacion_patente = QLineEdit()
+        self.input_operacion_patente.setPlaceholderText("Plate")
+        self.combo_operacion_orden = QComboBox()
+        self.combo_operacion_orden.addItems(["timestamp", "category", "amount", "operator", "plate"])
+        self.combo_operacion_direccion = QComboBox()
+        self.combo_operacion_direccion.addItems(["desc", "asc"])
+        self.combo_operacion_limite = QComboBox()
+        self.combo_operacion_limite.addItems(["10", "25", "50"])
+        self.combo_operacion_limite.setCurrentText("25")
+        self.boton_operaciones_buscar = QPushButton("Load operations")
+        self.boton_operaciones_buscar.setObjectName("BotonSecundario")
+        self.boton_operaciones_buscar.clicked.connect(self._buscar_operaciones_desde_inicio)
+        self.boton_operaciones_anterior = QPushButton("Previous")
+        self.boton_operaciones_anterior.setObjectName("BotonSecundario")
+        self.boton_operaciones_anterior.clicked.connect(self._operaciones_pagina_anterior)
+        self.boton_operaciones_siguiente = QPushButton("Next")
+        self.boton_operaciones_siguiente.setObjectName("BotonSecundario")
+        self.boton_operaciones_siguiente.clicked.connect(self._operaciones_pagina_siguiente)
+        self.boton_operaciones_anterior.setEnabled(False)
+        self.boton_operaciones_siguiente.setEnabled(False)
+
+        operations_controls.addWidget(QLabel("Category"), 0, 0)
+        operations_controls.addWidget(self.input_operacion_categoria, 0, 1)
+        operations_controls.addWidget(QLabel("Operator"), 0, 2)
+        operations_controls.addWidget(self.input_operacion_operador, 0, 3)
+        operations_controls.addWidget(QLabel("Plate"), 0, 4)
+        operations_controls.addWidget(self.input_operacion_patente, 0, 5)
+        operations_controls.addWidget(QLabel("Sort"), 1, 0)
+        operations_controls.addWidget(self.combo_operacion_orden, 1, 1)
+        operations_controls.addWidget(QLabel("Direction"), 1, 2)
+        operations_controls.addWidget(self.combo_operacion_direccion, 1, 3)
+        operations_controls.addWidget(QLabel("Limit"), 1, 4)
+        operations_controls.addWidget(self.combo_operacion_limite, 1, 5)
+        operations_controls.addWidget(self.boton_operaciones_buscar, 1, 6)
+        operations_controls.addWidget(self.boton_operaciones_anterior, 2, 5)
+        operations_controls.addWidget(self.boton_operaciones_siguiente, 2, 6)
+
+        self.label_operaciones_estado = QLabel("Operations: load a closed report to inspect API-owned rows.")
+        self.label_operaciones_estado.setObjectName("SubtituloSeccion")
+        self.label_operaciones_estado.setWordWrap(True)
+        self.label_operaciones_paginacion = QLabel("Pagination: unavailable")
+        self.label_operaciones_paginacion.setObjectName("SubtituloSeccion")
+        self.label_operaciones_paginacion.setWordWrap(True)
+        self.label_operaciones_advertencias = QLabel("")
+        self.label_operaciones_advertencias.setObjectName("SubtituloSeccion")
+        self.label_operaciones_advertencias.setWordWrap(True)
+        self.tabla_operaciones_reporte = QTableWidget()
+        self.tabla_operaciones_reporte.setColumnCount(5)
+        self.tabla_operaciones_reporte.setHorizontalHeaderLabels(["Category", "Amount", "Operator", "Plate", "Timestamp"])
+        self.tabla_operaciones_reporte.setAlternatingRowColors(True)
+        self.tabla_operaciones_reporte.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla_operaciones_reporte.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabla_operaciones_reporte.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
         closed_layout.addLayout(closed_header)
         closed_layout.addWidget(self.label_exportaciones_diferidas)
         closed_layout.addLayout(self.reporte_cerrado_metricas_layout)
@@ -296,6 +359,11 @@ class ReportesWindow(QWidget):
         closed_layout.addWidget(self.label_reporte_cerrado_completitud)
         closed_layout.addWidget(self.label_reporte_cerrado_capacidad)
         closed_layout.addWidget(self.label_reporte_cerrado_advertencias)
+        closed_layout.addLayout(operations_controls)
+        closed_layout.addWidget(self.label_operaciones_estado)
+        closed_layout.addWidget(self.label_operaciones_paginacion)
+        closed_layout.addWidget(self.label_operaciones_advertencias)
+        closed_layout.addWidget(self.tabla_operaciones_reporte)
         layout.addWidget(closed_group)
 
         # =========================================================
@@ -319,6 +387,10 @@ class ReportesWindow(QWidget):
         self.tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
         self.tabla.horizontalHeader().sectionClicked.connect(self.ordenar_tabla)
 
+        self.label_reportes_locales_legacy = QLabel("legacy/local calendar report consultation")
+        self.label_reportes_locales_legacy.setObjectName("SubtituloSeccion")
+        self.label_reportes_locales_legacy.setWordWrap(True)
+        layout.addWidget(self.label_reportes_locales_legacy)
         layout.addWidget(self.tabla, 1)
 
         self.setLayout(layout)
@@ -608,6 +680,8 @@ class ReportesWindow(QWidget):
             return
         self.reporte_cerrado_actual = payload
         self._renderizar_reporte_cerrado(payload)
+        self.operaciones_offset = 0
+        self.cargar_operaciones_reporte_cerrado()
         QMessageBox.information(self, "Closed report", "Closed report loaded from the API.")
 
     def _mostrar_error_reporte_cerrado(self, payload):
@@ -642,6 +716,87 @@ class ReportesWindow(QWidget):
         self.card_reporte_cerrado_bruto.label_valor.setText(f"${totals.get('total_general', 0):.0f}")
         self.card_reporte_cerrado_gastos.label_valor.setText(f"${totals.get('total_gastos', 0):.0f}")
         self.card_reporte_cerrado_neto.label_valor.setText(f"${totals.get('total_neto', 0):.0f}")
+
+    def _operaciones_filtros(self):
+        return {
+            "category": self.input_operacion_categoria.text().strip(),
+            "operator": self.input_operacion_operador.text().strip(),
+            "plate": self.input_operacion_patente.text().strip().upper(),
+            "sort": self.combo_operacion_orden.currentText(),
+            "direction": self.combo_operacion_direccion.currentText(),
+            "limit": int(self.combo_operacion_limite.currentText()),
+            "offset": self.operaciones_offset,
+        }
+
+    def _buscar_operaciones_desde_inicio(self):
+        self.operaciones_offset = 0
+        self.cargar_operaciones_reporte_cerrado()
+
+    def _operaciones_pagina_anterior(self):
+        limit = int(self.combo_operacion_limite.currentText())
+        self.operaciones_offset = max(0, self.operaciones_offset - limit)
+        self.cargar_operaciones_reporte_cerrado()
+
+    def _operaciones_pagina_siguiente(self):
+        limit = int(self.combo_operacion_limite.currentText())
+        self.operaciones_offset += limit
+        self.cargar_operaciones_reporte_cerrado()
+
+    def cargar_operaciones_reporte_cerrado(self):
+        closure = (self.reporte_cerrado_actual or {}).get("closure_reference") or {}
+        closure_id = closure.get("id")
+        if not closure_id:
+            self.label_operaciones_estado.setText("Operations: load a closed report before requesting rows.")
+            return
+        payload = obtener_operaciones_reporte_cerrado(
+            self.api_token,
+            closure_id,
+            **self._operaciones_filtros(),
+        )
+        self._renderizar_operaciones_reporte(payload)
+
+    def _renderizar_operaciones_reporte(self, payload):
+        if not payload.get("ok"):
+            detail = payload.get("api_error") or "Operation request failed."
+            status = payload.get("status")
+            suffix = f" (status {status})" if status else ""
+            self.label_operaciones_estado.setText(f"Operations error: {detail}{suffix}")
+            self.label_operaciones_paginacion.setText("Pagination: unavailable")
+            self.label_operaciones_advertencias.setText("")
+            self.tabla_operaciones_reporte.setRowCount(0)
+            self.boton_operaciones_anterior.setEnabled(False)
+            self.boton_operaciones_siguiente.setEnabled(False)
+            return
+
+        rows = payload.get("rows") or []
+        self.tabla_operaciones_reporte.setRowCount(len(rows))
+        for row_index, row in enumerate(rows):
+            amount = row.get("amount") or 0
+            items = [
+                QTableWidgetItem(str(row.get("category") or "-")),
+                QTableWidgetItem(f"${float(amount):.0f}"),
+                QTableWidgetItem(str(row.get("operator") or "-")),
+                QTableWidgetItem(str(row.get("plate") or "-")),
+                QTableWidgetItem(str(row.get("timestamp") or "-")),
+            ]
+            items[1].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            for column, item in enumerate(items):
+                self.tabla_operaciones_reporte.setItem(row_index, column, item)
+
+        pagination = payload.get("pagination") or {}
+        limit = int(pagination.get("limit") or self.combo_operacion_limite.currentText())
+        offset = int(pagination.get("offset") or 0)
+        total = int(pagination.get("total") or len(rows))
+        start = offset + 1 if total else 0
+        end = min(offset + limit, total) if total else 0
+        self.label_operaciones_paginacion.setText(f"Pagination: {start}-{end} of {total}")
+        if total == 1 and len(rows) == 1:
+            self.label_operaciones_paginacion.setText("Pagination: 1 of 1")
+        self.label_operaciones_estado.setText("Operations loaded from API." if rows else "No operations found for this closed report.")
+        warnings = payload.get("warnings") or []
+        self.label_operaciones_advertencias.setText("Warnings: " + "; ".join(warnings) if warnings else "")
+        self.boton_operaciones_anterior.setEnabled(offset > 0)
+        self.boton_operaciones_siguiente.setEnabled(offset + limit < total)
 
     @staticmethod
     def _texto_completitud_reporte_cerrado(completeness):

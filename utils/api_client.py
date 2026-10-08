@@ -4,6 +4,7 @@ import json
 import uuid
 from configparser import ConfigParser
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from utils.db import get_base_paths
@@ -14,6 +15,10 @@ class ApiClientError(RuntimeError):
         super().__init__(detail or "API_REQUEST_FAILED")
         self.status = status
         self.detail = detail
+
+
+ALLOWED_OPERATION_PARAMS = {"category", "operator", "plate", "sort", "direction", "limit", "offset"}
+ORDERED_OPERATION_PARAMS = ("category", "operator", "plate", "sort", "direction", "limit", "offset")
 
 
 def _api_base_url():
@@ -94,6 +99,20 @@ def obtener_dashboard_reporting(token):
 
 def obtener_reporte_cerrado(token, closure_id):
     return _request("GET", f"/reporting/reports/closed/{closure_id}", token=token)
+
+
+def obtener_operaciones_reporte(token, closure_id, **params):
+    query = {"period_id": f"closure:{closure_id}"}
+    for key in ORDERED_OPERATION_PARAMS:
+        value = params.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                continue
+        query[key] = value
+    return _request("GET", f"/reporting/reports/operations?{urlencode(query)}", token=token)
 
 
 def exportar_reporte_cerrado(token, closure_id, formato):
