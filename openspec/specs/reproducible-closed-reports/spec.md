@@ -73,18 +73,19 @@ The system MUST show discrepancies between closure reference values and recalcul
 
 ### Requirement: PDF/XLSX Export Reproducibility Boundary
 
-Closed-period PDF and XLSX exports MAY be deferred to 1.3.x and MUST NOT block 1.3.0 reporting readiness. When delivered, exports MUST include enough metadata to reproduce the exact report and MUST use closure/journey truth. Affected repos: API, Desktop, Mobile, Installer if packaging assets are required.
-(Previously: PDF and CSV exports were required as part of closed-report export reproducibility.)
+Desktop closed-period PDF and XLSX exports MUST be available only for loaded API-backed closed reports with a closure reference. Exported output MUST preserve closure/journey truth and include enough metadata to reproduce the exact report. CSV MUST remain absent and unsupported. This change MUST NOT alter API, Mobile, Installer, audit inventory, user-selected destination, CSV, or local fallback export behavior. Affected repo: Desktop.
+(Previously: PDF/XLSX exports could be deferred to 1.3.x and did not define Desktop enablement conditions.)
 
-#### Scenario: Exports deferred from 1.3.0
+#### Scenario: Export controls require a valid API-backed closure
 
-- GIVEN 1.3.0 reporting is planned without export delivery
-- WHEN readiness is evaluated
-- THEN missing PDF/XLSX exports do not block the release scope.
+- GIVEN no report, a local calendar report, or an API payload without closure reference is loaded
+- WHEN Desktop renders export controls
+- THEN PDF and XLSX controls are hidden or disabled
+- AND CSV is not shown or promised.
 
 #### Scenario: Export includes reproducibility metadata
 
-- GIVEN an admin exports a closed report in a later export slice
+- GIVEN an admin exports a loaded API-backed closed report with a closure reference
 - WHEN PDF or XLSX is generated
 - THEN it includes report id, journey bounds, closure reference id, generated timestamp, metric catalog version, filters, and source state.
 
@@ -93,46 +94,54 @@ Closed-period PDF and XLSX exports MAY be deferred to 1.3.x and MUST NOT block 1
 - GIVEN a spreadsheet export is offered
 - WHEN the admin requests it
 - THEN the format is XLSX
-- AND the flow does not promise CSV as the target format.
+- AND the flow does not label, request, or promise CSV.
+
 ### Requirement: Desktop Closed and Export Roadmap Boundaries
 
-Desktop MUST replace the closed-report and export roadmap-boundary entry points with operational API-backed closed-report retrieval and PDF/XLSX export flows. Desktop MUST remain an admin-only consumer of existing API contracts, MUST display reproducibility, source, completeness, warning, and error states returned by the API, and MUST NOT add API endpoints, database schema, Mobile behavior, installer behavior, CSV export promises, historical plate UI, anomaly UI, or formal accounting behavior. Affected repo: Desktop.
-(Previously: Desktop exposed visible closed-report and PDF/CSV export entry points as future-only boundaries and did not call API-backed closed/export flows.)
+Desktop MUST retrieve closed reports through existing API-backed flows and MUST enable PDF/XLSX export controls only after a valid API-backed closed report with a closure reference is loaded. Export actions MUST call the existing `exportar_reporte_cerrado` path, surface saved path/status on success, preserve API/controller error details on failure, and keep the loaded report available for retry unless the report itself becomes invalid. Desktop MUST remain an admin-only consumer of existing API contracts, MUST display reproducibility, source, completeness, warning, and error states returned by the API, and MUST NOT add API endpoints, database schema, Mobile behavior, installer behavior, CSV export promises, historical plate UI, anomaly UI, local fallback exports, or formal accounting behavior. Affected repo: Desktop.
+(Previously: Desktop exposed closed-report retrieval but treated PDF/XLSX export delivery as a roadmap boundary.)
 
 #### Scenario: Closed report is retrieved from the API
 
 - GIVEN an admin opens Desktop reporting and selects a closed report
 - WHEN the API returns a closed-report payload
 - THEN Desktop MUST display the report id, period bounds, closure reference, totals, and reproducibility metadata
-- AND Desktop MUST show the API source and completeness state
+- AND Desktop MUST show the API source and completeness state.
 
-#### Scenario: Incomplete closed report remains usable with warnings
+#### Scenario: Export controls become available after valid load
 
-- GIVEN the API returns a closed report marked incomplete or warning-bearing
-- WHEN Desktop renders the closed report
-- THEN Desktop MUST keep the report visible to the admin
-- AND Desktop MUST show the incompleteness or warning message without treating it as formal accounting
+- GIVEN an admin has loaded an API-backed closed report with a closure reference
+- WHEN Desktop renders the closed-report actions
+- THEN PDF and XLSX controls are visible and enabled
+- AND local calendar report state cannot enable them.
+
+#### Scenario: PDF export request is operational
+
+- GIVEN an admin views an API-backed closed report with a closure reference
+- WHEN the admin requests PDF export
+- THEN Desktop MUST call `exportar_reporte_cerrado` for PDF
+- AND Desktop MUST show the saved path or success status returned by the controller.
+
+#### Scenario: XLSX export request is operational
+
+- GIVEN an admin views an API-backed closed report with a closure reference
+- WHEN the admin requests spreadsheet export
+- THEN Desktop MUST call `exportar_reporte_cerrado` for XLSX
+- AND Desktop MUST NOT label, request, or promise CSV export for this flow.
+
+#### Scenario: Export failure is retryable
+
+- GIVEN an admin has loaded a valid API-backed closed report
+- WHEN the export controller or API returns an error
+- THEN Desktop MUST show the actionable error details
+- AND Desktop MUST keep the loaded report available for another export attempt.
 
 #### Scenario: Closed report API failure is explicit
 
 - GIVEN an admin requests a closed report
 - WHEN the API request fails or returns an error payload
 - THEN Desktop MUST show an actionable error state
-- AND Desktop MUST NOT fabricate closed-report totals from local fallback data
-
-#### Scenario: PDF export request is operational
-
-- GIVEN an admin views an API-backed closed report
-- WHEN the admin requests PDF export
-- THEN Desktop MUST request the API-backed PDF export and surface the returned file or download result
-- AND Desktop MUST preserve API error details if the export fails
-
-#### Scenario: XLSX export replaces CSV promise
-
-- GIVEN an admin views an API-backed closed report
-- WHEN the admin requests spreadsheet export
-- THEN Desktop MUST request XLSX export
-- AND Desktop MUST NOT label, request, or promise CSV export for this flow
+- AND Desktop MUST NOT fabricate closed-report totals or exports from local fallback data.
 ### Requirement: Desktop Closed Report Operation Drill-Down
 
 Desktop MUST let admins inspect API-owned operation rows for a loaded closed report by requesting `GET /reporting/reports/operations` with `period_id=closure:{id}`. Desktop MUST render each returned operation row with category, amount, operator, plate, and timestamp fields, and MUST preserve API pagination, status, warnings, and error states. Affected repo: Desktop.

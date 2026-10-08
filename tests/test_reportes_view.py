@@ -23,6 +23,21 @@ class ReportesViewTests(unittest.TestCase):
     def _dashboard_card_titles(self, vista):
         return [card.layout().itemAt(0).widget().text() for card in vista.dashboard_metric_cards]
 
+    def _api_closed_report_payload(self, closure_id="closure-2026-01"):
+        return {
+            "ok": True,
+            "source": "api",
+            "report_id": "closed-report-1",
+            "period": {"from": "2026-01-01", "to": "2026-01-31", "state": "closed"},
+            "closure_reference": {"id": closure_id, "closed_at": "2026-02-01T00:00:00Z"},
+            "operation_totals": {"total_general": 12000, "total_gastos": 2000, "total_neto": 10000},
+            "source_state": "canonical_snapshot",
+            "catalog_version": "1.3.0",
+            "historical_completeness": {"state": "complete", "reason": None},
+            "capacity": {"total": 40, "occupied": 12, "available": 28},
+            "warnings": [],
+        }
+
     @patch("views.reportes.QMessageBox.information")
     @patch("views.reportes.obtener_resumen_dashboard_reportes")
     @patch("views.reportes.obtener_reportes")
@@ -129,15 +144,16 @@ class ReportesViewTests(unittest.TestCase):
         self.assertEqual([card.label_valor.text() for card in vista.dashboard_metric_cards[:3]], ["$2500", "$0", "$2500"])
         vista.close()
 
-    def test_full_center_navigation_is_visible_and_exports_are_deferred(self):
+    def test_full_center_navigation_keeps_closed_exports_disabled_until_valid_api_report(self):
         vista = self._crear_vista(api_token="desktop-token")
 
         self.assertIn("Centro de Inteligencia", vista.label_centro_inteligencia.text())
         self.assertFalse(vista.boton_reportes_cerrados.isHidden())
         self.assertTrue(vista.boton_exportacion_canonica.isHidden())
         self.assertTrue(vista.boton_exportacion_canonica_xlsx.isHidden())
-        self.assertIn("1.3.x", vista.label_exportaciones_diferidas.text())
-        self.assertNotIn("1.3.0", vista.label_exportaciones_diferidas.text())
+        self.assertFalse(vista.boton_exportacion_canonica.isEnabled())
+        self.assertFalse(vista.boton_exportacion_canonica_xlsx.isEnabled())
+        self.assertNotIn("CSV", vista.label_exportaciones_diferidas.text())
         vista.close()
 
     def test_capacity_state_is_rendered_with_historical_limitation(self):
@@ -155,6 +171,7 @@ class ReportesViewTests(unittest.TestCase):
     def test_loads_api_closed_report_and_renders_metadata_without_local_fallback(self, cerrado, operations, _input, information):
         cerrado.return_value = {
             "ok": True,
+            "source": "api",
             "report_id": "closed-report-1",
             "period": {"from": "2026-01-01", "to": "2026-01-31", "state": "closed"},
             "closure_reference": {"id": "closure-2026-01", "closed_at": "2026-02-01T00:00:00Z"},
@@ -183,6 +200,10 @@ class ReportesViewTests(unittest.TestCase):
         self.assertIn("Completeness: complete", vista.label_reporte_cerrado_completitud.text())
         self.assertIn("Capacity: total 40", vista.label_reporte_cerrado_capacidad.text())
         self.assertEqual([card.label_valor.text() for card in vista.reporte_cerrado_metric_cards], ["$12000", "$2000", "$10000"])
+        self.assertFalse(vista.boton_exportacion_canonica.isHidden())
+        self.assertFalse(vista.boton_exportacion_canonica_xlsx.isHidden())
+        self.assertTrue(vista.boton_exportacion_canonica.isEnabled())
+        self.assertTrue(vista.boton_exportacion_canonica_xlsx.isEnabled())
         information.assert_called_once()
         self.assertIn("Closed report loaded", information.call_args.args[2])
         vista.close()
@@ -194,6 +215,7 @@ class ReportesViewTests(unittest.TestCase):
     def test_closed_report_operation_rows_render_core_fields(self, cerrado, operations, _input, _information):
         cerrado.return_value = {
             "ok": True,
+            "source": "api",
             "report_id": "closed-42",
             "period": {"from": "2026-01-01", "to": "2026-01-31"},
             "closure_reference": {"id": 42},
@@ -286,6 +308,12 @@ class ReportesViewTests(unittest.TestCase):
         self.assertEqual(vista.tabla.columnCount(), 7)
         self.assertEqual(vista.tabla_operaciones_reporte.columnCount(), 5)
         self.assertTrue(vista.boton_exportacion_canonica.isHidden())
+        self.assertFalse(vista.boton_exportacion_canonica.isEnabled())
+        vista.resultados = {"items": [{"patente": "ABC123"}], "totals": {}}
+        vista.reporte_cerrado_actual = {"source": "local", "closure_reference": {"id": "fabricated"}}
+        vista._actualizar_estado_exportaciones_cerradas()
+        self.assertTrue(vista.boton_exportacion_canonica.isHidden())
+        self.assertTrue(vista.boton_exportacion_canonica_xlsx.isHidden())
         vista.close()
 
     @patch("views.reportes.QMessageBox.information")
@@ -295,6 +323,7 @@ class ReportesViewTests(unittest.TestCase):
     def test_closed_report_warnings_and_api_errors_are_actionable(self, cerrado, _input, warning, _information):
         cerrado.return_value = {
             "ok": True,
+            "source": "api",
             "report_id": "closed-report-2",
             "period": {"from": "2026-02-01", "to": "2026-02-28"},
             "closure_reference": {"id": "closure-2026-02"},
@@ -325,15 +354,51 @@ class ReportesViewTests(unittest.TestCase):
         self.assertEqual(vista.card_reporte_cerrado_neto.label_valor.text(), "$6000")
         vista.close()
 
-    @patch("views.reportes.exportar_reporte_cerrado", create=True)
-    def test_closed_report_pdf_and_xlsx_exports_are_hidden_for_deferred_scope(self, exportar):
+    def test_api_payload_without_closure_reference_keeps_closed_exports_disabled(self):
         vista = self._crear_vista(api_token="desktop-token")
-        vista.reporte_cerrado_actual = {"closure_reference": {"id": "closure-2026-01"}}
+
+        vista.reporte_cerrado_actual = {"ok": True, "source": "api", "closure_reference": {}}
+        vista._renderizar_reporte_cerrado(vista.reporte_cerrado_actual)
 
         self.assertTrue(vista.boton_exportacion_canonica.isHidden())
         self.assertTrue(vista.boton_exportacion_canonica_xlsx.isHidden())
-        self.assertIn("1.3.x", vista.label_exportaciones_diferidas.text())
-        exportar.assert_not_called()
+        self.assertFalse(vista.boton_exportacion_canonica.isEnabled())
+        self.assertFalse(vista.boton_exportacion_canonica_xlsx.isEnabled())
+        vista.close()
+
+    @patch("views.reportes.QMessageBox.information")
+    @patch("views.reportes.exportar_reporte_cerrado", create=True)
+    def test_closed_report_pdf_and_xlsx_clicks_use_loaded_closure_id(self, exportar, _information):
+        exportar.return_value = {"ok": True, "format": "pdf", "path": "reportes/closed_closure-2026-01.pdf"}
+        vista = self._crear_vista(api_token="desktop-token")
+        vista.reporte_cerrado_actual = self._api_closed_report_payload()
+        vista._renderizar_reporte_cerrado(vista.reporte_cerrado_actual)
+
+        vista.boton_exportacion_canonica.click()
+        exportar.return_value = {"ok": True, "format": "xlsx", "path": "reportes/closed_closure-2026-01.xlsx"}
+        vista.boton_exportacion_canonica_xlsx.click()
+
+        self.assertEqual(exportar.call_args_list[0].args, ("desktop-token", "closure-2026-01", "pdf"))
+        self.assertEqual(exportar.call_args_list[1].args, ("desktop-token", "closure-2026-01", "xlsx"))
+        self.assertIn("reportes/closed_closure-2026-01.xlsx", vista.label_exportaciones_diferidas.text())
+        vista.close()
+
+    @patch("views.reportes.QMessageBox.warning")
+    @patch("views.reportes.exportar_reporte_cerrado", create=True)
+    def test_closed_report_export_error_is_actionable_and_preserves_retry_state(self, exportar, warning):
+        exportar.return_value = {"ok": False, "format": "pdf", "status": 500, "api_error": "EXPORT_FAILED"}
+        vista = self._crear_vista(api_token="desktop-token")
+        vista.reporte_cerrado_actual = self._api_closed_report_payload()
+        vista._renderizar_reporte_cerrado(vista.reporte_cerrado_actual)
+
+        vista.boton_exportacion_canonica.click()
+
+        self.assertEqual(vista.reporte_cerrado_actual["closure_reference"]["id"], "closure-2026-01")
+        self.assertFalse(vista.boton_exportacion_canonica.isHidden())
+        self.assertTrue(vista.boton_exportacion_canonica.isEnabled())
+        self.assertIn("EXPORT_FAILED", vista.label_exportaciones_diferidas.text())
+        self.assertIn("status 500", vista.label_exportaciones_diferidas.text())
+        self.assertIn("EXPORT_FAILED", warning.call_args.args[2])
         vista.close()
 
 

@@ -252,6 +252,7 @@ class ReportesWindow(QWidget):
         self.label_exportaciones_diferidas = QLabel("PDF/XLSX exports are deferred to 1.3.x.")
         self.label_exportaciones_diferidas.setObjectName("SubtituloSeccion")
         self.label_exportaciones_diferidas.setWordWrap(True)
+        self._actualizar_estado_exportaciones_cerradas()
 
         closed_header.addWidget(closed_title)
         closed_header.addStretch()
@@ -716,6 +717,27 @@ class ReportesWindow(QWidget):
         self.card_reporte_cerrado_bruto.label_valor.setText(f"${totals.get('total_general', 0):.0f}")
         self.card_reporte_cerrado_gastos.label_valor.setText(f"${totals.get('total_gastos', 0):.0f}")
         self.card_reporte_cerrado_neto.label_valor.setText(f"${totals.get('total_neto', 0):.0f}")
+        self._actualizar_estado_exportaciones_cerradas()
+
+    def _closure_id_reporte_cerrado_exportable(self):
+        payload = self.reporte_cerrado_actual or {}
+        if payload.get("source") != "api":
+            return None
+        closure = payload.get("closure_reference") or {}
+        return closure.get("id")
+
+    def _actualizar_estado_exportaciones_cerradas(self, mensaje=None):
+        exportable = bool(self._closure_id_reporte_cerrado_exportable())
+        self.boton_exportacion_canonica.setVisible(exportable)
+        self.boton_exportacion_canonica_xlsx.setVisible(exportable)
+        self.boton_exportacion_canonica.setEnabled(exportable)
+        self.boton_exportacion_canonica_xlsx.setEnabled(exportable)
+        if mensaje:
+            self.label_exportaciones_diferidas.setText(mensaje)
+        elif exportable:
+            self.label_exportaciones_diferidas.setText("Closed report PDF/XLSX exports are available for this API-backed closure.")
+        else:
+            self.label_exportaciones_diferidas.setText("Load an API-backed closed report with a closure reference to export PDF/XLSX.")
 
     def _operaciones_filtros(self):
         return {
@@ -810,17 +832,21 @@ class ReportesWindow(QWidget):
         return f"Completeness: {state}"
 
     def exportar_reporte_cerrado_api(self, formato):
-        closure = (self.reporte_cerrado_actual or {}).get("closure_reference") or {}
-        closure_id = closure.get("id")
+        closure_id = self._closure_id_reporte_cerrado_exportable()
         if not closure_id:
             QMessageBox.warning(self, "Closed report export", "Load a closed report before exporting.")
             return
         result = exportar_reporte_cerrado(self.api_token, closure_id, formato)
         if not result.get("ok"):
             detail = result.get("api_error") or "Closed report export failed."
-            QMessageBox.warning(self, "Closed report export error", detail)
+            status = result.get("status")
+            mensaje = f"{detail} (status {status})" if status else detail
+            self._actualizar_estado_exportaciones_cerradas(f"Export error: {mensaje}")
+            QMessageBox.warning(self, "Closed report export error", mensaje)
             return
-        QMessageBox.information(self, "Closed report export", f"Export saved: {result.get('path')}")
+        path = result.get("path") or "file saved"
+        self._actualizar_estado_exportaciones_cerradas(f"Export saved: {path}")
+        QMessageBox.information(self, "Closed report export", f"Export saved: {path}")
 
     @staticmethod
     def _formatear_valor_metrica(nombre, valor):
