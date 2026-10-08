@@ -77,8 +77,8 @@ The dashboard MUST apply canonical filters consistently across Desktop and Mobil
 - THEN the request is rejected with a clear validation error
 ### Requirement: Desktop Canonical Dashboard Rendering
 
-Desktop MUST render API-provided dashboard metadata without replacing canonical labels. It MUST show period state, source state, completeness state, and capacity metadata when present. Any Desktop local fallback MAY exist only as degraded consultation data and MUST be labeled incomplete, local, and non-official. Affected repos: Desktop.
-(Previously: local fallback had to show source/completeness but did not explicitly prohibit official closure-truth claims.)
+Desktop MUST render API-provided dashboard metadata without replacing canonical labels. It MUST show period state, source state, completeness state, capacity metadata, and compact audit coverage/status when present. Audit coverage payload variants MAY be normalized only as needed to produce stable visible text. Missing or empty audit coverage MUST be shown as unavailable or not provided, not as official coverage. Any Desktop local fallback MAY exist only as degraded consultation data and MUST be labeled incomplete, local, non-official, and audit-unavailable. Affected repos: Desktop.
+(Previously: Desktop rendered period/source/completeness/capacity metadata and local fallback labels, but did not require audit coverage/status visibility or audit-unavailable fallback labeling.)
 
 #### Scenario: Canonical API labels are preserved
 
@@ -93,12 +93,33 @@ Desktop MUST render API-provided dashboard metadata without replacing canonical 
 - WHEN Desktop renders the dashboard
 - THEN the user can see whether values come from API, operations, closure, or local fallback.
 
+#### Scenario: API audit summary is visible
+
+- GIVEN an API-backed dashboard payload includes audit coverage/status metadata
+- WHEN Desktop renders the dashboard metadata area
+- THEN a compact audit summary is visible
+- AND it distinguishes available coverage from known gaps.
+
+#### Scenario: Payload variants produce stable text
+
+- GIVEN equivalent audit coverage/status payload variants are supplied
+- WHEN Desktop prepares visible metadata
+- THEN the rendered audit text remains stable
+- AND normalization does not invent missing coverage.
+
+#### Scenario: Empty audit coverage is unavailable
+
+- GIVEN the API-backed payload omits audit coverage or supplies an empty value
+- WHEN Desktop renders the dashboard metadata area
+- THEN audit coverage is labeled unavailable or not provided
+- AND it is not presented as official coverage.
+
 #### Scenario: Local fallback is non-official
 
 - GIVEN the API is unavailable and Desktop uses local fallback
 - WHEN Desktop renders totals
-- THEN it labels them incomplete, local, and non-official
-- AND it does not present them as closure truth.
+- THEN it labels them incomplete, local, non-official, and audit-unavailable
+- AND it does not present them as closure truth or audit coverage.
 
 #### Scenario: Incomplete data warning remains visible
 
@@ -111,6 +132,7 @@ Desktop MUST render API-provided dashboard metadata without replacing canonical 
 - GIVEN the payload contains capacity metadata
 - WHEN Desktop renders the dashboard
 - THEN capacity is shown with any historical limitation label.
+
 ### Requirement: Slice 0 Reconciliation Gate
 
 Before further reporting implementation, the system roadmap MUST classify already merged API, Desktop, and Mobile work as keep, change, remove, or defer against the corrected product decisions.
@@ -191,3 +213,19 @@ This change MUST NOT add Desktop operations drill-down or pagination UI, API cha
 - GIVEN the change is scoped to Desktop validation
 - WHEN implementation tasks are planned
 - THEN API, Mobile, and Installer work is excluded.
+### Requirement: Desktop Audit Visibility Scope Boundary
+
+This change MUST NOT add API, Mobile, Installer, database, migration, remote validation, or new endpoint work. If the existing dashboard payload cannot support meaningful audit visibility, Desktop implementation MUST stop and recommend API change `api-report-audit-inventory`. Affected repos: Desktop.
+
+#### Scenario: Existing payload is insufficient
+
+- GIVEN available dashboard payloads cannot supply meaningful audit status or limitations
+- WHEN Desktop audit visibility is evaluated
+- THEN Desktop work stops for this change
+- AND `api-report-audit-inventory` is recommended.
+
+#### Scenario: Sibling repositories remain untouched
+
+- GIVEN implementation tasks are planned for this change
+- WHEN scope is evaluated
+- THEN API, Mobile, Installer, database, migration, and new endpoint work are excluded.

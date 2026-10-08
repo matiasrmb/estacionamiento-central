@@ -74,6 +74,7 @@ class ReportesViewTests(unittest.TestCase):
         self.assertIn("Versión catálogo: 1.3.0", vista.label_dashboard_estado.text())
         self.assertIn("Periodo: open", vista.label_dashboard_estado.text())
         self.assertIn("Fuente datos: api", vista.label_dashboard_estado.text())
+        self.assertEqual(vista.label_dashboard_auditoria.text(), "Audit: not provided by reporting dashboard")
         self.assertEqual(self._dashboard_card_titles(vista)[:3], ["All collected sources", "Expenses", "Net revenue"])
         self.assertEqual([card.label_valor.text() for card in vista.dashboard_metric_cards[:3]], ["$3000", "$500", "$2500"])
         self.assertEqual(vista.tabla.rowCount(), 2)
@@ -138,6 +139,9 @@ class ReportesViewTests(unittest.TestCase):
         self.assertIn("Fuente datos: local_fallback", vista.label_dashboard_estado.text())
         self.assertIn("No oficial", vista.label_dashboard_estado.text())
         self.assertEqual(vista.label_dashboard_capacidad.text(), "Capacity: unavailable")
+        self.assertIn("Audit: unavailable", vista.label_dashboard_auditoria.text())
+        self.assertIn("local non-official fallback", vista.label_dashboard_auditoria.text())
+        self.assertIn("API audit coverage unavailable", vista.label_dashboard_auditoria.text())
         self.assertIn("Incomplete totals", vista.label_dashboard_completitud.text())
         self.assertIn("API unavailable", vista.label_dashboard_completitud.text())
         self.assertIn("not official closure truth", vista.label_dashboard_advertencias.text())
@@ -162,6 +166,46 @@ class ReportesViewTests(unittest.TestCase):
         capacity_text = vista._texto_capacidad_dashboard({"total": 50, "occupied": 10, "state": "historical-capacity-limited"})
 
         self.assertEqual(capacity_text, "Capacity: total 50, occupied 10, state historical-capacity-limited")
+        vista.close()
+
+    def test_dashboard_audit_label_renders_available_gap_unavailable_and_not_provided_states(self):
+        vista = self._crear_vista(api_token="desktop-token")
+
+        vista._actualizar_metadata_dashboard({
+            "audit_coverage": {
+                "state": "available",
+                "available": ["operations", "closures"],
+                "gaps": [],
+                "unavailable": [],
+                "notes": [],
+            }
+        })
+        self.assertEqual(vista.label_dashboard_auditoria.text(), "Audit: available - operations, closures")
+
+        vista._actualizar_metadata_dashboard({
+            "audit_coverage": {
+                "state": "gap",
+                "available": ["operations"],
+                "gaps": ["payments"],
+                "unavailable": [],
+                "notes": [],
+            }
+        })
+        self.assertEqual(vista.label_dashboard_auditoria.text(), "Audit: gaps - payments; Available: operations")
+
+        vista._actualizar_metadata_dashboard({
+            "audit_coverage": {
+                "state": "unavailable",
+                "available": [],
+                "gaps": [],
+                "unavailable": ["prints"],
+                "notes": ["Not integrated"],
+            }
+        })
+        self.assertEqual(vista.label_dashboard_auditoria.text(), "Audit: unavailable - prints; Notes: Not integrated")
+
+        vista._actualizar_metadata_dashboard({"audit_coverage": {"state": "not_provided"}})
+        self.assertEqual(vista.label_dashboard_auditoria.text(), "Audit: not provided by reporting dashboard")
         vista.close()
 
     @patch("views.reportes.QMessageBox.information")
