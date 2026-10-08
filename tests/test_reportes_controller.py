@@ -283,6 +283,111 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(payload["api_error"], "API_UNAVAILABLE")
         local_reports.assert_not_called()
 
+    @patch.object(reportes_controller, "obtener_operaciones_reporte_api")
+    def test_closed_report_operations_normalize_rows_filters_and_source(self, operations_api):
+        operations_api.return_value = {
+            "rows": [
+                {
+                    "category": "vehiculo",
+                    "amount": 2500,
+                    "operator": "admin",
+                    "plate": "ABC123",
+                    "timestamp": "2026-01-10T10:00:00",
+                }
+            ],
+            "pagination": {"limit": 25, "offset": 0, "total": 1},
+            "filters": {"category": "vehiculo"},
+            "status": "complete",
+            "warnings": [],
+        }
+
+        payload = reportes_controller.obtener_operaciones_reporte_cerrado(
+            "api-token",
+            42,
+            category="vehiculo",
+            unsupported="ignored",
+        )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["period_id"], "closure:42")
+        self.assertEqual(payload["status"], "complete")
+        self.assertIsNone(payload["api_error"])
+        self.assertEqual(payload["filters"], {"category": "vehiculo"})
+        self.assertEqual(payload["pagination"], {"limit": 25, "offset": 0, "total": 1})
+        self.assertEqual(
+            payload["rows"],
+            [
+                {
+                    "category": "vehiculo",
+                    "amount": 2500,
+                    "operator": "admin",
+                    "plate": "ABC123",
+                    "timestamp": "2026-01-10T10:00:00",
+                }
+            ],
+        )
+        operations_api.assert_called_once_with("api-token", 42, category="vehiculo")
+
+    @patch.object(reportes_controller, "obtener_operaciones_reporte_api")
+    def test_closed_report_operations_empty_warning_state_keeps_api_payload_visible(self, operations_api):
+        operations_api.return_value = {
+            "items": [],
+            "pagination": {"limit": 50, "offset": 0, "total": 0},
+            "warnings": ["No operation rows available"],
+            "source_state": "warning",
+        }
+
+        payload = reportes_controller.obtener_operaciones_reporte_cerrado("api-token", "closure-43")
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["rows"], [])
+        self.assertEqual(payload["warnings"], ["No operation rows available"])
+        self.assertEqual(payload["status"], "warning")
+        self.assertEqual(payload["source_state"], "warning")
+        self.assertEqual(payload["pagination"], {"limit": 50, "offset": 0, "total": 0})
+
+    @patch.object(reportes_controller, "obtener_reportes")
+    @patch.object(reportes_controller, "obtener_operaciones_reporte_api")
+    def test_closed_report_operations_api_errors_are_explicit_without_local_fallback(self, operations_api, local_reports):
+        operations_api.side_effect = ApiClientError(status=503, detail="API_UNAVAILABLE")
+
+        payload = reportes_controller.obtener_operaciones_reporte_cerrado("api-token", 42)
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["source_state"], "api_error")
+        self.assertEqual(payload["status"], 503)
+        self.assertEqual(payload["api_error"], "API_UNAVAILABLE")
+        self.assertEqual(payload["rows"], [])
+        local_reports.assert_not_called()
+
+    @patch.object(reportes_controller, "obtener_reportes")
+    @patch.object(reportes_controller, "obtener_operaciones_reporte_api")
+    def test_closed_report_operations_preserve_pagination_and_do_not_use_local_fallback(self, operations_api, local_reports):
+        operations_api.return_value = {
+            "operations": [
+                {"type": "gasto", "value": -1200, "user": "manager", "license_plate": None, "created_at": "2026-01-11T08:00:00"}
+            ],
+            "pagination": {"limit": 10, "offset": 20, "total": 35},
+        }
+
+        payload = reportes_controller.obtener_operaciones_reporte_cerrado(
+            "api-token",
+            42,
+            limit=10,
+            offset=20,
+        )
+
+        self.assertEqual(payload["pagination"], {"limit": 10, "offset": 20, "total": 35})
+        self.assertEqual(payload["rows"][0]["category"], "gasto")
+        self.assertEqual(payload["rows"][0]["amount"], -1200)
+        self.assertEqual(payload["rows"][0]["operator"], "manager")
+        self.assertEqual(payload["rows"][0]["plate"], "-")
+        self.assertEqual(payload["rows"][0]["timestamp"], "2026-01-11T08:00:00")
+        operations_api.assert_called_once_with("api-token", 42, limit=10, offset=20)
+        local_reports.assert_not_called()
+
     @patch.object(reportes_controller, "exportar_reporte_cerrado_api")
     def test_closed_report_pdf_export_writes_returned_base64_content(self, export_api):
         export_api.return_value = {

@@ -17,10 +17,12 @@ import os
 import re
 from controllers.accounting_contracts import build_report_totals
 from utils.api_client import (
+    ALLOWED_OPERATION_PARAMS,
     ApiClientError,
     exportar_reporte_cerrado as exportar_reporte_cerrado_api,
     obtener_catalogo_metricas_reporting as obtener_catalogo_metricas_reporting_api,
     obtener_dashboard_reporting as obtener_dashboard_reporting_api,
+    obtener_operaciones_reporte as obtener_operaciones_reporte_api,
     obtener_reporte_cerrado as obtener_reporte_cerrado_api,
 )
 
@@ -173,6 +175,82 @@ def _normalizar_reporte_cerrado(payload):
         "discrepancy": payload.get("discrepancy"),
         "warnings": payload.get("warnings") or [],
         "raw": payload,
+    }
+
+
+def obtener_operaciones_reporte_cerrado(token, closure_id, **filters):
+    supported_filters = _normalizar_filtros_operaciones(filters)
+    try:
+        payload = obtener_operaciones_reporte_api(token, closure_id, **supported_filters)
+    except ApiClientError as exc:
+        return {
+            "ok": False,
+            "source": "api",
+            "source_state": "api_error",
+            "period_id": f"closure:{closure_id}",
+            "rows": [],
+            "pagination": _normalizar_paginacion({}, supported_filters),
+            "filters": supported_filters,
+            "warnings": [],
+            "status": exc.status,
+            "api_error": exc.detail,
+        }
+
+    rows = [_normalizar_operacion_reporte(row) for row in _filas_operaciones(payload)]
+    warnings = payload.get("warnings") or []
+    source_state = payload.get("source_state") or payload.get("source") or "api"
+    status = payload.get("status") or ("warning" if warnings else "ok")
+    return {
+        "ok": True,
+        "source": "api",
+        "source_state": source_state,
+        "period_id": payload.get("period_id") or f"closure:{closure_id}",
+        "rows": rows,
+        "pagination": _normalizar_paginacion(payload.get("pagination") or {}, supported_filters, len(rows)),
+        "filters": payload.get("filters") or supported_filters,
+        "warnings": warnings,
+        "status": status,
+        "api_error": None,
+    }
+
+
+def _normalizar_filtros_operaciones(filters):
+    normalized = {}
+    for key in ("category", "operator", "plate", "sort", "direction", "limit", "offset"):
+        if key not in ALLOWED_OPERATION_PARAMS:
+            continue
+        value = filters.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                continue
+        normalized[key] = value
+    return normalized
+
+
+def _filas_operaciones(payload):
+    return payload.get("rows") or payload.get("items") or payload.get("operations") or []
+
+
+def _normalizar_operacion_reporte(row):
+    return {
+        "category": row.get("category") or row.get("type") or row.get("tipo") or "-",
+        "amount": row.get("amount", row.get("value", row.get("monto", 0))),
+        "operator": row.get("operator") or row.get("user") or row.get("usuario") or "-",
+        "plate": row.get("plate") or row.get("license_plate") or row.get("patente") or "-",
+        "timestamp": row.get("timestamp") or row.get("created_at") or row.get("fecha_hora") or "-",
+    }
+
+
+def _normalizar_paginacion(pagination, filters=None, row_count=0):
+    pagination = pagination or {}
+    filters = filters or {}
+    return {
+        "limit": pagination.get("limit", filters.get("limit", row_count)),
+        "offset": pagination.get("offset", filters.get("offset", 0)),
+        "total": pagination.get("total", row_count),
     }
 
 

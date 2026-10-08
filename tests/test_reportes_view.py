@@ -150,8 +150,9 @@ class ReportesViewTests(unittest.TestCase):
 
     @patch("views.reportes.QMessageBox.information")
     @patch("views.reportes.QInputDialog.getText", return_value=("closure-2026-01", True))
+    @patch("views.reportes.obtener_operaciones_reporte_cerrado", create=True)
     @patch("views.reportes.obtener_reporte_cerrado", create=True)
-    def test_loads_api_closed_report_and_renders_metadata_without_local_fallback(self, cerrado, _input, information):
+    def test_loads_api_closed_report_and_renders_metadata_without_local_fallback(self, cerrado, operations, _input, information):
         cerrado.return_value = {
             "ok": True,
             "report_id": "closed-report-1",
@@ -164,6 +165,7 @@ class ReportesViewTests(unittest.TestCase):
             "capacity": {"total": 40, "occupied": 12, "available": 28},
             "warnings": [],
         }
+        operations.return_value = {"ok": True, "rows": [], "pagination": {"limit": 25, "offset": 0, "total": 0}, "warnings": []}
         vista = self._crear_vista(api_token="desktop-token")
 
         self.assertNotIn("Future", vista.boton_reportes_cerrados.text())
@@ -173,6 +175,7 @@ class ReportesViewTests(unittest.TestCase):
         vista.boton_reportes_cerrados.click()
 
         cerrado.assert_called_once_with("desktop-token", "closure-2026-01")
+        operations.assert_called_once()
         self.assertEqual(vista.reporte_cerrado_actual["report_id"], "closed-report-1")
         self.assertIn("closed-report-1", vista.label_reporte_cerrado_estado.text())
         self.assertIn("closure-2026-01", vista.label_reporte_cerrado_periodo.text())
@@ -182,6 +185,107 @@ class ReportesViewTests(unittest.TestCase):
         self.assertEqual([card.label_valor.text() for card in vista.reporte_cerrado_metric_cards], ["$12000", "$2000", "$10000"])
         information.assert_called_once()
         self.assertIn("Closed report loaded", information.call_args.args[2])
+        vista.close()
+
+    @patch("views.reportes.QMessageBox.information")
+    @patch("views.reportes.QInputDialog.getText", return_value=("42", True))
+    @patch("views.reportes.obtener_operaciones_reporte_cerrado", create=True)
+    @patch("views.reportes.obtener_reporte_cerrado", create=True)
+    def test_closed_report_operation_rows_render_core_fields(self, cerrado, operations, _input, _information):
+        cerrado.return_value = {
+            "ok": True,
+            "report_id": "closed-42",
+            "period": {"from": "2026-01-01", "to": "2026-01-31"},
+            "closure_reference": {"id": 42},
+            "operation_totals": {},
+            "warnings": [],
+        }
+        operations.return_value = {
+            "ok": True,
+            "rows": [
+                {"category": "vehiculo", "amount": 2500, "operator": "admin", "plate": "ABC123", "timestamp": "2026-01-10T10:00:00"}
+            ],
+            "pagination": {"limit": 25, "offset": 0, "total": 1},
+            "warnings": [],
+        }
+        vista = self._crear_vista(api_token="desktop-token")
+
+        vista.boton_reportes_cerrados.click()
+
+        self.assertEqual(vista.tabla_operaciones_reporte.rowCount(), 1)
+        self.assertEqual(vista.tabla_operaciones_reporte.item(0, 0).text(), "vehiculo")
+        self.assertEqual(vista.tabla_operaciones_reporte.item(0, 1).text(), "$2500")
+        self.assertEqual(vista.tabla_operaciones_reporte.item(0, 2).text(), "admin")
+        self.assertEqual(vista.tabla_operaciones_reporte.item(0, 3).text(), "ABC123")
+        self.assertEqual(vista.tabla_operaciones_reporte.item(0, 4).text(), "2026-01-10T10:00:00")
+        self.assertIn("1 of 1", vista.label_operaciones_paginacion.text())
+        vista.close()
+
+    @patch("views.reportes.obtener_operaciones_reporte_cerrado", create=True)
+    def test_closed_report_operation_controls_send_filters_sort_and_pagination(self, operations):
+        operations.return_value = {"ok": True, "rows": [], "pagination": {"limit": 10, "offset": 10, "total": 35}, "warnings": []}
+        vista = self._crear_vista(api_token="desktop-token")
+        vista.reporte_cerrado_actual = {"closure_reference": {"id": 42}}
+        vista.input_operacion_categoria.setText("vehiculo")
+        vista.input_operacion_operador.setText("admin")
+        vista.input_operacion_patente.setText("ABC123")
+        vista.combo_operacion_orden.setCurrentText("timestamp")
+        vista.combo_operacion_direccion.setCurrentText("desc")
+        vista.combo_operacion_limite.setCurrentText("10")
+        vista.operaciones_offset = 10
+
+        vista.cargar_operaciones_reporte_cerrado()
+
+        operations.assert_called_once_with(
+            "desktop-token",
+            42,
+            category="vehiculo",
+            operator="admin",
+            plate="ABC123",
+            sort="timestamp",
+            direction="desc",
+            limit=10,
+            offset=10,
+        )
+        self.assertIn("11-20 of 35", vista.label_operaciones_paginacion.text())
+        self.assertTrue(vista.boton_operaciones_anterior.isEnabled())
+        self.assertTrue(vista.boton_operaciones_siguiente.isEnabled())
+        vista.close()
+
+    @patch("views.reportes.obtener_operaciones_reporte_cerrado", create=True)
+    def test_closed_report_operation_empty_warning_and_error_states_do_not_enable_exports(self, operations):
+        vista = self._crear_vista(api_token="desktop-token")
+        vista.reporte_cerrado_actual = {"closure_reference": {"id": 42}}
+        operations.return_value = {
+            "ok": True,
+            "rows": [],
+            "pagination": {"limit": 25, "offset": 0, "total": 0},
+            "warnings": ["No operation rows available"],
+        }
+
+        vista.cargar_operaciones_reporte_cerrado()
+
+        self.assertEqual(vista.tabla_operaciones_reporte.rowCount(), 0)
+        self.assertIn("No operations found", vista.label_operaciones_estado.text())
+        self.assertIn("No operation rows available", vista.label_operaciones_advertencias.text())
+        self.assertTrue(vista.boton_exportacion_canonica.isHidden())
+        self.assertTrue(vista.boton_exportacion_canonica_xlsx.isHidden())
+
+        operations.return_value = {"ok": False, "api_error": "API_UNAVAILABLE", "status": 503, "rows": []}
+        vista.cargar_operaciones_reporte_cerrado()
+
+        self.assertIn("API_UNAVAILABLE", vista.label_operaciones_estado.text())
+        self.assertEqual(vista.tabla_operaciones_reporte.rowCount(), 0)
+        self.assertTrue(vista.boton_exportacion_canonica.isHidden())
+        vista.close()
+
+    def test_local_calendar_reports_remain_legacy_local_and_separate_from_closed_operations(self):
+        vista = self._crear_vista(api_token="desktop-token")
+
+        self.assertIn("legacy/local", vista.label_reportes_locales_legacy.text())
+        self.assertEqual(vista.tabla.columnCount(), 7)
+        self.assertEqual(vista.tabla_operaciones_reporte.columnCount(), 5)
+        self.assertTrue(vista.boton_exportacion_canonica.isHidden())
         vista.close()
 
     @patch("views.reportes.QMessageBox.information")

@@ -90,6 +90,56 @@ class ApiClientSessionTests(unittest.TestCase):
             token="desktop-token",
         )
 
+    @patch.object(api_client, "_request", return_value={"rows": []})
+    def test_closed_report_operations_use_closure_period(self, request):
+        result = api_client.obtener_operaciones_reporte("desktop-token", 42)
+
+        self.assertEqual(result, {"rows": []})
+        request.assert_called_once_with(
+            "GET",
+            "/reporting/reports/operations?period_id=closure%3A42",
+            token="desktop-token",
+        )
+
+    @patch.object(api_client, "_request", return_value={"rows": []})
+    def test_closed_report_operations_send_only_supported_params(self, request):
+        api_client.obtener_operaciones_reporte(
+            "desktop-token",
+            42,
+            category="vehiculo",
+            operator="admin",
+            plate="ABC123",
+            sort="timestamp",
+            direction="desc",
+            limit=25,
+            offset=50,
+            source="local",
+        )
+
+        request.assert_called_once_with(
+            "GET",
+            "/reporting/reports/operations?period_id=closure%3A42&category=vehiculo&operator=admin&plate=ABC123&sort=timestamp&direction=desc&limit=25&offset=50",
+            token="desktop-token",
+        )
+
+    @patch.object(api_client, "_request", return_value={"rows": []})
+    def test_closed_report_operations_omit_unsupported_and_blank_params(self, request):
+        api_client.obtener_operaciones_reporte(
+            "desktop-token",
+            42,
+            category="",
+            operator="   ",
+            plate=None,
+            sort="timestamp",
+            unsupported="value",
+        )
+
+        request.assert_called_once_with(
+            "GET",
+            "/reporting/reports/operations?period_id=closure%3A42&sort=timestamp",
+            token="desktop-token",
+        )
+
     @patch.object(api_client, "_request", return_value={"format": "pdf"})
     def test_closed_report_pdf_export_uses_canonical_endpoint(self, request):
         result = api_client.exportar_reporte_cerrado("desktop-token", "closure-42", "pdf")
