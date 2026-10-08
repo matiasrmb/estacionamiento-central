@@ -41,8 +41,8 @@ The system MUST NOT require or expose an auditor role in 1.3.0, but contracts MA
 
 ### Requirement: Audit Inventory from Existing Sources
 
-The system MUST provide an audit inventory based on existing operational, closure, payment, expense, print, and user/session sources. It MUST identify coverage gaps and support the product goal of full audit over time. It MUST NOT introduce full event sourcing for 1.3.0. Affected repos: API, Desktop, Mobile.
-(Previously: audit inventory listed existing sources and excluded event sourcing, but did not require an initial serious audit slice or full-audit trajectory.)
+The system MUST provide an audit inventory based on existing operational, closure, payment, expense, print, and user/session sources. It MUST identify coverage gaps and support the product goal of full audit over time. Desktop MUST surface existing-source audit limitations when supplied by the reporting dashboard payload. It MUST NOT introduce full event sourcing for 1.3.0. Affected repos: API, Desktop, Mobile.
+(Previously: audit inventory required existing-source coverage and visible limitations, but did not require Desktop to surface supplied dashboard audit limitations.)
 
 #### Scenario: Existing-source inventory
 
@@ -64,6 +64,19 @@ The system MUST provide an audit inventory based on existing operational, closur
 - THEN gaps are labeled as audit limitations
 - AND they are not presented as complete audit coverage.
 
+#### Scenario: Supplied dashboard limitations are surfaced
+
+- GIVEN an API-backed dashboard payload supplies audit limitations or unavailable sources
+- WHEN Desktop renders report metadata
+- THEN the limitations are visible to the admin
+- AND Desktop does not reclassify them as complete coverage.
+
+#### Scenario: Missing limitations are not fabricated
+
+- GIVEN the dashboard payload does not supply audit limitations
+- WHEN Desktop renders report metadata
+- THEN Desktop shows audit limitations as unavailable or not provided
+- AND no source coverage is fabricated.
 ### Requirement: Explicit Non-Goals
 
 Reporting and audit surfaces MUST be described as administrative financial-operational reporting. They MUST NOT claim support for formal accounting, taxes, commissions, payment-method accounting, machine-learning anomaly scoring, or auditor-role workflows in 1.3.0. Affected repos: API, Desktop, Mobile.

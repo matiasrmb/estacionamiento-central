@@ -158,6 +158,58 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(payload["completeness"], {"state": "complete", "reason": None})
         self.assertIsNone(payload["capacity"])
         self.assertEqual(payload["summary"], [{"metric": "legacy_total", "label": "Legacy total", "sign": None, "value": 99}])
+        self.assertEqual(
+            payload["audit_coverage"],
+            {"state": "not_provided", "available": [], "gaps": [], "unavailable": [], "notes": []},
+        )
+
+    @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
+    @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
+    def test_dashboard_api_normalizes_audit_coverage_variants_without_inventing_sources(self, metric_catalog, dashboard_api):
+        metric_catalog.return_value = {"metrics": []}
+        dashboard_api.return_value = {
+            "metrics": {},
+            "audit_coverage": {
+                "available_sources": ["operations", "closures"],
+                "gap_sources": ["payments"],
+                "unavailable_sources": ["legacy_history"],
+                "notes": ["Backfill pending"],
+            },
+        }
+
+        payload = reportes_controller.obtener_resumen_dashboard_reportes(token="api-token")
+
+        self.assertEqual(
+            payload["audit_coverage"],
+            {
+                "state": "gap",
+                "available": ["operations", "closures"],
+                "gaps": ["payments"],
+                "unavailable": ["legacy_history"],
+                "notes": ["Backfill pending"],
+            },
+        )
+
+        dashboard_api.return_value = {
+            "metrics": {},
+            "audit_coverage": [
+                {"source": "operations", "state": "available"},
+                {"source": "prints", "state": "unavailable", "reason": "Not integrated"},
+            ],
+        }
+
+        payload = reportes_controller.obtener_resumen_dashboard_reportes(token="api-token")
+
+        self.assertEqual(
+            payload["audit_coverage"],
+            {
+                "state": "unavailable",
+                "available": ["operations"],
+                "gaps": [],
+                "unavailable": ["prints"],
+                "notes": ["Not integrated"],
+            },
+        )
 
     @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
     @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
@@ -189,6 +241,7 @@ class ObtenerReportesTests(unittest.TestCase):
         self.assertEqual(payload["completeness"]["state"], "incomplete")
         self.assertIn("API_UNAVAILABLE", payload["completeness"]["reason"])
         self.assertIn("Local fallback is not official closure truth.", payload["warnings"])
+        self.assertEqual(payload["audit_coverage"], [])
         self.assertIsNone(payload["capacity"])
         self.assertIsNone(payload["catalog_version"])
         self.assertEqual(payload["api_error"], "API_UNAVAILABLE")

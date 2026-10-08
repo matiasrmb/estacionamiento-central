@@ -207,6 +207,9 @@ class ReportesWindow(QWidget):
         self.label_dashboard_capacidad = QLabel("Capacity: unavailable")
         self.label_dashboard_capacidad.setObjectName("SubtituloSeccion")
         self.label_dashboard_capacidad.setWordWrap(True)
+        self.label_dashboard_auditoria = QLabel("Audit: not provided by reporting dashboard")
+        self.label_dashboard_auditoria.setObjectName("SubtituloSeccion")
+        self.label_dashboard_auditoria.setWordWrap(True)
         self.label_dashboard_advertencias = QLabel("")
         self.label_dashboard_advertencias.setObjectName("SubtituloSeccion")
         self.label_dashboard_advertencias.setWordWrap(True)
@@ -216,6 +219,7 @@ class ReportesWindow(QWidget):
         dashboard_layout.addLayout(self.dashboard_metricas_layout)
         dashboard_layout.addWidget(self.label_dashboard_completitud)
         dashboard_layout.addWidget(self.label_dashboard_capacidad)
+        dashboard_layout.addWidget(self.label_dashboard_auditoria)
         dashboard_layout.addWidget(self.label_dashboard_advertencias)
         layout.addWidget(dashboard_group)
 
@@ -618,10 +622,52 @@ class ReportesWindow(QWidget):
             text = "Completeness: complete"
         self.label_dashboard_completitud.setText(text)
         self.label_dashboard_capacidad.setText(self._texto_capacidad_dashboard(payload.get("capacity")))
+        self.label_dashboard_auditoria.setText(self._texto_auditoria_dashboard(payload))
         warnings = payload.get("warnings") or []
         if not warnings and payload.get("source_state") == "local_fallback":
             warnings = ["Local fallback is not official closure truth."]
         self.label_dashboard_advertencias.setText("Warnings: " + "; ".join(warnings) if warnings else "")
+
+    @staticmethod
+    def _texto_auditoria_dashboard(payload):
+        if payload.get("source_state") == "local_fallback" or payload.get("source") == "local_fallback":
+            return "Audit: unavailable - local non-official fallback; API audit coverage unavailable"
+
+        coverage = payload.get("audit_coverage") or {}
+        if not coverage or not isinstance(coverage, dict):
+            return "Audit: not provided by reporting dashboard"
+
+        state = coverage.get("state") or "not_provided"
+        available = ReportesWindow._compactar_lista_metadata(coverage.get("available") or [])
+        gaps = ReportesWindow._compactar_lista_metadata(coverage.get("gaps") or [])
+        unavailable = ReportesWindow._compactar_lista_metadata(coverage.get("unavailable") or [])
+        notes = ReportesWindow._compactar_lista_metadata(coverage.get("notes") or [])
+
+        if state == "available" and available:
+            text = f"Audit: available - {available}"
+            if gaps:
+                text = f"{text}; Gaps: {gaps}"
+            return text
+        if state == "gap":
+            text = f"Audit: gaps - {gaps or 'not specified'}"
+            if available:
+                text = f"{text}; Available: {available}"
+            return text
+        if state == "unavailable":
+            text = f"Audit: unavailable - {unavailable or notes or 'coverage unavailable'}"
+            if notes and unavailable:
+                text = f"{text}; Notes: {notes}"
+            return text
+        return "Audit: not provided by reporting dashboard"
+
+    @staticmethod
+    def _compactar_lista_metadata(items):
+        items = [str(item) for item in (items or []) if item is not None and str(item)]
+        if not items:
+            return ""
+        if len(items) <= 3:
+            return ", ".join(items)
+        return f"{', '.join(items[:3])} (+{len(items) - 3} more)"
 
     @staticmethod
     def _texto_capacidad_dashboard(capacity):

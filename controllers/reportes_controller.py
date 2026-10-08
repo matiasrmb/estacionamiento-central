@@ -105,7 +105,7 @@ def _normalizar_dashboard_reporting_api(catalog, dashboard):
         "calendar_secondary": dashboard.get("calendar_secondary") or {},
         "official": dashboard.get("official", True),
         "warnings": dashboard.get("warnings") or [],
-        "audit_coverage": dashboard.get("audit_coverage") or [],
+        "audit_coverage": _normalizar_audit_coverage_dashboard(dashboard.get("audit_coverage")),
         "filters": dashboard.get("filters", {}),
         "pagination": dashboard.get("pagination", {}),
         "summary": [
@@ -119,6 +119,68 @@ def _normalizar_dashboard_reporting_api(catalog, dashboard):
             if metric.get("name") in metrics
         ],
     }
+
+
+def _normalizar_audit_coverage_dashboard(value):
+    if not value:
+        return {"state": "not_provided", "available": [], "gaps": [], "unavailable": [], "notes": []}
+
+    if isinstance(value, dict):
+        available = _normalizar_lista_audit(value.get("available") or value.get("available_sources") or value.get("covered"))
+        gaps = _normalizar_lista_audit(value.get("gaps") or value.get("gap_sources") or value.get("limitations"))
+        unavailable = _normalizar_lista_audit(value.get("unavailable") or value.get("unavailable_sources"))
+        notes = _normalizar_lista_audit(value.get("notes") or value.get("reasons"))
+        state = _estado_audit_coverage(value.get("state"), available, gaps, unavailable)
+        return {"state": state, "available": available, "gaps": gaps, "unavailable": unavailable, "notes": notes}
+
+    if isinstance(value, list):
+        available = []
+        gaps = []
+        unavailable = []
+        notes = []
+        for item in value:
+            if isinstance(item, dict):
+                source = item.get("source") or item.get("name") or item.get("id")
+                state = (item.get("state") or item.get("status") or "").lower()
+                if state in {"available", "covered", "complete"}:
+                    available.extend(_normalizar_lista_audit(source))
+                elif state in {"gap", "gaps", "partial", "limited"}:
+                    gaps.extend(_normalizar_lista_audit(source))
+                elif state in {"unavailable", "missing", "unsupported"}:
+                    unavailable.extend(_normalizar_lista_audit(source))
+                notes.extend(_normalizar_lista_audit(item.get("reason") or item.get("note")))
+            else:
+                available.extend(_normalizar_lista_audit(item))
+        return {
+            "state": _estado_audit_coverage(None, available, gaps, unavailable),
+            "available": available,
+            "gaps": gaps,
+            "unavailable": unavailable,
+            "notes": notes,
+        }
+
+    return {"state": "not_provided", "available": [], "gaps": [], "unavailable": [], "notes": []}
+
+
+def _normalizar_lista_audit(value):
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if item is not None and str(item)]
+    return [str(value)]
+
+
+def _estado_audit_coverage(state, available, gaps, unavailable):
+    state = (state or "").lower()
+    if state in {"available", "gap", "unavailable", "not_provided"}:
+        return state
+    if gaps:
+        return "gap"
+    if unavailable:
+        return "unavailable"
+    if available:
+        return "available"
+    return "not_provided"
 
 
 def _agregar_metadata_fallback_local(local_payload, api_error):
