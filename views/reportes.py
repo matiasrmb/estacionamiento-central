@@ -10,6 +10,7 @@ from PySide6.QtCore import QDate, QTime, Qt
 from controllers.reportes_controller import (
     obtener_reportes,
     obtener_resumen_dashboard_reportes,
+    obtener_inventario_auditoria,
     obtener_reporte_cerrado,
     obtener_operaciones_reporte_cerrado,
     exportar_reporte_cerrado,
@@ -18,6 +19,25 @@ from controllers.reportes_controller import (
 from controllers.registro_controller import obtener_patentes_conocidas
 from controllers.usuarios_controller import obtener_usuarios
 from utils.table_filters import create_sortable_item, sort_table_from_header_click
+
+
+def _inventario_auditoria_vacio(api_error=None, source_state="unavailable"):
+    return {
+        "ok": False,
+        "source": "api",
+        "source_state": source_state,
+        "period_id": None,
+        "coverage": [],
+        "available_sources": [],
+        "partial_sources": [],
+        "unavailable_sources": [],
+        "affected_scopes": [],
+        "unavailable_history": [],
+        "requires_event_sourcing": False,
+        "supports_persisted_anomalies": False,
+        "unsupported_behaviors": [],
+        "api_error": api_error,
+    }
 
 
 class ReportesWindow(QWidget):
@@ -213,6 +233,15 @@ class ReportesWindow(QWidget):
         self.label_dashboard_advertencias = QLabel("")
         self.label_dashboard_advertencias.setObjectName("SubtituloSeccion")
         self.label_dashboard_advertencias.setWordWrap(True)
+        self.label_audit_inventory_estado = QLabel("Audit inventory: unavailable")
+        self.label_audit_inventory_estado.setObjectName("SubtituloSeccion")
+        self.label_audit_inventory_estado.setWordWrap(True)
+        self.label_audit_inventory_coverage = QLabel("Coverage: No API-supplied coverage")
+        self.label_audit_inventory_coverage.setObjectName("SubtituloSeccion")
+        self.label_audit_inventory_coverage.setWordWrap(True)
+        self.label_audit_inventory_limitaciones = QLabel("Limitations: unavailable")
+        self.label_audit_inventory_limitaciones.setObjectName("SubtituloSeccion")
+        self.label_audit_inventory_limitaciones.setWordWrap(True)
         self._actualizar_resumen_dashboard_local(self.resultados)
 
         dashboard_layout.addLayout(dashboard_header)
@@ -221,6 +250,9 @@ class ReportesWindow(QWidget):
         dashboard_layout.addWidget(self.label_dashboard_capacidad)
         dashboard_layout.addWidget(self.label_dashboard_auditoria)
         dashboard_layout.addWidget(self.label_dashboard_advertencias)
+        dashboard_layout.addWidget(self.label_audit_inventory_estado)
+        dashboard_layout.addWidget(self.label_audit_inventory_coverage)
+        dashboard_layout.addWidget(self.label_audit_inventory_limitaciones)
         layout.addWidget(dashboard_group)
 
         # =========================================================
@@ -572,6 +604,53 @@ class ReportesWindow(QWidget):
             self._actualizar_resumen_dashboard_api(payload)
         else:
             self._actualizar_resumen_dashboard_local(payload)
+        self._actualizar_inventario_auditoria()
+
+    def _actualizar_inventario_auditoria(self):
+        if not self.api_token:
+            self._renderizar_inventario_auditoria(_inventario_auditoria_vacio("Sin sesión API"))
+            return
+        try:
+            payload = obtener_inventario_auditoria(self.api_token)
+        except Exception as exc:
+            payload = _inventario_auditoria_vacio(str(exc), source_state="api_error")
+        self._renderizar_inventario_auditoria(payload)
+
+    def _renderizar_inventario_auditoria(self, payload):
+        payload = payload or {}
+        period_id = payload.get("period_id") or "current"
+        source_state = payload.get("source_state") or "unavailable"
+        api_error = payload.get("api_error")
+        if payload.get("ok"):
+            self.label_audit_inventory_estado.setText(f"Audit inventory · Period: {period_id} · Source: {source_state}")
+        elif source_state == "api_error":
+            self.label_audit_inventory_estado.setText(f"Inventory error: {api_error or 'API request failed'} · Period: {period_id}")
+        else:
+            self.label_audit_inventory_estado.setText("Inventory unavailable: API did not provide validated readiness data")
+
+        coverage = payload.get("coverage") or []
+        if coverage:
+            coverage_text = "; ".join(
+                f"{item.get('source') or 'unknown'} ({item.get('state') or 'unavailable'})"
+                for item in coverage
+            )
+            self.label_audit_inventory_coverage.setText(f"Coverage: {coverage_text}")
+        else:
+            self.label_audit_inventory_coverage.setText("Coverage: No API-supplied coverage")
+
+        parts = [
+            f"Available: {self._compactar_lista_metadata(payload.get('available_sources') or []) or 'unavailable'}",
+            f"Partial: {self._compactar_lista_metadata(payload.get('partial_sources') or []) or 'unavailable'}",
+            f"Unavailable: {self._compactar_lista_metadata(payload.get('unavailable_sources') or []) or 'unavailable'}",
+            f"Affected scopes: {self._compactar_lista_metadata(payload.get('affected_scopes') or []) or 'unavailable'}",
+            f"Unavailable history: {self._compactar_lista_metadata(payload.get('unavailable_history') or []) or 'unavailable'}",
+            f"Event sourcing required: {'yes' if payload.get('requires_event_sourcing') else 'no'}",
+            f"Persisted anomalies supported: {'yes' if payload.get('supports_persisted_anomalies') else 'no'}",
+            f"Unsupported behaviors: {self._compactar_lista_metadata(payload.get('unsupported_behaviors') or []) or 'unavailable'}",
+        ]
+        if not payload.get("ok"):
+            parts.append("No local fallback coverage is used")
+        self.label_audit_inventory_limitaciones.setText("Limitations: " + " · ".join(parts))
 
     def _actualizar_resumen_dashboard_api(self, payload):
         version = payload.get("catalog_version") or "no disponible"

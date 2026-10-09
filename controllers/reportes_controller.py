@@ -22,6 +22,7 @@ from utils.api_client import (
     exportar_reporte_cerrado as exportar_reporte_cerrado_api,
     obtener_catalogo_metricas_reporting as obtener_catalogo_metricas_reporting_api,
     obtener_dashboard_reporting as obtener_dashboard_reporting_api,
+    obtener_inventario_auditoria_reporting as obtener_inventario_auditoria_reporting_api,
     obtener_operaciones_reporte as obtener_operaciones_reporte_api,
     obtener_reporte_cerrado as obtener_reporte_cerrado_api,
 )
@@ -198,6 +199,82 @@ def _agregar_metadata_fallback_local(local_payload, api_error):
     local_payload["warnings"] = ["Local fallback is not official closure truth."]
     local_payload["audit_coverage"] = []
     return local_payload
+
+
+def obtener_inventario_auditoria(token, period_id=None):
+    try:
+        payload = obtener_inventario_auditoria_reporting_api(token, period_id=period_id)
+    except ApiClientError as exc:
+        return _inventario_auditoria_no_disponible(
+            source_state="api_error",
+            period_id=period_id,
+            api_error=exc.detail,
+        )
+
+    if not _inventario_auditoria_valido(payload):
+        return _inventario_auditoria_no_disponible(api_error="API_AUDIT_INVENTORY_UNAVAILABLE")
+
+    return {
+        "ok": True,
+        "source": "api",
+        "source_state": payload.get("source_state") or payload.get("source") or "api",
+        "period_id": payload.get("period_id"),
+        "coverage": [_normalizar_fuente_inventario(item) for item in payload.get("coverage") or []],
+        "available_sources": _normalizar_lista_audit(payload.get("available_sources")),
+        "partial_sources": _normalizar_lista_audit(payload.get("partial_sources")),
+        "unavailable_sources": _normalizar_lista_audit(payload.get("unavailable_sources")),
+        "affected_scopes": _normalizar_lista_audit(payload.get("affected_scopes")),
+        "unavailable_history": _normalizar_lista_audit(payload.get("unavailable_history")),
+        "requires_event_sourcing": bool(payload.get("requires_event_sourcing")),
+        "supports_persisted_anomalies": bool(payload.get("supports_persisted_anomalies")),
+        "unsupported_behaviors": _normalizar_lista_audit(payload.get("unsupported_behaviors")),
+        "api_error": None,
+    }
+
+
+def _inventario_auditoria_valido(payload):
+    if not isinstance(payload, dict):
+        return False
+    required = {
+        "period_id",
+        "coverage",
+        "available_sources",
+        "partial_sources",
+        "unavailable_sources",
+        "affected_scopes",
+        "unavailable_history",
+        "requires_event_sourcing",
+        "supports_persisted_anomalies",
+        "unsupported_behaviors",
+    }
+    return required.issubset(payload.keys()) and isinstance(payload.get("coverage"), list)
+
+
+def _inventario_auditoria_no_disponible(source_state="unavailable", period_id=None, api_error=None):
+    return {
+        "ok": False,
+        "source": "api",
+        "source_state": source_state,
+        "period_id": period_id,
+        "coverage": [],
+        "available_sources": [],
+        "partial_sources": [],
+        "unavailable_sources": [],
+        "affected_scopes": [],
+        "unavailable_history": [],
+        "requires_event_sourcing": False,
+        "supports_persisted_anomalies": False,
+        "unsupported_behaviors": [],
+        "api_error": api_error,
+    }
+
+
+def _normalizar_fuente_inventario(item):
+    item = item if isinstance(item, dict) else {}
+    state = str(item.get("state") or "unavailable").strip().lower()
+    if state not in {"available", "partial", "unavailable"}:
+        state = "unavailable"
+    return {"source": str(item.get("source") or "").strip(), "state": state}
 
 
 def obtener_reporte_cerrado(token, closure_id):

@@ -79,6 +79,28 @@ class ApiClientSessionTests(unittest.TestCase):
         self.assertEqual(result, {"metrics": {}})
         request.assert_called_once_with("GET", "/reporting/dashboard", token="desktop-token")
 
+    @patch.object(api_client, "_request", return_value={"period_id": "current"})
+    def test_reporting_audit_inventory_uses_canonical_endpoint_without_query_params(self, request):
+        result = api_client.obtener_inventario_auditoria_reporting("desktop-token")
+
+        self.assertEqual(result, {"period_id": "current"})
+        request.assert_called_once_with("GET", "/reporting/audit-inventory", token="desktop-token")
+
+    @patch.object(api_client, "_request", return_value={"period_id": "closure:42"})
+    def test_reporting_audit_inventory_sends_only_non_blank_period_id(self, request):
+        result = api_client.obtener_inventario_auditoria_reporting("desktop-token", period_id=" closure:42 ")
+
+        self.assertEqual(result, {"period_id": "closure:42"})
+        request.assert_called_once_with(
+            "GET",
+            "/reporting/audit-inventory?period_id=closure%3A42",
+            token="desktop-token",
+        )
+
+        api_client.obtener_inventario_auditoria_reporting("desktop-token", period_id="   ")
+        self.assertEqual(request.call_args_list[-1].args, ("GET", "/reporting/audit-inventory"))
+        self.assertEqual(request.call_args_list[-1].kwargs, {"token": "desktop-token"})
+
     @patch.object(api_client, "_request", return_value={"report_id": "closed-42"})
     def test_closed_report_uses_canonical_endpoint(self, request):
         result = api_client.obtener_reporte_cerrado("desktop-token", "closure-42")
