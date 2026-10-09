@@ -163,6 +163,95 @@ class ObtenerReportesTests(unittest.TestCase):
             {"state": "not_provided", "available": [], "gaps": [], "unavailable": [], "notes": []},
         )
 
+    @patch.object(reportes_controller, "obtener_inventario_auditoria_reporting_api", create=True)
+    def test_audit_inventory_normalizes_validated_api_fields(self, inventory_api):
+        inventory_api.return_value = {
+            "period_id": "closure:42",
+            "coverage": [
+                {"source": "operations", "state": "available", "ignored_count": 50},
+                {"source": "payments", "state": "partial"},
+                {"source": "legacy", "state": "unknown"},
+            ],
+            "available_sources": ["operations"],
+            "partial_sources": ["payments"],
+            "unavailable_sources": ["legacy"],
+            "affected_scopes": ["closures", "exports"],
+            "unavailable_history": ["pre-1.3.0"],
+            "requires_event_sourcing": False,
+            "supports_persisted_anomalies": False,
+            "unsupported_behaviors": ["freshness timestamps", "source totals"],
+            "freshness_timestamp": "2026-10-08T00:00:00Z",
+        }
+
+        payload = reportes_controller.obtener_inventario_auditoria("api-token", period_id="closure:42")
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["source_state"], "api")
+        self.assertEqual(payload["period_id"], "closure:42")
+        self.assertEqual(
+            payload["coverage"],
+            [
+                {"source": "operations", "state": "available"},
+                {"source": "payments", "state": "partial"},
+                {"source": "legacy", "state": "unavailable"},
+            ],
+        )
+        self.assertEqual(payload["available_sources"], ["operations"])
+        self.assertEqual(payload["partial_sources"], ["payments"])
+        self.assertEqual(payload["unavailable_sources"], ["legacy"])
+        self.assertEqual(payload["affected_scopes"], ["closures", "exports"])
+        self.assertEqual(payload["unavailable_history"], ["pre-1.3.0"])
+        self.assertFalse(payload["requires_event_sourcing"])
+        self.assertFalse(payload["supports_persisted_anomalies"])
+        self.assertEqual(payload["unsupported_behaviors"], ["freshness timestamps", "source totals"])
+        self.assertIsNone(payload["api_error"])
+        self.assertNotIn("freshness_timestamp", payload)
+        inventory_api.assert_called_once_with("api-token", period_id="closure:42")
+
+    @patch.object(reportes_controller, "obtener_inventario_auditoria_reporting_api", create=True)
+    def test_audit_inventory_missing_required_fields_is_unavailable(self, inventory_api):
+        inventory_api.return_value = {"coverage": []}
+
+        payload = reportes_controller.obtener_inventario_auditoria("api-token")
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["source_state"], "unavailable")
+        self.assertEqual(payload["period_id"], None)
+        self.assertEqual(payload["coverage"], [])
+        self.assertEqual(payload["available_sources"], [])
+        self.assertEqual(payload["partial_sources"], [])
+        self.assertEqual(payload["unavailable_sources"], [])
+        self.assertEqual(payload["affected_scopes"], [])
+        self.assertEqual(payload["unavailable_history"], [])
+        self.assertFalse(payload["requires_event_sourcing"])
+        self.assertFalse(payload["supports_persisted_anomalies"])
+        self.assertEqual(payload["unsupported_behaviors"], [])
+        self.assertEqual(payload["api_error"], "API_AUDIT_INVENTORY_UNAVAILABLE")
+
+    @patch.object(reportes_controller, "obtener_reportes")
+    @patch.object(reportes_controller, "obtener_resumen_dashboard_reportes")
+    @patch.object(reportes_controller, "obtener_inventario_auditoria_reporting_api", create=True)
+    def test_audit_inventory_api_error_does_not_use_local_or_dashboard_fallbacks(
+        self,
+        inventory_api,
+        dashboard,
+        local_reports,
+    ):
+        inventory_api.side_effect = ApiClientError(status=503, detail="API_UNAVAILABLE")
+
+        payload = reportes_controller.obtener_inventario_auditoria("api-token", period_id="current")
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["source"], "api")
+        self.assertEqual(payload["source_state"], "api_error")
+        self.assertEqual(payload["period_id"], "current")
+        self.assertEqual(payload["api_error"], "API_UNAVAILABLE")
+        self.assertEqual(payload["coverage"], [])
+        dashboard.assert_not_called()
+        local_reports.assert_not_called()
+
     @patch.object(reportes_controller, "obtener_dashboard_reporting_api")
     @patch.object(reportes_controller, "obtener_catalogo_metricas_reporting_api")
     def test_dashboard_api_normalizes_audit_coverage_variants_without_inventing_sources(self, metric_catalog, dashboard_api):

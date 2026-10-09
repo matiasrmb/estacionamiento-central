@@ -97,6 +97,15 @@ def obtener_dashboard_reporting(token):
     return _request("GET", "/reporting/dashboard", token=token)
 
 
+def obtener_inventario_auditoria_reporting(token, period_id=None):
+    path = "/reporting/audit-inventory"
+    if isinstance(period_id, str):
+        period_id = period_id.strip()
+    if period_id:
+        path = f"{path}?{urlencode({'period_id': period_id})}"
+    return _request("GET", path, token=token)
+
+
 def obtener_reporte_cerrado(token, closure_id):
     return _request("GET", f"/reporting/reports/closed/{closure_id}", token=token)
 

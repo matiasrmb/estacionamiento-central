@@ -208,6 +208,117 @@ class ReportesViewTests(unittest.TestCase):
         self.assertEqual(vista.label_dashboard_auditoria.text(), "Audit: not provided by reporting dashboard")
         vista.close()
 
+    def test_audit_inventory_panel_renders_readiness_and_limitations(self):
+        vista = self._crear_vista(api_token="desktop-token")
+
+        vista._renderizar_inventario_auditoria({
+            "ok": True,
+            "source": "api",
+            "source_state": "api",
+            "period_id": "closure:42",
+            "coverage": [
+                {"source": "operations", "state": "available"},
+                {"source": "payments", "state": "partial"},
+                {"source": "legacy", "state": "unavailable"},
+            ],
+            "available_sources": ["operations"],
+            "partial_sources": ["payments"],
+            "unavailable_sources": ["legacy"],
+            "affected_scopes": ["closures"],
+            "unavailable_history": ["pre-1.3.0"],
+            "requires_event_sourcing": False,
+            "supports_persisted_anomalies": False,
+            "unsupported_behaviors": ["source totals"],
+        })
+
+        self.assertIn("Period: closure:42", vista.label_audit_inventory_estado.text())
+        self.assertIn("operations", vista.label_audit_inventory_coverage.text())
+        self.assertIn("payments", vista.label_audit_inventory_coverage.text())
+        self.assertIn("legacy", vista.label_audit_inventory_coverage.text())
+        self.assertIn("Affected scopes: closures", vista.label_audit_inventory_limitaciones.text())
+        self.assertIn("Unavailable history: pre-1.3.0", vista.label_audit_inventory_limitaciones.text())
+        self.assertIn("Event sourcing required: no", vista.label_audit_inventory_limitaciones.text())
+        self.assertIn("Persisted anomalies supported: no", vista.label_audit_inventory_limitaciones.text())
+        self.assertIn("Unsupported behaviors: source totals", vista.label_audit_inventory_limitaciones.text())
+        vista.close()
+
+    def test_audit_inventory_panel_renders_unavailable_and_error_states(self):
+        vista = self._crear_vista(api_token="desktop-token")
+
+        vista._renderizar_inventario_auditoria({
+            "ok": False,
+            "source": "api",
+            "source_state": "unavailable",
+            "period_id": None,
+            "coverage": [],
+            "api_error": "API_AUDIT_INVENTORY_UNAVAILABLE",
+        })
+        self.assertIn("Inventory unavailable", vista.label_audit_inventory_estado.text())
+        self.assertIn("No API-supplied coverage", vista.label_audit_inventory_coverage.text())
+
+        vista._renderizar_inventario_auditoria({
+            "ok": False,
+            "source": "api",
+            "source_state": "api_error",
+            "period_id": "current",
+            "coverage": [],
+            "api_error": "API_UNAVAILABLE",
+        })
+        self.assertIn("Inventory error: API_UNAVAILABLE", vista.label_audit_inventory_estado.text())
+        self.assertIn("No local fallback coverage is used", vista.label_audit_inventory_limitaciones.text())
+        vista.close()
+
+    @patch("views.reportes.QMessageBox.information")
+    @patch("views.reportes.obtener_inventario_auditoria", create=True)
+    @patch("views.reportes.obtener_resumen_dashboard_reportes")
+    @patch("views.reportes.obtener_reportes")
+    def test_dashboard_refresh_loads_audit_inventory_without_breaking_existing_flow(
+        self,
+        reportes,
+        dashboard,
+        inventory,
+        _messagebox,
+    ):
+        reportes.return_value = {
+            "items": [
+                {
+                    "categoria": "Vehículo",
+                    "patente": "ABC123",
+                    "fecha_hora_ingreso": datetime(2026, 1, 10, 9, 0),
+                    "fecha_hora_salida": datetime(2026, 1, 10, 10, 0),
+                    "minutos": 60,
+                    "tarifa_aplicada": 2500,
+                    "usuario": "admin",
+                }
+            ],
+            "totals": {"total_movimientos": 1, "total_general": 2500, "total_gastos": 0, "total_neto": 2500},
+        }
+        dashboard.return_value = {"source": "api", "summary": []}
+        inventory.return_value = {
+            "ok": True,
+            "source": "api",
+            "source_state": "api",
+            "period_id": "current",
+            "coverage": [{"source": "operations", "state": "available"}],
+            "available_sources": ["operations"],
+            "partial_sources": [],
+            "unavailable_sources": [],
+            "affected_scopes": [],
+            "unavailable_history": [],
+            "requires_event_sourcing": False,
+            "supports_persisted_anomalies": False,
+            "unsupported_behaviors": [],
+        }
+        vista = self._crear_vista(api_token="desktop-token")
+
+        vista.filtrar()
+
+        inventory.assert_called_once_with("desktop-token")
+        self.assertEqual(vista.tabla.rowCount(), 2)
+        self.assertIn("operations", vista.label_audit_inventory_coverage.text())
+        self.assertTrue(vista.boton_exportar.isEnabled())
+        vista.close()
+
     @patch("views.reportes.QMessageBox.information")
     @patch("views.reportes.QInputDialog.getText", return_value=("closure-2026-01", True))
     @patch("views.reportes.obtener_operaciones_reporte_cerrado", create=True)
